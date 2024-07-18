@@ -115,6 +115,7 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 
 func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 			vh, vr, ch, cr, err := cfg.MirrorStore.NetworkHeightRound(req.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -144,121 +145,151 @@ func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func (w http.
 
 func handleABCIInfo(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleABCIQuery(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBlock(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBlocksByHash(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBlockResults(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBlockSearch(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBroadcastEvidence(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBroadcastTxAsync(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBroadcastTxCommit(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleBroadcastTxSync(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleCheckTx(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleCommit(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleConsensusParams(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleConsensusState(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleDumpConsensusState(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleGenesis(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleGenesisChunked(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleHeader(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleHeaderByHash(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleHealth(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleNetInfo(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleNumUnconfirmedTxs(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleStatus(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleSubscribe(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleTx(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleTxSearch(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleUnconfirmedTxs(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleUnsubscribe(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func unsubscribeAll(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
 func handleValidators(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
