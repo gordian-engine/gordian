@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rollchains/gordian/tm/tmstore"
+	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
 )
 
 type HTTPServer struct {
@@ -20,6 +21,11 @@ type HTTPServerConfig struct {
 	Listener net.Listener
 
 	MirrorStore tmstore.MirrorStore
+
+	Libp2pHost   *tmlibp2p.Host
+	libp2pconn   *tmlibp2p.Connection
+	// driver *gsi.Driver[T]
+
 }
 
 func NewHTTPServer(ctx context.Context, log *slog.Logger, cfg HTTPServerConfig) *HTTPServer {
@@ -70,8 +76,14 @@ func (h *HTTPServer) serve(log *slog.Logger, ln net.Listener, srv *http.Server) 
 func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/blocks/watermark", func(w http.ResponseWriter, req *http.Request) {
-		vh, vr, ch, cr, err := cfg.MirrorStore.NetworkHeightRound(req.Context())
+	r.HandleFunc("/blocks/watermark", handleBlocksWatermark(log, cfg)).Methods("GET")
+
+	return r
+}
+
+func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+			vh, vr, ch, cr, err := cfg.MirrorStore.NetworkHeightRound(req.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -95,7 +107,5 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 			log.Warn("Failed to marshal current block", "err", err)
 			return
 		}
-	}).Methods("GET")
-
-	return r
+	}
 }
