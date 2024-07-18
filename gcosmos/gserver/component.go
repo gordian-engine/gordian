@@ -182,6 +182,8 @@ func (c *Component[T]) Start(ctx context.Context) error {
 		c.httpServer = gsi.NewHTTPServer(ctx, c.log.With("sys", "http"), gsi.HTTPServerConfig{
 			Listener:    c.httpLn,
 			MirrorStore: c.ms,
+			Libp2pHost: c.h,
+			Libp2pconn: c.conn,
 		})
 	}
 

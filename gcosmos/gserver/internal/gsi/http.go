@@ -16,7 +16,7 @@ import (
 	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
 	abcitypes "github.com/cometbft/cometbft/api/cometbft/abci/v1"
 	v1types "github.com/cometbft/cometbft/api/cometbft/types/v1"
-	tmp2p "github.com/cometbft/cometbft/p2p"
+	cmtp2p "github.com/cometbft/cometbft/p2p"
 )
 
 type HTTPServer struct {
@@ -29,9 +29,7 @@ type HTTPServerConfig struct {
 	MirrorStore tmstore.MirrorStore
 
 	Libp2pHost   *tmlibp2p.Host
-	libp2pconn   *tmlibp2p.Connection
-	// driver *gsi.Driver[T]
-
+	Libp2pconn   *tmlibp2p.Connection
 }
 
 func NewHTTPServer(ctx context.Context, log *slog.Logger, cfg HTTPServerConfig) *HTTPServer {
@@ -122,8 +120,7 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 
 func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		http.Error(w, "not yet implemented", http.StatusNotImplemented)
-			vh, vr, ch, cr, err := cfg.MirrorStore.NetworkHeightRound(req.Context())
+		vh, vr, ch, cr, err := cfg.MirrorStore.NetworkHeightRound(req.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -388,8 +385,8 @@ func handleNumUnconfirmedTxs(log *slog.Logger, cfg HTTPServerConfig) func (w htt
 func handleStatus(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		_ = &ctypes.ResultStatus{
-			NodeInfo: tmp2p.DefaultNodeInfo{
-				ProtocolVersion: tmp2p.ProtocolVersion{
+			NodeInfo: cmtp2p.DefaultNodeInfo{
+				ProtocolVersion: cmtp2p.ProtocolVersion{
 					P2P:   0,
 					Block: 0,
 					App:   0,
@@ -400,7 +397,7 @@ func handleStatus(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseW
 				Version:       "",
 				Channels:      []byte{},
 				Moniker:       "",
-				Other:         tmp2p.DefaultNodeInfoOther{},
+				Other:         cmtp2p.DefaultNodeInfoOther{},
 			},
 			SyncInfo: ctypes.SyncInfo{
 

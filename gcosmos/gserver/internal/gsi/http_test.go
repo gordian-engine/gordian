@@ -28,6 +28,8 @@ func TestHTTPServer_Blocks_Watermark(t *testing.T) {
 	h, err := gsi.NewHTTPServer(ctx, gtest.NewLogger(t), gsi.HTTPServerConfig{
 		Listener:    ln,
 		MirrorStore: ms,
+		Libp2pHost:  nil,
+		Libp2pconn:  nil,
 	})
 	require.NoError(t, err)
 
