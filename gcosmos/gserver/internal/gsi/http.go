@@ -78,6 +78,38 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 
 	r.HandleFunc("/blocks/watermark", handleBlocksWatermark(log, cfg)).Methods("GET")
 
+	// CometBFT Query methods for compatability with CometRPC
+	r.HandleFunc("abci_info", handleABCIInfo(log,cfg)).Methods("GET")
+	r.HandleFunc("abci_query", handleABCIQuery(log,cfg)).Methods("POST")
+	r.HandleFunc("block", handleBlock(log,cfg)).Methods("POST")
+	r.HandleFunc("block_by_hash", handleBlocksByHash(log,cfg)).Methods("GET")
+	r.HandleFunc("block_results", handleBlockResults(log,cfg)).Methods("POST")
+	r.HandleFunc("block_search", handleBlockSearch(log,cfg)).Methods("POST")
+	r.HandleFunc("broadcast_evidence", handleBroadcastEvidence(log,cfg)).Methods("POST")
+	r.HandleFunc("broadcast_tx_async", handleBroadcastTxAsync(log,cfg)).Methods("POST")
+	r.HandleFunc("broadcast_tx_commit", handleBroadcastTxCommit(log,cfg)).Methods("POST")
+	r.HandleFunc("broadcast_tx_sync", handleBroadcastTxSync(log,cfg)).Methods("POST")
+	r.HandleFunc("check_tx", handleCheckTx(log,cfg)).Methods("POST")
+	r.HandleFunc("commit", handleCommit(log,cfg)).Methods("POST")
+	r.HandleFunc("consensus_params", handleConsensusParams(log,cfg)).Methods("GET")
+	r.HandleFunc("consensus_state", handleConsensusState(log,cfg)).Methods("GET")
+	r.HandleFunc("dump_consensus_state", handleDumpConsensusState(log,cfg)).Methods("GET")
+	r.HandleFunc("genesis", handleGenesis(log,cfg)).Methods("GET")
+	r.HandleFunc("genesis_chunked", handleGenesisChunked(log,cfg)).Methods("GET")
+	r.HandleFunc("header", handleHeader(log,cfg)).Methods("GET")
+	r.HandleFunc("header_by_hash", handleHeaderByHash(log,cfg)).Methods("GET")
+	r.HandleFunc("health", handleHealth(log,cfg)).Methods("GET")
+	r.HandleFunc("net_info", handleNetInfo(log,cfg)).Methods("GET")
+	r.HandleFunc("num_unconfirmed_txs", handleNumUnconfirmedTxs(log,cfg)).Methods("GET")
+	r.HandleFunc("status", handleStatus(log,cfg)).Methods("GET")
+	r.HandleFunc("subscribe", handleSubscribe(log,cfg)).Methods("GET")
+	r.HandleFunc("tx", handleTx(log,cfg)).Methods("GET")
+	r.HandleFunc("tx_search", handleTxSearch(log,cfg)).Methods("GET")
+	r.HandleFunc("unconfirmed_txs", handleUnconfirmedTxs(log,cfg)).Methods("GET")
+	r.HandleFunc("unsubscribe", handleUnsubscribe(log,cfg)).Methods("GET")
+	r.HandleFunc("unsubscribe_all", unsubscribeAll(log,cfg)).Methods("GET")
+	r.HandleFunc("validators", handleValidators(log,cfg)).Methods("GET")
+
 	return r
 }
 
@@ -107,5 +139,126 @@ func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func (w http.
 			log.Warn("Failed to marshal current block", "err", err)
 			return
 		}
+	}
+}
+
+func handleABCIInfo(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleABCIQuery(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBlock(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBlocksByHash(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBlockResults(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBlockSearch(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBroadcastEvidence(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBroadcastTxAsync(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBroadcastTxCommit(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleBroadcastTxSync(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleCheckTx(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleCommit(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleConsensusParams(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleConsensusState(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleDumpConsensusState(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleGenesis(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleGenesisChunked(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleHeader(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleHeaderByHash(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleHealth(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleNetInfo(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleNumUnconfirmedTxs(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleStatus(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleSubscribe(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleTx(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleTxSearch(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleUnconfirmedTxs(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleUnsubscribe(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func unsubscribeAll(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+	}
+}
+func handleValidators(log *slog.Logger, cfg HTTPServerConfig) func (w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
 	}
 }
