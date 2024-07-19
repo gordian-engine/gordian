@@ -11,6 +11,7 @@ import (
 
 	abcitypes "github.com/cometbft/cometbft/api/cometbft/abci/v1"
 	v1types "github.com/cometbft/cometbft/api/cometbft/types/v1"
+	cversion "github.com/cometbft/cometbft/api/cometbft/version/v1"
 	cmtp2p "github.com/cometbft/cometbft/p2p"
 	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -87,37 +88,37 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 	r.HandleFunc("/blocks/watermark", handleBlocksWatermark(log, cfg)).Methods("GET")
 
 	// CometBFT Query methods for compatability with CometRPC
-	r.HandleFunc("abci_info", handleABCIInfo(log, cfg)).Methods("GET")
+	r.HandleFunc("abci_info", handleABCIInfo(log, cfg)).Methods("POST")
 	r.HandleFunc("abci_query", handleABCIQuery(log, cfg)).Methods("POST")
 	r.HandleFunc("block", handleBlock(log, cfg)).Methods("POST")
-	r.HandleFunc("block_by_hash", handleBlockByHash(log, cfg)).Methods("GET")
+	r.HandleFunc("block_by_hash", handleBlockByHash(log, cfg)).Methods("POST")
 	r.HandleFunc("block_results", handleBlockResults(log, cfg)).Methods("POST")
 	r.HandleFunc("block_search", handleBlockSearch(log, cfg)).Methods("POST")
-	r.HandleFunc("blockchain", handleBlockchainInfo(log, cfg)).Methods("GET")
+	r.HandleFunc("blockchain", handleBlockchainInfo(log, cfg)).Methods("POST")
 	r.HandleFunc("broadcast_evidence", handleBroadcastEvidence(log, cfg)).Methods("POST")
 	r.HandleFunc("broadcast_tx_async", handleBroadcastTxAsync(log, cfg)).Methods("POST")
 	r.HandleFunc("broadcast_tx_commit", handleBroadcastTxCommit(log, cfg)).Methods("POST")
 	r.HandleFunc("broadcast_tx_sync", handleBroadcastTxSync(log, cfg)).Methods("POST")
 	r.HandleFunc("check_tx", handleCheckTx(log, cfg)).Methods("POST")
 	r.HandleFunc("commit", handleCommit(log, cfg)).Methods("POST")
-	r.HandleFunc("consensus_params", handleConsensusParams(log, cfg)).Methods("GET")
-	r.HandleFunc("consensus_state", handleConsensusState(log, cfg)).Methods("GET")
-	r.HandleFunc("dump_consensus_state", handleDumpConsensusState(log, cfg)).Methods("GET")
-	r.HandleFunc("genesis", handleGenesis(log, cfg)).Methods("GET")
-	r.HandleFunc("genesis_chunked", handleGenesisChunked(log, cfg)).Methods("GET")
-	r.HandleFunc("header", handleHeader(log, cfg)).Methods("GET")
-	r.HandleFunc("header_by_hash", handleHeaderByHash(log, cfg)).Methods("GET")
-	r.HandleFunc("health", handleHealth(log, cfg)).Methods("GET")
-	r.HandleFunc("net_info", handleNetInfo(log, cfg)).Methods("GET")
-	r.HandleFunc("num_unconfirmed_txs", handleNumUnconfirmedTxs(log, cfg)).Methods("GET")
-	r.HandleFunc("status", handleStatus(log, cfg)).Methods("GET")
-	r.HandleFunc("subscribe", handleSubscribe(log, cfg)).Methods("GET")
+	r.HandleFunc("consensus_params", handleConsensusParams(log, cfg)).Methods("POST")
+	r.HandleFunc("consensus_state", handleConsensusState(log, cfg)).Methods("POST")
+	r.HandleFunc("dump_consensus_state", handleDumpConsensusState(log, cfg)).Methods("POST")
+	r.HandleFunc("genesis", handleGenesis(log, cfg)).Methods("POST")
+	r.HandleFunc("genesis_chunked", handleGenesisChunked(log, cfg)).Methods("POST")
+	r.HandleFunc("header", handleHeader(log, cfg)).Methods("POST")
+	r.HandleFunc("header_by_hash", handleHeaderByHash(log, cfg)).Methods("POST")
+	r.HandleFunc("health", handleHealth(log, cfg)).Methods("POST")
+	r.HandleFunc("net_info", handleNetInfo(log, cfg)).Methods("POST")
+	r.HandleFunc("num_unconfirmed_txs", handleNumUnconfirmedTxs(log, cfg)).Methods("POST")
+	r.HandleFunc("status", handleStatus(log, cfg)).Methods("POST")
+	r.HandleFunc("subscribe", handleSubscribe(log, cfg)).Methods("POST")
 	r.HandleFunc("tx", handleTx(log, cfg)).Methods("POST")
-	r.HandleFunc("tx_search", handleTxSearch(log, cfg)).Methods("GET")
-	r.HandleFunc("unconfirmed_txs", handleUnconfirmedTxs(log, cfg)).Methods("GET")
-	r.HandleFunc("unsubscribe", handleUnsubscribe(log, cfg)).Methods("GET")
-	r.HandleFunc("unsubscribe_all", unsubscribeAll(log, cfg)).Methods("GET")
-	r.HandleFunc("validators", handleValidators(log, cfg)).Methods("GET")
+	r.HandleFunc("tx_search", handleTxSearch(log, cfg)).Methods("POST")
+	r.HandleFunc("unconfirmed_txs", handleUnconfirmedTxs(log, cfg)).Methods("POST")
+	r.HandleFunc("unsubscribe", handleUnsubscribe(log, cfg)).Methods("POST")
+	r.HandleFunc("unsubscribe_all", unsubscribeAll(log, cfg)).Methods("POST")
+	r.HandleFunc("validators", handleValidators(log, cfg)).Methods("POST")
 
 	return r
 }
@@ -177,12 +178,34 @@ func handleABCIQuery(log *slog.Logger, cfg HTTPServerConfig) func(w http.Respons
 
 func handleBlock(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		// Request
-		// height *int64
-		_ = &ctypes.ResultBlock{
-			BlockID: tmtypes.BlockID{},
-			Block:   &tmtypes.Block{},
+		var height uint64
+		// TODO parse height from request
+		block, err := cfg.BlockStore.LoadBlock(req.Context(), height)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
+		ctypesblock := &ctypes.ResultBlock{
+			BlockID: tmtypes.BlockID{
+				Hash:          block.Block.Hash,
+				PartSetHeader: tmtypes.PartSetHeader{},
+			},
+			Block: &tmtypes.Block{
+				Header: tmtypes.Header{
+					Version: cversion.Consensus{
+						Block: uint64(1),
+						App:   uint64(2),
+					},
+					// todo: where to get this? genesis?
+					ChainID: "",
+					Height:  int64(block.Block.Height),
+					// TODO: time in the blocks?
+					// Time:    block.Block.,
+					Time: time.Now(),
+				},
+			},
+		}
+		log.Info("log chainid from result block", "ctypes.ResultBlock", ctypesblock.Block.ChainID)
 		http.Error(w, "not yet implemented", http.StatusNotImplemented)
 	}
 }
