@@ -206,8 +206,8 @@ func (c *Component[T]) Start(ctx context.Context) error {
 		c.httpServer = gsi.NewHTTPServer(ctx, c.log.With("sys", "http"), gsi.HTTPServerConfig{
 			Listener:    c.httpLn,
 			MirrorStore: c.ms,
-			Libp2pHost: c.h,
-			Libp2pconn: c.conn,
+			Libp2pHost:  c.h,
+			Libp2pconn:  c.conn,
 		})
 	}
 
@@ -307,7 +307,12 @@ func (c *Component[T]) Init(app serverv2.AppI[T], v *viper.Viper, log cosmoslog.
 
 	c.ms = ms
 
-	const chainID = "TODO:TEMPORARY_CHAIN_ID" // TODO: need to get this from the SDK.
+	genesis := &tmconsensus.ExternalGenesis{
+		ChainID:           "TODO:TEMPORARY_CHAIN_ID", // todo parse this out of sdk genesis file
+		InitialHeight:     1,
+		InitialAppState:   strings.NewReader(""), // No initial app state for echo app.
+		GenesisValidators: nil,                   // TODO: where will the validators come from?
+	}
 
 	c.opts = []tmengine.Opt{
 		tmengine.WithSigner(signer),
@@ -323,12 +328,7 @@ func (c *Component[T]) Init(app serverv2.AppI[T], v *viper.Viper, log cosmoslog.
 		tmengine.WithSignatureScheme(tmconsensustest.SimpleSignatureScheme{}),
 		tmengine.WithCommonMessageSignatureProofScheme(gcrypto.SimpleCommonMessageSignatureProofScheme),
 
-		tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
-			ChainID:           chainID,
-			InitialHeight:     1,
-			InitialAppState:   strings.NewReader(""), // No initial app state for echo app.
-			GenesisValidators: nil,                   // TODO: where will the validators come from?
-		}),
+		tmengine.WithGenesis(genesis),
 
 		// NOTE: there are remaining required options that we shouldn't initialize here,
 		// but instead they will be added during the Start call.
