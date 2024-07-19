@@ -199,9 +199,19 @@ func handleBlock(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWri
 					// todo: where to get this? genesis?
 					ChainID: "",
 					Height:  int64(block.Block.Height),
-					// TODO: time in the blocks?
-					// Time:    block.Block.,
+					// TODO: pull block time out of block annotations
 					Time: time.Now(),
+					LastBlockID: tmtypes.BlockID{
+						Hash:          block.Block.PrevBlockHash,
+						PartSetHeader: tmtypes.PartSetHeader{},
+					},
+					LastCommitHash: block.Block.PrevBlockHash,
+					DataHash:       block.Block.PrevAppStateHash,
+					// ValidatorsHash: block.Block.Validators, // todo hash the validators
+					// NextValidatorsHash: block.Block.NextValidators // todo hash the validators
+					// ConsensusHash: block.Block.ConsensusHash, // todo hash the consensus params
+					AppHash: block.Block.PrevAppStateHash,
+					// LastResultsHash: block.Block, // todo figure this one out
 				},
 			},
 		}
