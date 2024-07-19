@@ -2,9 +2,11 @@ package gsi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"cosmossdk.io/core/transaction"
 	"github.com/rollchains/gordian/internal/gchan"
@@ -30,6 +32,27 @@ func NewConsensusStrategy[T transaction.Tx](
 	}
 }
 
+type BlockAnnotation struct {
+	BlockTime string `json:"block_time"`
+}
+
+func NewBlockAnnotation(blockTime time.Time) ([]byte, error) {
+	ba := BlockAnnotation{
+		BlockTime: time.Now().Format(time.RFC3339),
+	}
+	return json.Marshal(ba)
+}
+
+func BlockAnnotationFromBytes(b []byte) (BlockAnnotation, error) {
+	var ba BlockAnnotation
+	err := json.Unmarshal(b, &ba)
+	return ba, err
+}
+
+func (ba BlockAnnotation) BlockTimeAsTime() (time.Time, error) {
+	return time.Parse(time.RFC3339, ba.BlockTime)
+}
+
 func (c *ConsensusStrategy[T]) EnterRound(
 	ctx context.Context,
 	rv tmconsensus.RoundView,
@@ -51,10 +74,18 @@ func (c *ConsensusStrategy[T]) EnterRound(
 		))
 	}
 
+	ba, err := NewBlockAnnotation(time.Now())
+	if err != nil {
+		panic(errors.New(
+			"BUG: failed to json marshal block annotation",
+		))
+	}
+
 	if !gchan.SendC(
 		ctx, c.log,
 		proposalOut, tmconsensus.Proposal{
-			AppDataID: fmt.Sprintf("%d/%d", rv.Height, rv.Round),
+			AppDataID:       fmt.Sprintf("%d/%d", rv.Height, rv.Round),
+			BlockAnnotation: ba,
 		},
 		"sending proposal to engine",
 	) {
@@ -77,6 +108,20 @@ func (c *ConsensusStrategy[T]) ConsiderProposedBlocks(
 		}
 
 		if string(pb.Block.DataID) != expAppDataID {
+			continue
+		}
+
+		ba, err := BlockAnnotationFromBytes(pb.Annotations.App)
+		if err != nil {
+			continue
+		}
+
+		bt, err := ba.BlockTimeAsTime()
+		if err != nil {
+			continue
+		}
+
+		if bt.After(time.Now()) {
 			continue
 		}
 
