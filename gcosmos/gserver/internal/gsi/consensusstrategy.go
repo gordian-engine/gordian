@@ -38,7 +38,7 @@ type BlockAnnotation struct {
 
 func NewBlockAnnotation(blockTime time.Time) ([]byte, error) {
 	ba := BlockAnnotation{
-		BlockTime: time.Now().Format(time.RFC3339),
+		BlockTime: blockTime.Format(time.RFC3339Nano),
 	}
 	return json.Marshal(ba)
 }
@@ -76,9 +76,7 @@ func (c *ConsensusStrategy[T]) EnterRound(
 
 	ba, err := NewBlockAnnotation(time.Now())
 	if err != nil {
-		panic(errors.New(
-			"BUG: failed to json marshal block annotation",
-		))
+		return errors.New("BUG: failed to json marshal block annotation")
 	}
 
 	if !gchan.SendC(
