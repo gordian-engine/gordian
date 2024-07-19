@@ -26,7 +26,11 @@ type HTTPServer struct {
 type HTTPServerConfig struct {
 	Listener net.Listener
 
-	MirrorStore tmstore.MirrorStore
+	MirrorStore       tmstore.MirrorStore
+	ValidatorStore    tmstore.ValidatorStore
+	RoundStore        tmstore.RoundStore
+	FinalizationStore tmstore.FinalizationStore
+	BlockStore        tmstore.BlockStore
 
 	Libp2pHost *tmlibp2p.Host
 	Libp2pconn *tmlibp2p.Connection

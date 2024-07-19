@@ -68,6 +68,10 @@ type Component[T transaction.Tx] struct {
 
 	httpLn     net.Listener
 	ms         tmstore.MirrorStore
+	vs         tmstore.ValidatorStore
+	rs         tmstore.RoundStore
+	fs         tmstore.FinalizationStore
+	bs         tmstore.BlockStore
 	httpServer *gsi.HTTPServer
 }
 
@@ -206,10 +210,14 @@ func (c *Component[T]) Start(ctx context.Context) error {
 
 	if c.httpLn != nil {
 		c.httpServer = gsi.NewHTTPServer(ctx, c.log.With("sys", "http"), gsi.HTTPServerConfig{
-			Listener:    c.httpLn,
-			MirrorStore: c.ms,
-			Libp2pHost:  c.h,
-			Libp2pconn:  c.conn,
+			Listener:          c.httpLn,
+			MirrorStore:       c.ms,
+			Libp2pHost:        c.h,
+			Libp2pconn:        c.conn,
+			ValidatorStore:    c.vs,
+			RoundStore:        c.rs,
+			FinalizationStore: c.fs,
+			BlockStore:        c.bs,
 		})
 	}
 
@@ -306,14 +314,13 @@ func (c *Component[T]) Init(app serverv2.AppI[T], v *viper.Viper, log cosmoslog.
 	rs := tmmemstore.NewRoundStore()
 	vs := tmmemstore.NewValidatorStore(tmconsensustest.SimpleHashScheme{})
 
+	c.bs = bs
+	c.fs = fs
 	c.ms = ms
+	c.rs = rs
+	c.vs = vs
 
-	genesis := &tmconsensus.ExternalGenesis{
-		ChainID:           "TODO:TEMPORARY_CHAIN_ID", // todo parse this out of sdk genesis file
-		InitialHeight:     1,
-		InitialAppState:   strings.NewReader(""), // No initial app state for echo app.
-		GenesisValidators: nil,                   // TODO: where will the validators come from?
-	}
+	const chainID = "TODO:TEMPORARY_CHAIN_ID" // TODO: need to get this from the SDK.
 
 	c.opts = []tmengine.Opt{
 		tmengine.WithSigner(c.signer),
