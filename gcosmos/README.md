@@ -39,12 +39,9 @@ This currently adds one new subcommand, "gstart", to the simapp command.
 Begin running the updated command by using
 ```bash
 go run . init moniker
-echo -n "easy visit salt program one absurd strike warm remind badge cake muscle survey monitor swamp nation holiday escape vault tuna claw essay deliver nominee" > $HOME/.simappv2/mnemonic.txt
+echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > $HOME/.simappv2/mnemonic.txt
 
-# TODO: no override command to skip interactive prompt?
 go run . keys add val --recover --source $HOME/.simappv2/mnemonic.txt --keyring-backend=test
-
-go run . keys list --keyring-backend=test
 
 go run . genesis add-genesis-account val 1000000stake --keyring-backend=test
 go run . genesis gentx val 1000000stake --keyring-backend=test --chain-id=gcosmos
