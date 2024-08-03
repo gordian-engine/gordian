@@ -21,6 +21,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/rollchains/gordian/gcosmos/gmempool"
+	"github.com/rollchains/gordian/gcosmos/gtx"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/internal/gchan"
 	"github.com/rollchains/gordian/internal/glog"
@@ -53,12 +54,15 @@ type Driver struct {
 
 func NewDriver(
 	lifeCtx, valCtx context.Context,
+	serverCtx *server.Context,
 	log *slog.Logger,
 	cfg DriverConfig,
 ) (*Driver, error) {
-	// Fine if these panic on conversion failure.
 	cc := valCtx.Value(client.ClientContextKey).(*client.Context)
-	serverCtx := valCtx.Value(server.ServerContextKey).(*server.Context)
+
+	// TODO: re-impl without serverCtx signature requirement would be nice.
+	// serverCtx := valCtx.Value(server.ServerContextKey).(*server.Context)
+	// fmt.Println("serverCtx.Config.Genesis", serverCtx.Config.Genesis, "serverCtx", serverCtx)
 
 	genesisPath := filepath.Join(cc.HomeDir, serverCtx.Config.Genesis)
 
@@ -76,13 +80,13 @@ func NewDriver(
 		done: make(chan struct{}),
 	}
 
-	go d.run(lifeCtx, valCtx, ag, cc.TxConfig, cfg)
+	go d.run(lifeCtx, ag, cc.TxConfig, cfg)
 
 	return d, nil
 }
 
 func (d *Driver) run(
-	lifeCtx, valCtx context.Context,
+	lifeCtx context.Context,
 	ag *genutiltypes.AppGenesis,
 	txConfig client.TxConfig,
 	cfg DriverConfig,
@@ -95,7 +99,7 @@ func (d *Driver) run(
 	// We are currently assuming we always need to handle init chain,
 	// but we should handle non-initial height.
 	if !d.handleInitialization(
-		lifeCtx, valCtx,
+		lifeCtx,
 		ag,
 		cfg.ConsensusAuthority,
 		cfg.AppManager,
@@ -110,7 +114,7 @@ func (d *Driver) run(
 }
 
 func (d *Driver) handleInitialization(
-	lifeCtx, valCtx context.Context,
+	lifeCtx context.Context,
 	ag *genutiltypes.AppGenesis,
 	consensusAuthority string,
 	appManager *appmanager.AppManager[transaction.Tx],
@@ -162,7 +166,7 @@ func (d *Driver) handleInitialization(
 	appState := []byte(ag.AppState)
 
 	// Now, init genesis in the SDK-layer application.
-	var codec transaction.Codec[transaction.Tx] = txDecoder[transaction.Tx]{txConfig: txConfig}
+	var codec = gtx.NewTxDecoder(txConfig)
 	blockResp, genesisState, err := appManager.InitGenesis(
 		lifeCtx, blockReq, appState, codec,
 	)
