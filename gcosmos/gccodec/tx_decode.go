@@ -1,7 +1,8 @@
 package gccodec
 
 import (
-	"errors"
+	"fmt"
+	"reflect"
 
 	"cosmossdk.io/core/transaction"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -15,7 +16,7 @@ type TxDecoder[T transaction.Tx] struct {
 
 func NewTxDecoder(txConfig client.TxConfig) TxDecoder[transaction.Tx] {
 	if txConfig == nil {
-		panic("NewTxDecoder txConfig is nil")
+		panic("BUG: NewTxDecoder txConfig is nil")
 	}
 
 	return TxDecoder[transaction.Tx]{
@@ -34,7 +35,7 @@ func (t TxDecoder[T]) Decode(bz []byte) (T, error) {
 	var ok bool
 	out, ok = tx.(T)
 	if !ok {
-		return out, errors.New("unexpected Tx type")
+		return out, fmt.Errorf("failed to convert decoded type %T to %s", tx, reflect.TypeFor[T]())
 	}
 
 	return out, nil
@@ -51,7 +52,7 @@ func (t TxDecoder[T]) DecodeJSON(bz []byte) (T, error) {
 	var ok bool
 	out, ok = tx.(T)
 	if !ok {
-		return out, errors.New("unexpected Tx type")
+		return out, fmt.Errorf("failed to convert decoded type %T to %s", tx, reflect.TypeFor[T]())
 	}
 
 	return out, nil
