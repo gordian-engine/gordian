@@ -49,6 +49,11 @@ There are a couple of tradeoffs with this “control loop” or “single writer
 -  Returning values from the control loop goroutine means that you usually have to have a request-response pair of types; the response returns a _**copy**_ of the writable data that the main goroutine owns. If used improperly, this can lead to a lot of garbage creation, but there are multiple mitigation strategies to avoid that.
 -  Clean execution of this pattern involves widespread use of `select` and generally, every send and every receive is going to be in a `select` at least also watching a root `context.Context` for cancellation. So naturally there are going to be some helper functions for the common case of sending to or receiving from one channel while watching that root context. (TODO: add links to or examples of these helper functions)
 
+Examples found in [gchan/send.go](../internal/gchan/send.go)
+  - SendC
+  - RecvC
+  - ReqResp
+
 ### 2. The application has a determinate number of goroutines
 
 We create a fixed number of goroutines within every type.
@@ -73,6 +78,8 @@ In Gordian we use unbuffered channels in two primary cases:
 - batching collections of updates, where we need to be certain that the receiver has the data we sent.
 
 And by corollary, the buffered channels are closer to a fire and forget pattern. When we have a request-response pair, we generally have the pattern
+
+[example: mirror gossip strategy](../tm/tmengine/internal/tmmirror/internal/tmi/gossipviewmanager.go)
 
 ```go
 type FooRequest struct {
@@ -157,3 +164,5 @@ We use the `Wait` pattern extensively to ensure that, in tests especially, all o
 ### 5. Batch channel values together where it makes sense
 
 It’s a small optimization, but there is overhead in every `select` and in every channel that the runtime maintains, and there is overhead in switching active goroutines, so if `Parent` sends multiple values to `Child` and those values are somehow related, prefer `toChildCh <- oneValWithMultipleOptionalFields` over `fooToChildCh <- foo; barToChildCh <- bar; bazToChildCh <- baz`
+
+[Practical Example](./../tm/tmengine/tmelink/networkviewupdate.go).
