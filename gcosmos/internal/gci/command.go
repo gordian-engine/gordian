@@ -112,9 +112,6 @@ func StartGordianCommand() *cobra.Command {
 				// but for some reason that value doesn't get set correctly anymore.
 				filepath.Join(cc.HomeDir, serverCtx.Config.Genesis),
 				am,
-				// txDecoder{
-				// 	txConfig: cc.TxConfig,
-				// },
 				gccodec.NewTxDecoder(cc.TxConfig),
 				initChainCh,
 			)
