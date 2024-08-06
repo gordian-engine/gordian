@@ -23,7 +23,6 @@ if ! test -d "$SDK_DIR"; then
   git clone \
     --reference-if-able ../../../../cosmos/cosmos-sdk \
     --reference-if-able ../../../cosmos-sdk \
-    --reference-if-able $GOPATH/src/github.com/cosmos/cosmos-sdk \
     --dissociate \
     https://github.com/cosmos/cosmos-sdk \
     "$SDK_DIR"
