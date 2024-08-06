@@ -6,7 +6,7 @@ This is an outline of the principles behind the concurrency design patterns in G
 
 > **General rule:** no mutexes
 
-> **Exception:** plain old get-set objects don’t need a coordinating goroutine. 
+> **Exception:** plain old get-set objects don’t need a coordinating goroutine.
 
 ```go
 type ConcurrentBidirectionalMap struct {
@@ -15,14 +15,24 @@ type ConcurrentBidirectionalMap struct {
   is map[int]string
 }
 
-func (m *C...Map) Set(s string, i int) {
-  m.mu.Lock()
-  defer m.mu.Unlock()
-  m.si[s] = i
-  m.is[i] = s
+func (m *ConcurrentBidirectionalMap) Set(s string, i int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.si[s] = i
+	m.is[i] = s
 }
 
-// func GetI, func GetS
+func (m *ConcurrentBidirectionalMap) GetI(i int) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.is[i]
+}
+
+func (m *ConcurrentBidirectionalMap) GetS(s string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.si[s]
+}
 ```
 
 In types like the above there is no statefulness. The mutex is held for an instant while modifying a map and there is no further concurrent interaction with any other types.
