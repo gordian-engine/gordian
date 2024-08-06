@@ -22,6 +22,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/libp2p/go-libp2p"
+	"github.com/rollchains/gordian/gcosmos/gccodec"
 	"github.com/rollchains/gordian/gcosmos/gserver"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/gwatchdog"
@@ -41,7 +42,7 @@ import (
 // in order to get simd start to use Gordian instead of Comet.
 func NewSimdRootCmdWithGordian(lifeCtx context.Context, log *slog.Logger) *cobra.Command {
 	return simdcmd.NewRootCmdWithServer(func(cc client.Context) serverv2.ServerComponent[transaction.Tx] {
-		codec := txDecoder{txConfig: cc.TxConfig}
+		codec := gccodec.NewTxDecoder(cc.TxConfig)
 		c, err := gserver.NewComponent(lifeCtx, log, codec, cc.Codec)
 		if err != nil {
 			panic(err)
@@ -111,9 +112,10 @@ func StartGordianCommand() *cobra.Command {
 				// but for some reason that value doesn't get set correctly anymore.
 				filepath.Join(cc.HomeDir, serverCtx.Config.Genesis),
 				am,
-				txDecoder{
-					txConfig: cc.TxConfig,
-				},
+				// txDecoder{
+				// 	txConfig: cc.TxConfig,
+				// },
+				gccodec.NewTxDecoder(cc.TxConfig),
 				initChainCh,
 			)
 
@@ -244,22 +246,6 @@ func runStateMachine(
 	log.Info("Shutting down...")
 
 	return nil
-}
-
-// txDecoder adapts client.TxConfig to the transaction.Codec type.
-// This is a copy of "temporaryTxDecoder" from simapp code.
-type txDecoder struct {
-	txConfig client.TxConfig
-}
-
-// Decode implements transaction.Codec.
-func (t txDecoder) Decode(bz []byte) (transaction.Tx, error) {
-	return t.txConfig.TxDecoder()(bz)
-}
-
-// DecodeJSON implements transaction.Codec.
-func (t txDecoder) DecodeJSON(bz []byte) (transaction.Tx, error) {
-	return t.txConfig.TxJSONDecoder()(bz)
 }
 
 func runDriver(

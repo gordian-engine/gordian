@@ -20,6 +20,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
+	"github.com/rollchains/gordian/gcosmos/gccodec"
 	"github.com/rollchains/gordian/gcosmos/gmempool"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/internal/gchan"
@@ -162,7 +163,7 @@ func (d *Driver) handleInitialization(
 	appState := []byte(ag.AppState)
 
 	// Now, init genesis in the SDK-layer application.
-	var codec transaction.Codec[transaction.Tx] = txDecoder[transaction.Tx]{txConfig: txConfig}
+	var codec transaction.Codec[transaction.Tx] = gccodec.NewTxDecoder(txConfig)
 	blockResp, genesisState, err := appManager.InitGenesis(
 		lifeCtx, blockReq, appState, codec,
 	)
