@@ -9,11 +9,14 @@ import (
 	"maps"
 	"runtime/trace"
 	"slices"
+	"time"
 
 	"github.com/rollchains/gordian/gcrypto"
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/glog"
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
+	"github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
 	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmstore"
 )
@@ -36,17 +39,12 @@ type Kernel struct {
 	initialVals   []tmconsensus.Validator
 
 	pbf tmelink.ProposedBlockFetcher
-
-	votingViewOut,
-	committingViewOut,
-	nextRoundViewOut chan<- tmconsensus.VersionedRoundView
+	mc  *tmemetrics.Collector
 
 	gossipOutCh chan<- tmelink.NetworkViewUpdate
 
-	stateMachineIn      <-chan tmeil.StateMachineRoundActionSet
-	stateMachineViewOut chan<- tmconsensus.VersionedRoundView
+	stateMachineRoundEntranceIn <-chan tmeil.StateMachineRoundEntrance
 
-	nhrRequests        <-chan chan NetworkHeightRound
 	snapshotRequests   <-chan SnapshotRequest
 	viewLookupRequests <-chan ViewLookupRequest
 	pbCheckRequests    <-chan PBCheckRequest
@@ -73,21 +71,16 @@ type KernelConfig struct {
 
 	ProposedBlockFetcher tmelink.ProposedBlockFetcher
 
-	// Views that are sent to the gossip strategy.
-	VotingViewOut,
-	CommittingViewOut,
-	NextRoundViewOut chan<- tmconsensus.VersionedRoundView
-
 	GossipStrategyOut chan<- tmelink.NetworkViewUpdate
 
-	StateMachineRoundActionsIn <-chan tmeil.StateMachineRoundActionSet
+	StateMachineRoundEntranceIn <-chan tmeil.StateMachineRoundEntrance
 
 	// View sent to the state machine.
 	// It should usually map to the voting view,
 	// but it will occasionally "blip" to the committing view
 	// when the Mirror considers a round committed
 	// while the state machine is in a Commit Wait phase.
-	StateMachineViewOut chan<- tmconsensus.VersionedRoundView
+	StateMachineRoundViewOut chan<- tmeil.StateMachineRoundView
 
 	NHRRequests        <-chan chan NetworkHeightRound
 	SnapshotRequests   <-chan SnapshotRequest
@@ -97,6 +90,10 @@ type KernelConfig struct {
 	AddPBRequests        <-chan tmconsensus.ProposedBlock
 	AddPrevoteRequests   <-chan AddPrevoteRequest
 	AddPrecommitRequests <-chan AddPrecommitRequest
+
+	MetricsCollector *tmemetrics.Collector
+
+	Watchdog *gwatchdog.Watchdog
 }
 
 func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel, error) {
@@ -137,19 +134,14 @@ func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel
 		initialVals:   slices.Clone(cfg.InitialValidators),
 
 		pbf: cfg.ProposedBlockFetcher,
+		mc:  cfg.MetricsCollector,
 
 		// Channels provided through the config,
 		// i.e. channels coordinated by the Engine or Mirror.
-		votingViewOut:     cfg.VotingViewOut,
-		committingViewOut: cfg.CommittingViewOut,
-		nextRoundViewOut:  cfg.NextRoundViewOut,
-
 		gossipOutCh: cfg.GossipStrategyOut,
 
-		stateMachineIn:      cfg.StateMachineRoundActionsIn,
-		stateMachineViewOut: cfg.StateMachineViewOut,
+		stateMachineRoundEntranceIn: cfg.StateMachineRoundEntranceIn,
 
-		nhrRequests:        cfg.NHRRequests,
 		snapshotRequests:   cfg.SnapshotRequests,
 		viewLookupRequests: cfg.ViewLookupRequests,
 		pbCheckRequests:    cfg.PBCheckRequests,
@@ -164,20 +156,16 @@ func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel
 	// Seed the initial state with view heights and rounds,
 	// so the loadInitial* calls have sufficient information.
 	initState := kState{
-		Committing: View{
-			VRV: tmconsensus.VersionedRoundView{
-				RoundView: tmconsensus.RoundView{
-					Height: nhr.CommittingHeight,
-					Round:  nhr.CommittingRound,
-				},
+		Committing: tmconsensus.VersionedRoundView{
+			RoundView: tmconsensus.RoundView{
+				Height: nhr.CommittingHeight,
+				Round:  nhr.CommittingRound,
 			},
 		},
-		Voting: View{
-			VRV: tmconsensus.VersionedRoundView{
-				RoundView: tmconsensus.RoundView{
-					Height: nhr.VotingHeight,
-					Round:  nhr.VotingRound,
-				},
+		Voting: tmconsensus.VersionedRoundView{
+			RoundView: tmconsensus.RoundView{
+				Height: nhr.VotingHeight,
+				Round:  nhr.VotingRound,
 			},
 		},
 		// Not necessary to prepopulate NextRound,
@@ -185,7 +173,9 @@ func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel
 
 		InFlightFetchPBs: make(map[string]context.CancelFunc),
 
-		StateMachineView: newStateMachineView(cfg.StateMachineViewOut),
+		StateMachineViewManager: newStateMachineViewManager(cfg.StateMachineRoundViewOut),
+
+		GossipViewManager: newGossipViewManager(cfg.GossipStrategyOut),
 	}
 
 	// Have to load the committing view first,
@@ -202,7 +192,11 @@ func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel
 		return nil, err
 	}
 
-	go k.mainLoop(ctx, &initState)
+	if err := k.updateObservers(ctx, &initState); err != nil {
+		return nil, err
+	}
+
+	go k.mainLoop(ctx, &initState, cfg.Watchdog)
 
 	return k, nil
 }
@@ -211,17 +205,43 @@ func (k *Kernel) Wait() {
 	<-k.done
 }
 
-func (k *Kernel) mainLoop(ctx context.Context, s *kState) {
+func (k *Kernel) mainLoop(ctx context.Context, s *kState, wd *gwatchdog.Watchdog) {
 	ctx, task := trace.NewTask(ctx, "Mirror.kernel.mainLoop")
 	defer task.End()
 
 	defer close(k.done)
 
-	for {
-		vo := k.viewOutputs(s)
-		smOut := s.StateMachineView.Output(s)
+	defer func() {
+		if !gwatchdog.IsTermination(ctx) {
+			return
+		}
 
-		gsOut := k.gossipStrategyOutput(s)
+		nvrVal := slog.StringValue("<nil>")
+		if s.GossipViewManager.NilVotedRound != nil {
+			nvrVal = s.GossipViewManager.NilVotedRound.LogValue()
+		}
+
+		k.log.Info(
+			"WATCHDOG TERMINATING; DUMPING STATE",
+			"kState", slog.GroupValue(
+				slog.Any("CommittingVRV", s.Committing),
+				slog.Any("VotingVRV", s.Voting),
+				slog.Any("NextRoundVRV", s.NextRound),
+				slog.Any("NilVotedRound", nvrVal),
+			),
+		)
+	}()
+
+	wSig := wd.Monitor(ctx, gwatchdog.MonitorConfig{
+		Name:     "Mirror kernel",
+		Interval: 10 * time.Second, Jitter: time.Second,
+		ResponseTimeout: time.Second,
+	})
+
+	for {
+		smOut := s.StateMachineViewManager.Output(s)
+
+		gsOut := s.GossipViewManager.Output()
 
 		select {
 		case <-ctx.Done():
@@ -230,24 +250,13 @@ func (k *Kernel) mainLoop(ctx context.Context, s *kState) {
 				"cause", context.Cause(ctx),
 				"committing_height", s.CommittingBlock.Height,
 				"committing_hash", glog.Hex(s.CommittingBlock.Hash),
-				"voting_height", s.Voting.VRV.Height,
-				"voting_round", s.Voting.VRV.Round,
-				"voting_vote_summary", s.Voting.VRV.VoteSummary,
-				"state_machine_height", s.StateMachineView.H(),
-				"state_machine_round", s.StateMachineView.R(),
+				"voting_height", s.Voting.Height,
+				"voting_round", s.Voting.Round,
+				"voting_vote_summary", s.Voting.VoteSummary,
+				"state_machine_height", s.StateMachineViewManager.H(),
+				"state_machine_round", s.StateMachineViewManager.R(),
 			)
 			return
-
-		case ch := <-k.nhrRequests:
-			// The incoming channel is always 1-buffered, originating from m.NetworkHeightRound(),
-			// so we don't have to select against context.
-			ch <- NetworkHeightRound{
-				VotingHeight: s.Voting.VRV.Height,
-				VotingRound:  s.Voting.VRV.Round,
-
-				CommittingHeight: s.Committing.VRV.Height,
-				CommittingRound:  s.Committing.VRV.Round,
-			}
 
 		case req := <-k.snapshotRequests:
 			k.sendSnapshotResponse(ctx, s, req)
@@ -267,17 +276,8 @@ func (k *Kernel) mainLoop(ctx context.Context, s *kState) {
 		case req := <-k.addPrecommitRequests:
 			k.addPrecommit(ctx, s, req)
 
-		case vo.VotingCh <- vo.VotingVal:
-			s.Voting.Outgoing.MarkSent()
-
-		case vo.CommittingCh <- vo.CommittingVal:
-			s.Committing.Outgoing.MarkSent()
-
-		case vo.NextRoundCh <- vo.NextRoundVal:
-			s.NextRound.Outgoing.MarkSent()
-
 		case gsOut.Ch <- gsOut.Val:
-			gsOut.MarkSent(s)
+			gsOut.MarkSent()
 
 		case smOut.Ch <- smOut.Val:
 			smOut.MarkSent()
@@ -285,11 +285,14 @@ func (k *Kernel) mainLoop(ctx context.Context, s *kState) {
 		case pb := <-k.pbf.FetchedProposedBlocks:
 			k.addPB(ctx, s, pb)
 
-		case as := <-k.stateMachineIn:
-			k.handleStateMachineRoundUpdate(ctx, s, as)
+		case re := <-k.stateMachineRoundEntranceIn:
+			k.handleStateMachineRoundEntrance(ctx, s, re)
 
-		case act := <-s.StateMachineView.Actions():
+		case act := <-s.StateMachineViewManager.Actions():
 			k.handleStateMachineAction(ctx, s, act)
+
+		case sig := <-wSig:
+			close(sig.Alive)
 		}
 	}
 }
@@ -306,17 +309,15 @@ func (k *Kernel) addPB(ctx context.Context, s *kState, pb tmconsensus.ProposedBl
 		delete(s.InFlightFetchPBs, string(pb.Block.Hash))
 	}
 
-	view, viewID, _ := s.FindView(pb.Block.Height, pb.Round, "(*Kernel).addPB")
-	if view == nil {
+	vrv, viewID, _ := s.FindView(pb.Block.Height, pb.Round, "(*Kernel).addPB")
+	if vrv == nil {
 		k.log.Info(
 			"Dropping proposed block that did not match a view (may have been received immediately before a view shift)",
 			"pb_height", pb.Block.Height, "pb_round", pb.Round,
-			"voting_height", s.Voting.VRV.Height, "voting_round", s.Voting.VRV.Round,
+			"voting_height", s.Voting.Height, "voting_round", s.Voting.Round,
 		)
 		return
 	}
-
-	vrv := &view.VRV
 
 	// If we concurrently handled multiple requests for the same proposed block,
 	// the goroutines calling into HandleProposedBlock would have seen the same original view
@@ -337,13 +338,15 @@ func (k *Kernel) addPB(ctx context.Context, s *kState, pb tmconsensus.ProposedBl
 	// so we can add the proposed block.
 	vrv.ProposedBlocks = append(vrv.ProposedBlocks, pb)
 
+	// Persist the change before updating local state.
 	if err := k.rStore.SaveProposedBlock(ctx, pb); err != nil {
 		glog.HRE(k.log, pb.Block.Height, pb.Round, err).Warn(
 			"Failed to save proposed block to round store; this may cause issues upon restart",
 		)
+		// Continue anyway despite failure.
 	}
 
-	view.UpdateOutgoing()
+	s.MarkViewUpdated(viewID)
 
 	if viewID != ViewIDVoting && viewID != ViewIDNextRound {
 		// The rest of the method assumes we merged the proposed block into the current height.
@@ -352,9 +355,9 @@ func (k *Kernel) addPB(ctx context.Context, s *kState, pb tmconsensus.ProposedBl
 
 	// Also, now that we saved this proposed block,
 	// we need to check if it had commit info for our previous height.
-	// This applies whether we added the proposed block into voting or next round.
-	backfillView := &s.Committing
-	backfillVRV := &backfillView.VRV
+	// This applies whether we added the proposed block into voting or next round,
+	// which is guaranteed by the prior guard clause.
+	backfillVRV := &s.Committing
 
 	// TODO: this merging code should probably move to a function in gcrypto.
 	commitProofs := pb.Block.PrevCommitProof.Proofs
@@ -387,7 +390,7 @@ func (k *Kernel) addPB(ctx context.Context, s *kState, pb tmconsensus.ProposedBl
 		}
 
 		// Also update the committing view.
-		backfillView.UpdateOutgoing()
+		s.MarkCommittingViewUpdated()
 	}
 
 	// Finally, since we know at this point we've added a new proposed block,
@@ -401,7 +404,7 @@ func (k *Kernel) addPB(ctx context.Context, s *kState, pb tmconsensus.ProposedBl
 	// but for now, we will check for a view shift if this proposed block
 	// has any precommits, indicating we've received this block later than expected.
 	if viewID == ViewIDVoting {
-		if _, ok := s.Voting.VRV.PrecommitProofs[string(pb.Block.Hash)]; ok {
+		if _, ok := s.Voting.PrecommitProofs[string(pb.Block.Hash)]; ok {
 			k.checkVotingPrecommitViewShift(ctx, s)
 		}
 	}
@@ -420,7 +423,7 @@ func (k *Kernel) addPrevote(ctx context.Context, s *kState, req AddPrevoteReques
 
 	// NOTE: keep changes to this method synchronized with addPrecommit.
 
-	view, vID, vStatus := s.FindView(req.H, req.R, "(*Kernel).addPrevote")
+	vrv, vID, vStatus := s.FindView(req.H, req.R, "(*Kernel).addPrevote")
 	if vStatus != ViewFound {
 		switch vStatus {
 		case ViewBeforeCommitting, ViewOrphaned:
@@ -447,8 +450,6 @@ func (k *Kernel) addPrevote(ctx context.Context, s *kState, req AddPrevoteReques
 		))
 	}
 
-	vrv := &view.VRV
-
 	// Assume the votes will be accepted, then invalidate that if needed.
 	allAccepted := true
 	anyAdded := false
@@ -469,7 +470,7 @@ func (k *Kernel) addPrevote(ctx context.Context, s *kState, req AddPrevoteReques
 	// Bookkeeping.
 	if anyAdded {
 		vrv.VoteSummary.SetPrevotePowers(vrv.Validators, vrv.PrevoteProofs)
-		view.UpdateOutgoing()
+		s.MarkViewUpdated(vID)
 
 		if err := k.rStore.OverwritePrevoteProofs(
 			ctx,
@@ -523,7 +524,7 @@ func (k *Kernel) addPrecommit(ctx context.Context, s *kState, req AddPrecommitRe
 
 	// NOTE: keep changes to this method synchronized with addPrevote.
 
-	view, vID, vStatus := s.FindView(req.H, req.R, "(*Kernel).addPrecommit")
+	vrv, vID, vStatus := s.FindView(req.H, req.R, "(*Kernel).addPrecommit")
 	if vStatus != ViewFound {
 		switch vStatus {
 		case ViewBeforeCommitting, ViewOrphaned:
@@ -550,8 +551,6 @@ func (k *Kernel) addPrecommit(ctx context.Context, s *kState, req AddPrecommitRe
 		))
 	}
 
-	vrv := &view.VRV
-
 	// Assume the votes will be accepted, then invalidate that if needed.
 	allAccepted := true
 	anyAdded := false
@@ -572,7 +571,7 @@ func (k *Kernel) addPrecommit(ctx context.Context, s *kState, req AddPrecommitRe
 	// Bookkeeping.
 	if anyAdded {
 		vrv.VoteSummary.SetPrecommitPowers(vrv.Validators, vrv.PrecommitProofs)
-		view.UpdateOutgoing()
+		s.MarkViewUpdated(vID)
 
 		if err := k.rStore.OverwritePrecommitProofs(
 			ctx,
@@ -627,7 +626,7 @@ func (k *Kernel) addPrecommit(ctx context.Context, s *kState, req AddPrecommitRe
 // has been reached on the voting round, and if so,
 // updates the voting round accordingly.
 func (k *Kernel) checkVotingPrecommitViewShift(ctx context.Context, s *kState) error {
-	vrv := &s.Voting.VRV
+	vrv := &s.Voting
 	vs := vrv.VoteSummary
 	oldHeight, oldRound := vrv.Height, vrv.Round
 
@@ -643,7 +642,7 @@ func (k *Kernel) checkVotingPrecommitViewShift(ctx context.Context, s *kState) e
 		// then we know it doesn't matter where the remaining 5% land --
 		// it will not influence a block to be committed.
 		if vs.TotalPrecommitPower == vs.AvailablePower {
-			if err := k.advanceVotingRound(s); err != nil {
+			if err := k.advanceVotingRound(ctx, s); err != nil { // Certain due to 100% precommits present.
 				return err
 			}
 
@@ -661,14 +660,16 @@ func (k *Kernel) checkVotingPrecommitViewShift(ctx context.Context, s *kState) e
 	// At this point, we know the most voted precommit hash has exceeded the majority requirement.
 	if committingHash == "" {
 		// Voted nil, so only update the voting round.
-		if err := k.advanceVotingRound(s); err != nil {
+		if err := k.advanceVotingRound(ctx, s); err != nil { // Certain because full nil precommit.
 			return err
 		}
 
+		newHeight, newRound := s.Voting.Height, s.Voting.Round
+
 		k.log.Info(
 			"Shifted voting round due to nil precommit",
-			"height", oldHeight,
-			"old_round", oldRound, "new_round", oldRound+1,
+			"old_height", oldHeight, "old_round", oldRound,
+			"new_height", newHeight, "new_round", newRound,
 		)
 		return nil
 	}
@@ -693,113 +694,76 @@ func (k *Kernel) checkVotingPrecommitViewShift(ctx context.Context, s *kState) e
 		return nil
 	}
 
-	// Move the voting round to the committing round,
-	// and re-initialize the voting round.
-	// TODO: use the next height view.
-	committedBlock := s.CommittingBlock // Will put this in the block store momentarily.
-	s.Committing = s.Voting
-	s.Committing.UpdateOutgoing()
-
-	cbUpdated := false
-	for _, pb := range s.Committing.VRV.ProposedBlocks {
+	var votedBlock tmconsensus.Block
+	for _, pb := range s.Voting.ProposedBlocks {
 		if string(pb.Block.Hash) == committingHash {
-			s.CommittingBlock = pb.Block
-			cbUpdated = true
+			votedBlock = pb.Block
 			break
 		}
 	}
-
-	if !cbUpdated {
+	if votedBlock.Hash == nil {
+		// Still the zero value, which is an unsolved problem for now.
 		panic(fmt.Errorf(
-			"BUG: missed update; need to fetch missing proposed block with hash %x",
+			"BUG: missed update; needed to fetch missing proposed block with hash %x",
 			committingHash,
 		))
 	}
 
-	newHeight := s.Committing.VRV.Height + 1
-	votingVals := slices.Clone(s.CommittingBlock.NextValidators)
-
-	s.Voting = View{
-		VRV: tmconsensus.VersionedRoundView{
-			RoundView: tmconsensus.RoundView{
-				Height: newHeight,
-				Round:  0,
-
-				Validators: votingVals,
-
-				ValidatorPubKeyHash:    s.Committing.VRV.ValidatorPubKeyHash,
-				ValidatorVotePowerHash: s.Committing.VRV.ValidatorVotePowerHash,
-
-				VoteSummary: tmconsensus.NewVoteSummary(),
-
-				// TODO: initialize PrevoteProofs, PrecommitProofs from NextHeight.
-			},
-
-			PrevoteVersion:   1,
-			PrecommitVersion: 1,
-		},
+	// We are about to shift the voting view to committing,
+	// but first we need to persist the currently committing block.
+	if s.CommittingBlock.Height >= k.initialHeight {
+		cb := tmconsensus.CommittedBlock{
+			Block: s.CommittingBlock,
+			Proof: votedBlock.PrevCommitProof,
+		}
+		if err := k.bStore.SaveBlock(ctx, cb); err != nil {
+			return fmt.Errorf("failed to save newly committed block: %w", err)
+		}
 	}
 
-	s.Voting.VRV.VoteSummary.SetAvailablePower(votingVals) // TODO: this will need to update vote powers from NextHeight too.
+	nextVals := slices.Clone(votedBlock.NextValidators)
+	nhd := nextHeightDetails{
+		Validators: nextVals,
+	}
+	var err error
 
-	// TODO: check existing nil votes before creating both of them and possibly discarding one or both.
-	nilPrevote, nilPrecommit, err := k.getInitialNilProofs(newHeight, 0, votingVals)
+	nhd.Round0NilPrevote, nhd.Round0NilPrecommit, err =
+		k.getInitialNilProofs(votedBlock.Height+1, 0, nextVals)
 	if err != nil {
 		return fmt.Errorf("failed to load nil proofs on new voting round: %w", err)
 	}
-	if s.Voting.VRV.PrevoteProofs == nil {
-		s.Voting.VRV.PrevoteProofs = make(map[string]gcrypto.CommonMessageSignatureProof)
-	}
-	if s.Voting.VRV.PrevoteProofs[""] == nil {
-		s.Voting.VRV.PrevoteProofs[""] = nilPrevote
-	}
-	if s.Voting.VRV.PrecommitProofs == nil {
-		s.Voting.VRV.PrecommitProofs = make(map[string]gcrypto.CommonMessageSignatureProof)
-	}
-	if s.Voting.VRV.PrecommitProofs[""] == nil {
-		s.Voting.VRV.PrecommitProofs[""] = nilPrecommit
-	}
-
-	// Update the outgoing voting state following initialization.
-	s.Voting.UpdateOutgoing()
-
-	// And now set the next round.
-	s.NextRound.VRV.Reset() // Reuse space to save some allocations.
-	s.NextRound.VRV.Height = newHeight
-	s.NextRound.VRV.Round = 1
-	s.NextRound.VRV.Validators = append(s.NextRound.VRV.Validators[:0], votingVals...) // Existing slice likely already had capacity.
-	s.NextRound.VRV.ValidatorPubKeyHash = s.Voting.VRV.ValidatorPubKeyHash
-	s.NextRound.VRV.ValidatorVotePowerHash = s.Voting.VRV.ValidatorVotePowerHash
-	s.NextRound.VRV.PrevoteVersion = 1
-	s.NextRound.VRV.PrecommitVersion = 1
-	s.NextRound.VRV.VoteSummary.AvailablePower = s.Voting.VRV.VoteSummary.AvailablePower // Next round has same validators as current round.
-
-	// We reset the value, so we have vote proofs maps we can reuse.
-	nilPrevote, nilPrecommit, err = k.getInitialNilProofs(newHeight, 1, votingVals)
+	nhd.Round1NilPrevote, nhd.Round1NilPrecommit, err =
+		k.getInitialNilProofs(votedBlock.Height+1, 1, nextVals)
 	if err != nil {
 		return fmt.Errorf("failed to load nil proofs on new next round: %w", err)
 	}
-	s.NextRound.VRV.PrevoteProofs[""] = nilPrevote
-	s.NextRound.VRV.PrecommitProofs[""] = nilPrecommit
 
-	s.NextRound.UpdateOutgoing()
-
-	if s.Voting.VRV.Height <= k.initialHeight+1 {
-		// Don't attempt to commit a block at height 0.
-		return nil
+	// TODO: we can avoid calculating these hashes sometimes,
+	// if we are smart about inspecting the previous view.
+	pubKeys := tmconsensus.ValidatorsToPubKeys(nextVals)
+	bPubKeyHash, err := k.hashScheme.PubKeys(pubKeys)
+	if err != nil {
+		return fmt.Errorf("failed to build public key hash for new voting height: %w", err)
 	}
+	nhd.ValidatorPubKeyHash = string(bPubKeyHash)
 
-	cb := tmconsensus.CommittedBlock{
-		Block: committedBlock,
-		Proof: s.CommittingBlock.PrevCommitProof,
+	pows := tmconsensus.ValidatorsToVotePowers(nextVals)
+	bPowHash, err := k.hashScheme.VotePowers(pows)
+	if err != nil {
+		return fmt.Errorf("failed to build vote power hash for new voting height: %w", err)
 	}
-	if err := k.bStore.SaveBlock(ctx, cb); err != nil {
-		return fmt.Errorf("failed to save newly committed block: %w", err)
+	nhd.ValidatorVotePowerHash = string(bPowHash)
+
+	nhd.VotedBlock = votedBlock
+
+	s.ShiftVotingToCommitting(nhd)
+	if err := k.updateObservers(ctx, s); err != nil {
+		return err
 	}
 
 	k.log.Info(
 		"Committed block",
-		"height", committedBlock.Height, "hash", glog.Hex(committedBlock.Hash),
+		"height", s.CommittingBlock.Height-1, "hash", glog.Hex(s.CommittingBlock.PrevBlockHash),
 		"next_committing_height", s.CommittingBlock.Height, "next_committing_hash", glog.Hex(s.CommittingBlock.Hash),
 	)
 
@@ -810,8 +774,7 @@ func (k *Kernel) checkVotingPrecommitViewShift(ctx context.Context, s *kState) e
 // has surpassed the minority threshold on a single block in the next round.
 // If it has, voting advances to the next round.
 func (k *Kernel) checkNextRoundPrecommitViewShift(ctx context.Context, s *kState) error {
-	vrv := &s.NextRound.VRV
-	oldHeight, oldRound := vrv.Height, vrv.Round
+	vrv := &s.NextRound
 
 	vs := vrv.VoteSummary
 	min := tmconsensus.ByzantineMinority(vs.AvailablePower)
@@ -820,16 +783,22 @@ func (k *Kernel) checkNextRoundPrecommitViewShift(ctx context.Context, s *kState
 		return nil
 	}
 
+	oldHeight, oldRound := s.Voting.Height, s.Voting.Round
+
 	// Otherwise at least a minority of the network is precommitting on the target round,
-	// so we need to advance voting to that round.
-	if err := k.advanceVotingRound(s); err != nil {
+	// so we need to jump voting to that round.
+	// This is a jump, not advance, because we actually don't have
+	// sufficient information to treat the current round as a nil commit.
+	if err := k.jumpVotingRound(ctx, s); err != nil {
 		return err
 	}
 
+	newHeight, newRound := s.Voting.Height, s.Voting.Round
+
 	k.log.Info(
 		"Shifting voting round due to minority precommit",
-		"height", oldHeight,
-		"old_round", oldRound, "new_round", oldRound+1,
+		"old_height", oldHeight, "old_round", oldRound,
+		"new_height", newHeight, "new_round", newRound,
 	)
 
 	maj := tmconsensus.ByzantineMajority(vs.AvailablePower)
@@ -842,7 +811,7 @@ func (k *Kernel) checkNextRoundPrecommitViewShift(ctx context.Context, s *kState
 	if maxPow >= min {
 		// Make a PB fetch request if we don't have the proposed block
 		// that just crossed the threshold.
-		k.checkMissingPBs(ctx, s, s.Voting.VRV.PrecommitProofs)
+		k.checkMissingPBs(ctx, s, s.Voting.PrecommitProofs)
 	}
 
 	return nil
@@ -855,12 +824,10 @@ func (k *Kernel) checkPrevoteViewShift(ctx context.Context, s *kState, vID ViewI
 	var vrv *tmconsensus.VersionedRoundView
 	switch vID {
 	case ViewIDNextRound:
-		vrv = &s.NextRound.VRV
+		vrv = &s.NextRound
 	default:
 		panic(fmt.Errorf("BUG: unhandled view ID %s in checkPrecommitViewShift", vID))
 	}
-
-	oldHeight, oldRound := vrv.Height, vrv.Round
 
 	vs := vrv.VoteSummary
 	min := tmconsensus.ByzantineMinority(vs.AvailablePower)
@@ -869,21 +836,27 @@ func (k *Kernel) checkPrevoteViewShift(ctx context.Context, s *kState, vID ViewI
 		return nil
 	}
 
+	oldHeight, oldRound := s.Voting.Height, s.Voting.Round
+
 	// Otherwise a minority of the network is prevoting on the target round,
-	// so we need to advance voting to that round.
-	if err := k.advanceVotingRound(s); err != nil {
+	// so we need to jump voting to that round.
+	// This is a jump, not advance, because we actually don't have
+	// sufficient information to treat the current round as a nil commit.
+	if err := k.jumpVotingRound(ctx, s); err != nil {
 		return err
 	}
 
+	newHeight, newRound := s.Voting.Height, s.Voting.Round
+
 	k.log.Info(
 		"Shifted voting round due to minority prevote",
-		"height", oldHeight,
-		"old_round", oldRound, "new_round", oldRound+1,
+		"old_height", oldHeight, "old_round", oldRound,
+		"new_height", newHeight, "new_round", newRound,
 	)
 
 	// If the vote was for a single non-nil block, we may need to fetch proposed blocks.
 	if vs.PrevoteBlockPower[vs.MostVotedPrevoteHash] >= min {
-		k.checkMissingPBs(ctx, s, s.Voting.VRV.PrevoteProofs)
+		k.checkMissingPBs(ctx, s, s.Voting.PrevoteProofs)
 	}
 
 	return nil
@@ -895,8 +868,8 @@ func (k *Kernel) checkPrevoteViewShift(ctx context.Context, s *kState, vID ViewI
 // and if we do not have an outstanding request for that block.
 // This is only applicable to the Voting view.
 func (k *Kernel) checkMissingPBs(ctx context.Context, s *kState, proofs map[string]gcrypto.CommonMessageSignatureProof) {
-	havePBHashes := make(map[string]struct{}, len(s.Voting.VRV.ProposedBlocks))
-	for _, pb := range s.Voting.VRV.ProposedBlocks {
+	havePBHashes := make(map[string]struct{}, len(s.Voting.ProposedBlocks))
+	for _, pb := range s.Voting.ProposedBlocks {
 		havePBHashes[string(pb.Block.Hash)] = struct{}{}
 	}
 
@@ -951,7 +924,7 @@ func (k *Kernel) checkMissingPBs(ctx context.Context, s *kState, proofs map[stri
 	// nonexistent proposed block
 
 	// TODO: figure out how to use the VoteSummary with the proofs argument properly.
-	dist := newVoteDistribution(proofs, s.Voting.VRV.Validators)
+	dist := newVoteDistribution(proofs, s.Voting.Validators)
 
 	min := tmconsensus.ByzantineMinority(dist.AvailableVotePower)
 
@@ -972,7 +945,7 @@ func (k *Kernel) checkMissingPBs(ctx context.Context, s *kState, proofs map[stri
 			return
 		case k.pbf.FetchRequests <- tmelink.ProposedBlockFetchRequest{
 			Ctx:       fetchCtx,
-			Height:    s.Voting.VRV.Height,
+			Height:    s.Voting.Height,
 			BlockHash: missingHash,
 		}:
 			// Okay.
@@ -981,188 +954,56 @@ func (k *Kernel) checkMissingPBs(ctx context.Context, s *kState, proofs map[stri
 			// The FetchRequests channel ought to be sufficiently buffered to avoid this.
 			// But even if we do hit this log line once,
 			// the fetch attempt will repeat for every subsequent vote received thereafter.
-			k.log.Warn(
+			k.log.Debug(
 				"Blocked sending fetch request; kernel may deadlock if this block reaches consensus",
-				"height", s.Voting.VRV.Height, "round", s.Voting.VRV.Round,
+				"height", s.Voting.Height, "round", s.Voting.Round,
 				"missing_hash", glog.Hex(missingHash),
 			)
 		}
 	}
 }
 
-// advanceVotingRound is called when the kernel knows we need to increase the voting round by one.
-func (k *Kernel) advanceVotingRound(s *kState) error {
-	// If the round is advancing and the state machine is still pointing at the voting round,
-	// we need to ensure the view with sufficient commit information is sent to the state machine.
-	if s.StateMachineView.H() == s.Voting.VRV.Height &&
-		s.StateMachineView.R() == s.Voting.VRV.Round {
-		clone := s.Voting.VRV.Clone()
-		// It ought to be okay to force the send here.
-		// Getting the initial nil proofs should never fail,
-		// and even if it did, that would have no bearing on the existing voting view
-		// being sent to the state machine.
-		s.StateMachineView.ForceSend(&clone)
-	}
-
-	// And, we always set the NilVotedRound on the state here,
-	// because we have to assume nobody else has sufficient information to advance.
-	//
-	// It doesn't matter if there was an existing value for NilVotedRound.
-	// If there was one somehow, it would have been out of date.
-	vClone := s.Voting.VRV.Clone()
-	s.NilVotedRound = &vClone
-
-	// Whatever is in the NextRound view can be placed directly in the Voting view.
-	// By only swapping the VersionedRoundView fields,
-	// updating the outgoing views will do the right thing.
-	s.Voting.VRV, s.NextRound.VRV = s.NextRound.VRV, s.Voting.VRV
-
-	s.Voting.VRV.Version = 0
-	s.Voting.UpdateOutgoing()
-
-	s.NextRound.VRV.ResetForSameHeight()
-	s.NextRound.VRV.Round = s.Voting.VRV.Round + 1
-	nrrv := s.NextRound.VRV
-
-	nilPrevote, nilPrecommit, err := k.getInitialNilProofs(nrrv.Height, nrrv.Round, nrrv.Validators)
+// advanceVotingRound is called when the kernel needs to increase the voting round by one,
+// and when we have sufficient information for the voting round to treat it as a nil commit.
+func (k *Kernel) advanceVotingRound(ctx context.Context, s *kState) error {
+	h := s.NextRound.Height
+	r := s.NextRound.Round + 1
+	nilPrevote, nilPrecommit, err := k.getInitialNilProofs(h, r, s.NextRound.Validators)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get initial nil proofs for h=%d/r=%d when advancing voting round",
-			nrrv.Height, nrrv.Round+1,
+			h, r,
 		)
 	}
-	// The previous voting view must have had non-nil maps
-	// for it to have its own nil proofs.
-	// So, we don't need to handle the case of these maps being nil before assignment.
-	nrrv.PrevoteProofs[""] = nilPrevote
-	nrrv.PrecommitProofs[""] = nilPrecommit
 
-	s.NextRound.UpdateOutgoing()
+	s.AdvanceVotingRound(nilPrevote, nilPrecommit)
+	if err := k.updateObservers(ctx, s); err != nil {
+		return err
+	}
 	return nil
 }
 
-// viewOutputs is the collection of channels and values
-// corresponding to round views that the Mirror tracks.
-type viewOutputs struct {
-	VotingCh  chan<- tmconsensus.VersionedRoundView
-	VotingVal tmconsensus.VersionedRoundView
-
-	CommittingCh  chan<- tmconsensus.VersionedRoundView
-	CommittingVal tmconsensus.VersionedRoundView
-
-	NextRoundCh  chan<- tmconsensus.VersionedRoundView
-	NextRoundVal tmconsensus.VersionedRoundView
-
-	// TODO: channels and values for NextHeight.
-}
-
-// kViewOutputs is a kernel method that returns a collection of
-// output channels and values to send on those channels.
-//
-// Any output channels that have already sent the most recent value,
-// will be set to nil so that no send is attempted.
-func (k *Kernel) viewOutputs(s *kState) viewOutputs {
-	var out viewOutputs
-
-	if !s.Voting.Outgoing.HasBeenSent() {
-		out.VotingCh = k.votingViewOut
-		out.VotingVal = s.Voting.Outgoing.VRV
+// jumpVotingRound is called when the kernel needs to increase the voting round by one,
+// but this is due to timing without receiving a majority nil vote on the round.
+// Compared to [*Kernel.advanceVotingRound], this sends more information to the state machine
+// indicating the kernel's intent to skip the round.
+func (k *Kernel) jumpVotingRound(ctx context.Context, s *kState) error {
+	h := s.NextRound.Height
+	r := s.NextRound.Round + 1
+	nilPrevote, nilPrecommit, err := k.getInitialNilProofs(h, r, s.NextRound.Validators)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get initial nil proofs for h=%d/r=%d when jumping voting round",
+			h, r,
+		)
 	}
 
-	if !s.Committing.Outgoing.HasBeenSent() {
-		out.CommittingCh = k.committingViewOut
-		out.CommittingVal = s.Committing.Outgoing.VRV
+	s.JumpVotingRound(nilPrevote, nilPrecommit)
+	if err := k.updateObservers(ctx, s); err != nil {
+		return err
 	}
 
-	if !s.NextRound.Outgoing.HasBeenSent() {
-		out.NextRoundCh = k.nextRoundViewOut
-		out.NextRoundVal = s.NextRound.Outgoing.VRV
-	}
-
-	return out
-}
-
-type gossipStrategyOut struct {
-	Ch  chan<- tmelink.NetworkViewUpdate
-	Val tmelink.NetworkViewUpdate
-}
-
-func (o gossipStrategyOut) MarkSent(s *kState) {
-	if o.Val.Voting != nil {
-		s.Voting.Outgoing.MarkSent()
-	}
-
-	if o.Val.Committing != nil {
-		s.Committing.Outgoing.MarkSent()
-	}
-
-	if o.Val.NextRound != nil {
-		s.NextRound.Outgoing.MarkSent()
-	}
-
-	// If the gossip strategy value was sent, we always clear the NilVotedRound.
-	s.NilVotedRound = nil
-}
-
-func (k *Kernel) gossipStrategyOutput(s *kState) gossipStrategyOut {
-	var o gossipStrategyOut
-
-	// TODO: there are some optimizations that can be applied here to reduce garbage creation.
-
-	// In each check whether the view has been sent,
-	// we unconditionally (re)assign the output channel.
-	// If we don't hit any of those checks, the output channel will be nil,
-	// so that case will not be considered in the select.
-
-	if !s.Voting.Outgoing.HasBeenSent() {
-		o.Ch = k.gossipOutCh
-
-		val := s.Voting.Outgoing.VRV.Clone()
-		stripEmptyNilVotes(&val)
-		o.Val.Voting = &val
-	}
-
-	if !s.Committing.Outgoing.HasBeenSent() {
-		o.Ch = k.gossipOutCh
-
-		val := s.Committing.Outgoing.VRV.Clone()
-		stripEmptyNilVotes(&val)
-		o.Val.Committing = &val
-	}
-
-	if !s.NextRound.Outgoing.HasBeenSent() {
-		o.Ch = k.gossipOutCh
-
-		val := s.NextRound.Outgoing.VRV.Clone()
-		stripEmptyNilVotes(&val)
-		o.Val.NextRound = &val
-	}
-
-	// The nil voted round handling is a little different.
-	// There is not particular version handling for a nil voted round;
-	// whatever we had when we advanced the round, we send.
-	if s.NilVotedRound != nil {
-		o.Ch = k.gossipOutCh
-
-		o.Val.NilVotedRound = s.NilVotedRound
-	}
-
-	return o
-}
-
-// stripEmptyNilVotes removes a prevote or precommit proof for nil
-// if it contains no actual votes.
-//
-// The nil votes are always present for other bookkeeping reasons,
-// but we do not want to send that to the gossip strategy
-// and require the gossip strategy to filter it out.
-func stripEmptyNilVotes(vrv *tmconsensus.VersionedRoundView) {
-	if vrv.PrevoteProofs[""].SignatureBitSet().None() {
-		delete(vrv.PrevoteProofs, "")
-	}
-	if vrv.PrecommitProofs[""].SignatureBitSet().None() {
-		delete(vrv.PrecommitProofs, "")
-	}
+	return nil
 }
 
 func (k *Kernel) getInitialNilProofs(h uint64, r uint32, vals []tmconsensus.Validator) (
@@ -1209,10 +1050,10 @@ func (k *Kernel) sendSnapshotResponse(ctx context.Context, s *kState, req Snapsh
 	defer close(req.Ready)
 
 	if req.Snapshot.Voting != nil {
-		k.copySnapshotView(s.Voting.VRV, req.Snapshot.Voting, req.Fields)
+		k.copySnapshotView(s.Voting, req.Snapshot.Voting, req.Fields)
 	}
 	if req.Snapshot.Committing != nil {
-		k.copySnapshotView(s.Committing.VRV, req.Snapshot.Committing, req.Fields)
+		k.copySnapshotView(s.Committing, req.Snapshot.Committing, req.Fields)
 	}
 }
 
@@ -1313,9 +1154,9 @@ func (k *Kernel) sendViewLookupResponse(ctx context.Context, s *kState, req View
 
 	var resp ViewLookupResponse
 
-	srcView, vID, vStatus := s.FindView(req.H, req.R, req.Reason)
-	if srcView != nil {
-		k.copySnapshotView(srcView.VRV, req.VRV, req.Fields)
+	srcVRV, vID, vStatus := s.FindView(req.H, req.R, req.Reason)
+	if srcVRV != nil {
+		k.copySnapshotView(*srcVRV, req.VRV, req.Fields)
 	}
 	resp.ID = vID
 	resp.Status = vStatus
@@ -1332,10 +1173,10 @@ func (k *Kernel) sendPBCheckResponse(ctx context.Context, s *kState, req PBCheck
 
 	pbHeight := req.PB.Block.Height
 	pbRound := req.PB.Round
-	votingHeight := s.Voting.VRV.Height
-	votingRound := s.Voting.VRV.Round
-	committingHeight := s.Committing.VRV.Height
-	committingRound := s.Committing.VRV.Round
+	votingHeight := s.Voting.Height
+	votingRound := s.Voting.Round
+	committingHeight := s.Committing.Height
+	committingRound := s.Committing.Round
 
 	// Sorted earliest to latest heights,
 	// then interior round checks also sorted earliest to latest.
@@ -1345,7 +1186,7 @@ func (k *Kernel) sendPBCheckResponse(ctx context.Context, s *kState, req PBCheck
 		if pbRound < committingRound {
 			resp.Status = PBCheckRoundTooOld
 		} else if pbRound == committingRound {
-			k.setPBCheckStatus(req, &resp, s.Committing.VRV)
+			k.setPBCheckStatus(req, &resp, s.Committing)
 		} else {
 			panic(fmt.Errorf(
 				"TODO: handle proposed block with round (%d) beyond committing round (%d)",
@@ -1356,9 +1197,9 @@ func (k *Kernel) sendPBCheckResponse(ctx context.Context, s *kState, req PBCheck
 		if pbRound < votingRound {
 			resp.Status = PBCheckRoundTooOld
 		} else if pbRound == votingRound {
-			k.setPBCheckStatus(req, &resp, s.Voting.VRV)
+			k.setPBCheckStatus(req, &resp, s.Voting)
 		} else if pbRound == votingRound+1 {
-			k.setPBCheckStatus(req, &resp, s.NextRound.VRV)
+			k.setPBCheckStatus(req, &resp, s.NextRound)
 		} else {
 			panic(fmt.Errorf(
 				"TODO: handle proposed block with round (%d) beyond voting round (%d)",
@@ -1369,7 +1210,7 @@ func (k *Kernel) sendPBCheckResponse(ctx context.Context, s *kState, req PBCheck
 		// Special case of the proposed block being for the next height.
 		resp.Status = PBCheckNextHeight
 
-		rv := s.Voting.VRV.RoundView.Clone()
+		rv := s.Voting.RoundView.Clone()
 		resp.VotingRoundView = &rv
 	} else {
 		resp.Status = PBCheckRoundTooFarInFuture
@@ -1419,57 +1260,46 @@ func (k *Kernel) setPBCheckStatus(
 	}
 }
 
-func (k *Kernel) handleStateMachineRoundUpdate(ctx context.Context, s *kState, as tmeil.StateMachineRoundActionSet) {
-	defer trace.StartRegion(ctx, "handleStateMachineRoundUpdate").End()
+func (k *Kernel) handleStateMachineRoundEntrance(ctx context.Context, s *kState, re tmeil.StateMachineRoundEntrance) {
+	defer trace.StartRegion(ctx, "handleStateMachineRoundEntrance").End()
 
 	// We have received an updated height and round, and new action channels.
-	s.StateMachineView.Reset(as)
+	s.StateMachineViewManager.Reset(re)
 
 	// And now we need to respond with the matching view.
-	view, vID, status := s.FindView(as.H, as.R, "(*Kernel).handleStateMachineRoundUpdate")
-	if view == nil {
+	vrv, _, status := s.FindView(re.H, re.R, "(*Kernel).handleStateMachineRoundEntrance")
+	if vrv == nil {
 		// There is one acceptable condition here -- it was before the committing round.
 		if status == ViewBeforeCommitting {
 			// Then we have to load it from the block store.
-			cb, err := k.bStore.LoadBlock(ctx, as.H)
+			cb, err := k.bStore.LoadBlock(ctx, re.H)
 			if err != nil {
 				panic(fmt.Errorf(
 					"failed to load block at height %d from block store for state machine: %w",
-					as.H, err,
+					re.H, err,
 				))
 			}
 
 			// Send on 1-buffered channel does not require a select.
-			as.StateResponse <- tmeil.StateUpdate{
+			re.Response <- tmeil.RoundEntranceResponse{
 				CB: cb,
 			}
 			return
 		}
 
 		panic(fmt.Errorf(
-			"TODO: handle view not found (status=%s) when responding to state machine round update",
-			status,
+			"TODO: handle view not found (status=%s) when responding to state machine round update for height/round %d/%d",
+			status, re.H, re.R,
 		))
 	}
 
-	su := tmeil.StateUpdate{
-		VRV: view.VRV,
-	}
-	switch vID {
-	case ViewIDVoting:
-		su.PrevBlockHash = string(s.CommittingBlock.Hash)
-	case ViewIDCommitting:
-		su.PrevBlockHash = string(s.CommittingBlock.PrevBlockHash)
-	default:
-		panic(fmt.Errorf(
-			"TODO: handle state machine round update when matched view ID = %s (received height=%d round=%d; voting view is height=%d round=%d)",
-			vID, as.H, as.R, s.Voting.VRV.Height, s.Voting.VRV.Round,
-		))
+	r := tmeil.RoundEntranceResponse{
+		VRV: vrv.Clone(),
 	}
 
 	// Response channel is 1-buffered so it is safe to send this without a select.
-	as.StateResponse <- su
-	s.StateMachineView.MarkFirstSentVersion(su.VRV.Version)
+	re.Response <- r
+	s.StateMachineViewManager.MarkFirstSentVersion(r.VRV.Version)
 }
 
 func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tmeil.StateMachineRoundAction) {
@@ -1500,17 +1330,17 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 	// For votes, we have to duplicate some of the logic that happens in the mirror.
 	// Specifically, we have to get the current state so we can produce an accurate VoteUpdate.
 
-	h, r := s.StateMachineView.H(), s.StateMachineView.R()
-	v, vID, _ := s.FindView(h, r, "(*Kernel).handleStateMachineAction")
-	if v == nil || (vID != ViewIDVoting && vID != ViewIDCommitting) {
+	h, r := s.StateMachineViewManager.H(), s.StateMachineViewManager.R()
+	vrv, vID, _ := s.FindView(h, r, "(*Kernel).handleStateMachineAction")
+	if vrv == nil || (vID != ViewIDVoting && vID != ViewIDCommitting) {
 		k.log.Info(
 			"Dropping state machine vote due to not matching voting or committing view",
 			"req_h", h,
 			"req_r", r,
-			"voting_h", s.Voting.VRV.Height,
-			"voting_r", s.Voting.VRV.Round,
-			"committing_h", s.Committing.VRV.Height,
-			"committing_r", s.Committing.VRV.Round,
+			"voting_h", s.Voting.Height,
+			"voting_r", s.Voting.Round,
+			"committing_h", s.Committing.Height,
+			"committing_r", s.Committing.Round,
 			"view_id", vID,
 		)
 		return
@@ -1525,14 +1355,14 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 
 		hash := act.Prevote.TargetHash
 		var updatedVote gcrypto.CommonMessageSignatureProof
-		existingVote := v.VRV.PrevoteProofs[hash]
+		existingVote := vrv.PrevoteProofs[hash]
 		if existingVote == nil {
 			// First vote we have for this hash.
 			var err error
 			updatedVote, err = k.cmspScheme.New(
 				act.Prevote.SignContent,
-				tmconsensus.ValidatorsToPubKeys(s.Voting.VRV.Validators),
-				s.Voting.VRV.ValidatorPubKeyHash,
+				tmconsensus.ValidatorsToPubKeys(s.Voting.Validators),
+				s.Voting.ValidatorPubKeyHash,
 			)
 			if err != nil {
 				k.log.Error(
@@ -1548,7 +1378,7 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 			// But we will clone it first in case something goes wrong.
 			updatedVote = existingVote.Clone()
 		}
-		if err := updatedVote.AddSignature(act.Prevote.Sig, s.StateMachineView.PubKey()); err != nil {
+		if err := updatedVote.AddSignature(act.Prevote.Sig, s.StateMachineViewManager.PubKey()); err != nil {
 			k.log.Error(
 				"Failed to add prevote signature from state machine",
 				"prevote_h", h,
@@ -1565,7 +1395,7 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 			PrevoteUpdates: map[string]VoteUpdate{
 				act.Prevote.TargetHash: {
 					Proof:       updatedVote,
-					PrevVersion: v.VRV.PrevoteBlockVersions[hash],
+					PrevVersion: vrv.PrevoteBlockVersions[hash],
 				},
 			},
 
@@ -1579,13 +1409,13 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 	// At this point, from the early returns, only hasPrecommit must be true.
 	hash := act.Precommit.TargetHash
 	var updatedVote gcrypto.CommonMessageSignatureProof
-	existingVote := v.VRV.PrecommitProofs[hash]
+	existingVote := vrv.PrecommitProofs[hash]
 	if existingVote == nil {
 		var err error
 		updatedVote, err = k.cmspScheme.New(
 			act.Precommit.SignContent,
-			tmconsensus.ValidatorsToPubKeys(s.Voting.VRV.Validators),
-			s.Voting.VRV.ValidatorPubKeyHash,
+			tmconsensus.ValidatorsToPubKeys(s.Voting.Validators),
+			s.Voting.ValidatorPubKeyHash,
 		)
 		if err != nil {
 			k.log.Error(
@@ -1599,7 +1429,7 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 	} else {
 		updatedVote = existingVote.Clone()
 	}
-	if err := updatedVote.AddSignature(act.Precommit.Sig, s.StateMachineView.PubKey()); err != nil {
+	if err := updatedVote.AddSignature(act.Precommit.Sig, s.StateMachineViewManager.PubKey()); err != nil {
 		k.log.Error(
 			"Failed to add precommit signature from state machine",
 			"precommit_h", h,
@@ -1616,7 +1446,7 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 		PrecommitUpdates: map[string]VoteUpdate{
 			act.Precommit.TargetHash: {
 				Proof:       updatedVote,
-				PrevVersion: v.VRV.PrecommitBlockVersions[hash],
+				PrevVersion: vrv.PrecommitBlockVersions[hash],
 			},
 		},
 
@@ -1712,8 +1542,8 @@ func (k *Kernel) loadInitialView(
 func (k *Kernel) loadInitialCommittingView(ctx context.Context, s *kState) error {
 	var vals []tmconsensus.Validator
 
-	h := s.Committing.VRV.Height
-	r := s.Committing.VRV.Round
+	h := s.Committing.Height
+	r := s.Committing.Round
 
 	if h == k.initialHeight || h == k.initialHeight+1 {
 		vals = slices.Clone(k.initialVals)
@@ -1725,10 +1555,10 @@ func (k *Kernel) loadInitialCommittingView(ctx context.Context, s *kState) error
 	if err != nil {
 		return err
 	}
-	s.Committing.VRV.RoundView = rv
-	s.Committing.VRV.PrevoteVersion = 1
-	s.Committing.VRV.PrecommitVersion = 1
-	s.Committing.UpdateOutgoing()
+	s.Committing.RoundView = rv
+	s.Committing.PrevoteVersion = 1
+	s.Committing.PrecommitVersion = 1
+	s.MarkCommittingViewUpdated()
 
 	// Now we need to set s.CommittingBlock.
 	// We know this block is in the committing view,
@@ -1777,8 +1607,8 @@ func (k *Kernel) loadInitialCommittingView(ctx context.Context, s *kState) error
 func (k *Kernel) loadInitialVotingView(ctx context.Context, s *kState) error {
 	var vals []tmconsensus.Validator
 
-	h := s.Voting.VRV.Height
-	r := s.Voting.VRV.Round
+	h := s.Voting.Height
+	r := s.Voting.Round
 
 	if h == k.initialHeight || h == k.initialHeight+1 {
 		vals = slices.Clone(k.initialVals)
@@ -1800,10 +1630,10 @@ func (k *Kernel) loadInitialVotingView(ctx context.Context, s *kState) error {
 	if err != nil {
 		return err
 	}
-	s.Voting.VRV.RoundView = rv
-	s.Voting.VRV.PrevoteVersion = 1
-	s.Voting.VRV.PrecommitVersion = 1
-	s.Voting.UpdateOutgoing()
+	s.Voting.RoundView = rv
+	s.Voting.PrevoteVersion = 1
+	s.Voting.PrecommitVersion = 1
+	s.MarkVotingViewUpdated()
 
 	// The voting view may be cleared independently of the next round view,
 	// so take another clone of the validators slice to be defensive.
@@ -1811,10 +1641,34 @@ func (k *Kernel) loadInitialVotingView(ctx context.Context, s *kState) error {
 	if err != nil {
 		return err
 	}
-	s.NextRound.VRV.RoundView = nrrv
-	s.NextRound.VRV.PrevoteVersion = 1
-	s.NextRound.VRV.PrecommitVersion = 1
-	s.NextRound.UpdateOutgoing()
+	s.NextRound.RoundView = nrrv
+	s.NextRound.PrevoteVersion = 1
+	s.NextRound.PrecommitVersion = 1
+	s.MarkNextRoundViewUpdated()
+
+	return nil
+}
+
+// updateObservers records the new voting and committing heights and rounds,
+// to the Mirror store and to the metrics collector.
+func (k *Kernel) updateObservers(ctx context.Context, s *kState) error {
+	if err := k.store.SetNetworkHeightRound(
+		ctx,
+		s.Voting.Height, s.Voting.Round,
+		s.Committing.Height, s.Committing.Round,
+	); err != nil {
+		return fmt.Errorf("failed to update mirror store with new heights and rounds: %w", err)
+	}
+
+	// This should only be nil in test.
+	if k.mc == nil {
+		return nil
+	}
+
+	k.mc.UpdateMirror(tmemetrics.MirrorMetrics{
+		VH: s.Voting.Height, VR: s.Voting.Round,
+		CH: s.Committing.Height, CR: s.Committing.Round,
+	})
 
 	return nil
 }

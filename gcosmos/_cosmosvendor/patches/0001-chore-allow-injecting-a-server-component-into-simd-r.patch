@@ -1,0 +1,94 @@
+From bb130d4b2cf1e107acf6b12854a47d3573d7216b Mon Sep 17 00:00:00 2001
+From: Mark Rushakoff <mark@strange.love>
+Date: Wed, 17 Jul 2024 10:03:22 -0400
+Subject: [PATCH 1/6] chore: allow injecting a server component into simd root
+ command
+
+---
+ simapp/v2/simdv2/cmd/commands.go |  6 +++---
+ simapp/v2/simdv2/cmd/root_di.go  | 21 ++++++++++++++++++++-
+ 2 files changed, 23 insertions(+), 4 deletions(-)
+
+diff --git a/simapp/v2/simdv2/cmd/commands.go b/simapp/v2/simdv2/cmd/commands.go
+index 8d1e8bd40a..48b15cc8d9 100644
+--- a/simapp/v2/simdv2/cmd/commands.go
++++ b/simapp/v2/simdv2/cmd/commands.go
+@@ -15,7 +15,6 @@ import (
+ 	runtimev2 "cosmossdk.io/runtime/v2"
+ 	serverv2 "cosmossdk.io/server/v2"
+ 	"cosmossdk.io/server/v2/api/grpc"
+-	"cosmossdk.io/server/v2/cometbft"
+ 	"cosmossdk.io/server/v2/store"
+ 	"cosmossdk.io/simapp/v2"
+ 	confixcmd "cosmossdk.io/tools/confix/cmd"
+@@ -41,8 +40,9 @@ func newApp[T transaction.Tx](
+ 
+ func initRootCmd[T transaction.Tx](
+ 	rootCmd *cobra.Command,
+-	txConfig client.TxConfig,
++	clientCtx client.Context,
+ 	moduleManager *runtimev2.MM[T],
++	makeComponent func(cc client.Context) serverv2.ServerComponent[T],
+ ) {
+ 	cfg := sdk.GetConfig()
+ 	cfg.Seal()
+@@ -75,7 +75,7 @@ func initRootCmd[T transaction.Tx](
+ 		rootCmd,
+ 		newApp,
+ 		logger,
+-		cometbft.New(&genericTxDecoder[T]{txConfig}, cometbft.DefaultServerOptions[T]()),
++		makeComponent(clientCtx),
+ 		grpc.New[T](),
+ 		store.New[T](),
+ 	); err != nil {
+diff --git a/simapp/v2/simdv2/cmd/root_di.go b/simapp/v2/simdv2/cmd/root_di.go
+index 6051bede8e..fe9ebd9753 100644
+--- a/simapp/v2/simdv2/cmd/root_di.go
++++ b/simapp/v2/simdv2/cmd/root_di.go
+@@ -12,6 +12,8 @@ import (
+ 	"cosmossdk.io/depinject"
+ 	"cosmossdk.io/log"
+ 	"cosmossdk.io/runtime/v2"
++	serverv2 "cosmossdk.io/server/v2"
++	"cosmossdk.io/server/v2/cometbft"
+ 	"cosmossdk.io/simapp/v2"
+ 	"cosmossdk.io/x/auth/tx"
+ 	authtxconfig "cosmossdk.io/x/auth/tx/config"
+@@ -24,8 +26,25 @@ import (
+ 	"github.com/cosmos/cosmos-sdk/std"
+ )
+ 
++func NewRootCmdWithServer[T transaction.Tx](
++	makeComponent func(cc client.Context) serverv2.ServerComponent[T],
++) *cobra.Command {
++	return newRootCmd[T](makeComponent)
++}
++
+ // NewRootCmd creates a new root command for simd. It is called once in the main function.
+ func NewRootCmd[T transaction.Tx]() *cobra.Command {
++	return NewRootCmdWithServer(func(cc client.Context) serverv2.ServerComponent[T] {
++		return cometbft.New[T](
++			&genericTxDecoder[T]{cc.TxConfig},
++			cometbft.DefaultServerOptions[T](),
++		)
++	})
++}
++
++func newRootCmd[T transaction.Tx](
++	makeComponent func(cc client.Context) serverv2.ServerComponent[T],
++) *cobra.Command {
+ 	var (
+ 		autoCliOpts   autocli.AppOptions
+ 		moduleManager *runtime.MM[T]
+@@ -80,7 +99,7 @@ func NewRootCmd[T transaction.Tx]() *cobra.Command {
+ 		},
+ 	}
+ 
+-	initRootCmd[T](rootCmd, clientCtx.TxConfig, moduleManager)
++	initRootCmd[T](rootCmd, clientCtx, moduleManager, makeComponent)
+ 	if err := autoCliOpts.EnhanceRootCommand(rootCmd); err != nil {
+ 		panic(err)
+ 	}
+-- 
+2.44.0
+

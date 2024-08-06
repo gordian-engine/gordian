@@ -1,0 +1,7 @@
+go 1.22.3
+
+use (
+	.
+	..
+	./_cosmosvendor/cosmos-sdk/simapp/v2
+)

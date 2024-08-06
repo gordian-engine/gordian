@@ -87,7 +87,7 @@ func TestHashSchemeCompliance(
 		t.Run("block fields", func(t *testing.T) {
 			t.Parallel()
 
-			for _, tc := range []struct {
+			tcs := []struct {
 				name string
 				fn   func(*tmconsensus.Block)
 			}{
@@ -138,46 +138,27 @@ func TestHashSchemeCompliance(
 				},
 				// TODO: change just the ID of one in Validators, NextValidators
 
-				{
-					name: "Annotations (empty but non-nil App)",
-					fn: func(b *tmconsensus.Block) {
-						b.Annotations.App = []byte{}
-					},
-				},
-				{
-					name: "Annotations (empty but non-nil Engine)",
-					fn: func(b *tmconsensus.Block) {
-						b.Annotations.Engine = []byte{}
-					},
-				},
-				{
-					name: "Annotations (empty but non-nil for both)",
-					fn: func(b *tmconsensus.Block) {
-						b.Annotations.App = []byte{}
-						b.Annotations.Engine = []byte{}
-					},
-				},
+			}
 
-				{
-					name: "Annotations (populated App)",
+			// Use AnnotationCombinations to expand the test cases.
+			for _, ac := range AnnotationCombinations() {
+				if ac.Annotations.User == nil && ac.Annotations.Driver == nil {
+					// Don't add the empty case.
+					continue
+				}
+
+				tcs = append(tcs, struct {
+					name string
+					fn   func(*tmconsensus.Block)
+				}{
+					name: ac.Name,
 					fn: func(b *tmconsensus.Block) {
-						b.Annotations.App = []byte("app_annotation")
+						b.Annotations = ac.Annotations
 					},
-				},
-				{
-					name: "Annotations (populated Engine)",
-					fn: func(b *tmconsensus.Block) {
-						b.Annotations.Engine = []byte("engine_annotation")
-					},
-				},
-				{
-					name: "Annotations (populated for both)",
-					fn: func(b *tmconsensus.Block) {
-						b.Annotations.App = []byte("app_annotation")
-						b.Annotations.Engine = []byte("engine_annotation")
-					},
-				},
-			} {
+				})
+			}
+
+			for _, tc := range tcs {
 				tc := tc
 				var seenHashes [][]byte
 				t.Run(tc.name, func(t *testing.T) {

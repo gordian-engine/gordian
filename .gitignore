@@ -12,3 +12,6 @@
 demo/
 **/bin
 **/.DS_Store
+
+# If a test binary gets compiled, never check it in.
+*.test

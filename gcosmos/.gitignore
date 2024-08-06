@@ -1,0 +1,5 @@
+# Seems to be created when using the default simd start cxommand.
+/data
+
+# go build . will make a binary named gcosmos, which we never want to commit.
+gcosmos

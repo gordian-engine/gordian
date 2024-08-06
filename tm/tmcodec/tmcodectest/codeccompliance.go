@@ -54,18 +54,9 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 					mc := mcf()
 
 					t.Run("proposed block", func(t *testing.T) {
-						for _, ac := range []struct {
-							name string
-							a    tmconsensus.Annotations
-						}{
-							{name: "no annotations"},
-							{name: "only app annotation", a: tmconsensus.Annotations{App: []byte("app")}},
-							{name: "only engine annotation", a: tmconsensus.Annotations{Engine: []byte("engine")}},
-							{name: "both annotations set", a: tmconsensus.Annotations{App: []byte("both:app"), Engine: []byte("both:engine")}},
-							{name: "both annotations empty but not nil", a: tmconsensus.Annotations{App: []byte{}, Engine: []byte{}}},
-						} {
+						for _, ac := range tmconsensustest.AnnotationCombinations() {
 							ac := ac
-							t.Run(ac.name, func(t *testing.T) {
+							t.Run(ac.Name, func(t *testing.T) {
 								if !useInitialHeight {
 									activePrecommit := fx.PrecommitSignatureProof(
 										ctx,
@@ -92,7 +83,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 									}
 									pb.Block.PrevCommitProof = proof
 
-									pb.Annotations = ac.a
+									pb.Annotations = ac.Annotations
 								}
 
 								b, err := mc.MarshalProposedBlock(pb)
@@ -107,6 +98,19 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 					})
 
 					t.Run("plain block", func(t *testing.T) {
+						b, err := mc.MarshalBlock(pb.Block)
+						require.NoError(t, err)
+
+						var got tmconsensus.Block
+						require.NoError(t, mc.UnmarshalBlock(b, &got))
+
+						require.Equal(t, pb.Block, got)
+					})
+
+					t.Run("plain block with annotations", func(t *testing.T) {
+						// Just move the proposed block's annotations over the block's.
+						pb.Block.Annotations, pb.Annotations = pb.Annotations, tmconsensus.Annotations{}
+
 						b, err := mc.MarshalBlock(pb.Block)
 						require.NoError(t, err)
 

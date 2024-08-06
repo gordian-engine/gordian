@@ -14,6 +14,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/rollchains/gordian/gexchange"
+	"github.com/rollchains/gordian/internal/gchan"
 	"github.com/rollchains/gordian/tm/tmcodec"
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmp2p"
@@ -360,15 +361,19 @@ func (c *Connection) Codec() tmcodec.MarshalCodec {
 
 // SetConsensusHandler sets the consensus handler for this Connection.
 // h may be nil to ignore consensus messages.
-func (c *Connection) SetConsensusHandler(h tmconsensus.ConsensusHandler) {
+func (c *Connection) SetConsensusHandler(ctx context.Context, h tmconsensus.ConsensusHandler) {
 	ready := make(chan struct{})
 	req := setConsensusHandlerRequest{
 		Handler: h,
 		Ready:   ready,
 	}
 
-	c.setConsensusHandlerRequests <- req
-	<-req.Ready
+	_, _ = gchan.ReqResp(
+		ctx, c.log,
+		c.setConsensusHandlerRequests, req,
+		req.Ready,
+		"setting consensus handler",
+	)
 }
 
 type setConsensusHandlerRequest struct {

@@ -104,36 +104,6 @@ func (e ProposalOverwriteError) Error() string {
 	return fmt.Sprintf("attempted to overwrite existing proposal at height/round %d/%d", e.Height, e.Round)
 }
 
-// DoubleVoteError indicates the presence of a validator who submitted
-// multiple, conflicting votes.
-//
-// This error should rarely be returned directly;
-// instead use the AsDoublePrevoteError, AsDoublePrevoteError methods.
-type DoubleVoteError struct {
-	PubKeys []gcrypto.PubKey
-}
-
-func (e DoubleVoteError) Error() string {
-	var buf bytes.Buffer
-	buf.WriteString("simultaneous active and nil votes: ")
-	for i, pk := range e.PubKeys {
-		if i > 0 {
-			fmt.Fprintf(&buf, ", %x", pk.PubKeyBytes())
-		} else {
-			fmt.Fprintf(&buf, "%x", pk.PubKeyBytes())
-		}
-	}
-	return buf.String()
-}
-
-func (e DoubleVoteError) AsDoublePrevoteError() DoublePrevoteError {
-	return DoublePrevoteError{PubKeys: e.PubKeys}
-}
-
-func (e DoubleVoteError) AsDoublePrecommitError() DoublePrecommitError {
-	return DoublePrecommitError{PubKeys: e.PubKeys}
-}
-
 // DoublePrevoteError indicates a prevote message contained both an active and a nil prevote
 // from one or more validators.
 type DoublePrevoteError struct {

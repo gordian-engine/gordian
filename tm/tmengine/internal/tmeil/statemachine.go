@@ -5,7 +5,7 @@ import (
 	"github.com/rollchains/gordian/tm/tmconsensus"
 )
 
-// StateMachineRoundActionSet is the value the state machine sends to the engine,
+// StateMachineRoundEntrance is the value the state machine sends to the engine,
 // specifically routed to the mirror kernel.
 //
 // The state machine indicates its current height and round,
@@ -22,7 +22,7 @@ import (
 // However, if the state machine begins to fall behind,
 // the mirror may ignore values sent on an action set
 // belonging to a stale round.
-type StateMachineRoundActionSet struct {
+type StateMachineRoundEntrance struct {
 	H uint64
 	R uint32
 
@@ -30,7 +30,7 @@ type StateMachineRoundActionSet struct {
 
 	Actions chan StateMachineRoundAction
 
-	StateResponse chan StateUpdate
+	Response chan RoundEntranceResponse
 }
 
 // StateMachineRoundAction is the collection of actions that a state machine
@@ -44,7 +44,7 @@ type StateMachineRoundAction struct {
 }
 
 // ScopedSignature is a pair of target hash and signature that have an implied height and round,
-// stated explicitly in the H and R fields of a [StateMachineRoundActionSet].
+// stated explicitly in the H and R fields of a [StateMachineRoundEntrance].
 type ScopedSignature struct {
 	TargetHash string
 
@@ -56,28 +56,48 @@ type ScopedSignature struct {
 	Sig []byte
 }
 
-// StateUpdate contains either a versioned round view or a committed block.
-// The mirror sends this type to the state machine,
-// in response to the state machine sending an updated [StateMachineRoundActionSet].
-type StateUpdate struct {
+// RoundEntranceResponse is the state-synchronizing value that the mirror sends to the state machine
+// following a state machine's updated [StateMachineRoundEntrance],
+// which is the result of the state machine changing rounds.
+//
+// After a round sync, the mirror sends [StateMachineRoundView] values.
+type RoundEntranceResponse struct {
 	VRV tmconsensus.VersionedRoundView
-	// Only set when VRV is also set. Empty string at initial height.
-	// The state machine depends on this value when proposing a block.
-	// Actually... the state machine should be able to retrieve the previous finalization,
-	// so we probably do not need this field.
-	PrevBlockHash string
 
 	CB tmconsensus.CommittedBlock
 }
 
-// IsVRV reports whether the update contains a VersionedRoundView,
-// by checking for a non-zero height on u.VRV.
-func (u StateUpdate) IsVRV() bool {
-	return u.VRV.Height > 0
+// IsVRV reports whether r contains a VersionedRoundView,
+// by checking for a non-zero height on r.VRV.
+func (r RoundEntranceResponse) IsVRV() bool {
+	return r.VRV.Height > 0
 }
 
-// IsCB reports whether the update contains a CommittedBlock,
-// by checking for a non-zero height on u.CB.
-func (u StateUpdate) IsCB() bool {
-	return u.CB.Block.Height > 0
+// IsCB reports whether r contains a CommittedBlock,
+// by checking for a non-zero height on r.CB.
+func (r RoundEntranceResponse) IsCB() bool {
+	return r.CB.Block.Height > 0
+}
+
+// StateMachineRoundView is the set of values the mirror sends to the state machine
+// regularly throughout a single round, as the mirror receives updates from tne network.
+type StateMachineRoundView struct {
+	// The VRV for the state machine's current round.
+	// Value, not pointer, since it is almost always set.
+	VRV tmconsensus.VersionedRoundView
+
+	// When the mirror sees sufficient votes for a future round within the same height,
+	// it sets the JumpAheadRoundView to the details of that round.
+	// At that point, the state machine should assume no further round view updates,
+	// and it should enter the round specified by this field.
+	//
+	// Pointer because it is rarely set.
+	JumpAheadRoundView *tmconsensus.VersionedRoundView
+
+	// If the state machine has fallen behind to the point where
+	// the height it was on has been committed,
+	// the mirror will send a committed block on the round view update channel.
+	//
+	// Pointer because it is rarely set.
+	CB *tmconsensus.CommittedBlock
 }

@@ -101,11 +101,11 @@ PrevAppStateHash: %x
 		b.PrevAppStateHash,
 	)
 
-	if b.Annotations.App != nil {
-		fmt.Fprintf(hasher, "AppAnnotation: %x\n", b.Annotations.App)
+	if b.Annotations.User != nil {
+		fmt.Fprintf(hasher, "UserAnnotation: %x\n", b.Annotations.User)
 	}
-	if b.Annotations.Engine != nil {
-		fmt.Fprintf(hasher, "EngineAnnotation: %x\n", b.Annotations.Engine)
+	if b.Annotations.Driver != nil {
+		fmt.Fprintf(hasher, "DriverAnnotation: %x\n", b.Annotations.Driver)
 	}
 
 	return hasher.Sum(nil), nil

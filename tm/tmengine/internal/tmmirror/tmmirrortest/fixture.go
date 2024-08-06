@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	"github.com/rollchains/gordian/gcrypto"
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/gtest"
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
+	"github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror"
 	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmengine/tmelink/tmelinktest"
@@ -27,30 +29,40 @@ type Fixture struct {
 
 	// These channels are bidirectional in the fixture,
 	// because they are write-only in the config.
-	StateMachineViewOut chan tmconsensus.VersionedRoundView
+	StateMachineRoundViewOut chan tmeil.StateMachineRoundView
 
 	GossipStrategyOut chan tmelink.NetworkViewUpdate
 
-	StateMachineRoundActionsIn chan tmeil.StateMachineRoundActionSet
+	StateMachineRoundEntranceIn chan tmeil.StateMachineRoundEntrance
 
 	Cfg tmmirror.MirrorConfig
+
+	WatchdogCtx context.Context
 }
 
-func NewFixture(t *testing.T, nVals int) *Fixture {
+func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
 	fx := tmconsensustest.NewStandardFixture(nVals)
 	gso := make(chan tmelink.NetworkViewUpdate)
-	smIn := make(chan tmeil.StateMachineRoundActionSet, 1)
-	smViewOut := make(chan tmconsensus.VersionedRoundView) // Unbuffered.
+	smIn := make(chan tmeil.StateMachineRoundEntrance, 1)
+	smViewOut := make(chan tmeil.StateMachineRoundView) // Unbuffered.
+
+	log := gtest.NewLogger(t)
+	wd, wCtx := gwatchdog.NewNopWatchdog(ctx, log.With("sys", "watchdog"))
+
+	// Ensure the watchdog doesn't log after test completion.
+	// There ought to be a defer cancel before the call to NewFixture anyway.
+	t.Cleanup(wd.Wait)
+
 	return &Fixture{
-		Log: gtest.NewLogger(t),
+		Log: log,
 
 		Fx: fx,
 
-		StateMachineViewOut: smViewOut,
+		StateMachineRoundViewOut: smViewOut,
 
 		GossipStrategyOut: gso,
 
-		StateMachineRoundActionsIn: smIn,
+		StateMachineRoundEntranceIn: smIn,
 
 		Cfg: tmmirror.MirrorConfig{
 			Store:          tmmemstore.NewMirrorStore(),
@@ -72,27 +84,51 @@ func NewFixture(t *testing.T, nVals int) *Fixture {
 
 			GossipStrategyOut: gso,
 
-			StateMachineViewOut: smViewOut,
+			StateMachineRoundViewOut: smViewOut,
 
-			FromStateMachineLink: smIn,
+			StateMachineRoundEntranceIn: smIn,
+
+			Watchdog: wd,
 		},
+
+		WatchdogCtx: wCtx,
 	}
 }
 
-func (f *Fixture) NewMirror(ctx context.Context) *tmmirror.Mirror {
-	m, err := tmmirror.NewMirror(ctx, f.Log, f.Cfg)
+func (f *Fixture) NewMirror() *tmmirror.Mirror {
+	m, err := tmmirror.NewMirror(f.WatchdogCtx, f.Log, f.Cfg)
 	if err != nil {
 		panic(err)
 	}
 	return m
 }
 
-func (f *Fixture) Store() tmstore.MirrorStore {
-	return f.Cfg.Store
+func (f *Fixture) Store() *tmmemstore.MirrorStore {
+	return f.Cfg.Store.(*tmmemstore.MirrorStore)
 }
 
 func (f *Fixture) ValidatorStore() tmstore.ValidatorStore {
 	return f.Cfg.ValidatorStore
+}
+
+func (f *Fixture) UseMetrics(t *testing.T, ctx context.Context) <-chan tmemetrics.Metrics {
+	if f.Cfg.MetricsCollector != nil {
+		panic("UseMetrics called when f.Cfg.MetricsCollector was not nil")
+	}
+
+	ch := make(chan tmemetrics.Metrics)
+	mc := tmemetrics.NewCollector(ctx, 4, ch)
+	f.Cfg.MetricsCollector = mc
+
+	// The one tricky part: the collector will not report any metrics
+	// before both the state machine and the mirror have reported once.
+	// So, since this is a mirror fixture and we presumably will not
+	// have any state machine involvement,
+	// just report a zero state machine metric.
+	mc.UpdateStateMachine(tmemetrics.StateMachineMetrics{})
+
+	t.Cleanup(mc.Wait)
+	return ch
 }
 
 // CommitInitialHeight updates the round store, the network store,

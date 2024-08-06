@@ -1,8 +1,11 @@
 package tmconsensus
 
 import (
+	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/rollchains/gordian/gcrypto"
 )
@@ -98,6 +101,64 @@ func (v *RoundView) ResetForSameHeight() {
 	v.VoteSummary.ResetForSameHeight()
 }
 
+// LogValue converts v into an slog.Value.
+// This provides a highly detailed log, so it is only appropriate for infrequent log events,
+// such as responding to a watchdog termination signal.
+func (v RoundView) LogValue() slog.Value {
+	// This method is a value receiver because the slog package will not call the method
+	// if it is a pointer receiver and we are not calling with a pointer.
+	valAttrs := make([]slog.Attr, len(v.Validators))
+	for i, val := range v.Validators {
+		valAttrs[i] = slog.Attr{
+			Key: fmt.Sprintf("%x", val.PubKey.PubKeyBytes()),
+			Value: slog.GroupValue(
+				slog.Int("index", i),
+				slog.Uint64("power", val.Power),
+			),
+		}
+	}
+
+	pbHashes := make([]string, len(v.ProposedBlocks))
+	for i, pb := range v.ProposedBlocks {
+		pbHashes[i] = fmt.Sprintf("%x", pb)
+	}
+
+	prevoteAttrs := make([]slog.Attr, 0, len(v.PrevoteProofs))
+	for hash, proof := range v.PrevoteProofs {
+		key := fmt.Sprintf("%x", hash)
+		if key == "" {
+			key = "<nil>"
+		}
+		prevoteAttrs = append(prevoteAttrs, slog.String(key, proof.SignatureBitSet().String()))
+	}
+	sortSlogAttrsByKey(prevoteAttrs)
+
+	precommitAttrs := make([]slog.Attr, 0, len(v.PrecommitProofs))
+	for hash, proof := range v.PrecommitProofs {
+		key := fmt.Sprintf("%x", hash)
+		if key == "" {
+			key = "<nil>"
+		}
+		precommitAttrs = append(precommitAttrs, slog.String(key, proof.SignatureBitSet().String()))
+	}
+	sortSlogAttrsByKey(precommitAttrs)
+
+	return slog.GroupValue(
+		slog.Uint64("height", v.Height),
+		slog.Uint64("round", uint64(v.Round)), // slog does not have a uint32 value.
+
+		slog.Attr{Key: "validators", Value: slog.GroupValue(valAttrs...)},
+
+		slog.String("validator_pub_key_hash", fmt.Sprintf("%x", v.ValidatorPubKeyHash)),
+		slog.String("validator_vote_power_hash", fmt.Sprintf("%x", v.ValidatorVotePowerHash)),
+
+		slog.String("proposed_blocks", strings.Join(pbHashes, ", ")),
+
+		slog.Attr{Key: "prevote_proofs", Value: slog.GroupValue(prevoteAttrs...)},
+		slog.Attr{Key: "precommit_proofs", Value: slog.GroupValue(precommitAttrs...)},
+	)
+}
+
 // VersionedRoundView is a superset of [RoundView]
 // that contains version information,
 // for use cases where a RoundView may be receiving live updates
@@ -105,7 +166,7 @@ func (v *RoundView) ResetForSameHeight() {
 //
 // This type is used internally to the engine and exposed to the gossip strategy.
 type VersionedRoundView struct {
-	// Embedded network view for ease of access.
+	// Embedded round view for ease of access.
 	RoundView
 
 	// Overall version that gets incremented with each atomic change.
@@ -180,4 +241,51 @@ func (v *VersionedRoundView) resetVersions() {
 
 	clear(v.PrevoteBlockVersions)
 	clear(v.PrecommitBlockVersions)
+}
+
+// LogValue converts v into an slog.Value.
+// This provides a highly detailed log, so it is only appropriate for infrequent log events,
+// such as responding to a watchdog termination signal.
+func (v VersionedRoundView) LogValue() slog.Value {
+	// This method is a value receiver because the slog package will not call the method
+	// if it is a pointer receiver and we are not calling with a pointer.
+	prevoteBlockVersionAttrs := make([]slog.Attr, 0, len(v.PrevoteBlockVersions))
+	for hash, version := range v.PrevoteBlockVersions {
+		key := fmt.Sprintf("%x", hash)
+		if key == "" {
+			key = "<nil>"
+		}
+		prevoteBlockVersionAttrs = append(prevoteBlockVersionAttrs, slog.Uint64(key, uint64(version)))
+	}
+	sortSlogAttrsByKey(prevoteBlockVersionAttrs)
+
+	precommitBlockVersionAttrs := make([]slog.Attr, 0, len(v.PrecommitBlockVersions))
+	for hash, version := range v.PrecommitBlockVersions {
+		key := fmt.Sprintf("%x", hash)
+		if key == "" {
+			key = "<nil>"
+		}
+		precommitBlockVersionAttrs = append(precommitBlockVersionAttrs, slog.Uint64(key, uint64(version)))
+	}
+	sortSlogAttrsByKey(precommitBlockVersionAttrs)
+
+	return slog.GroupValue(
+		slog.Uint64("version", uint64(v.Version)),
+
+		slog.Uint64("prevote_version", uint64(v.PrevoteVersion)),
+		slog.Attr{Key: "prevote_block_versions", Value: slog.GroupValue(prevoteBlockVersionAttrs...)},
+
+		slog.Uint64("precommit_version", uint64(v.PrecommitVersion)),
+		slog.Attr{Key: "precommit_block_versions", Value: slog.GroupValue(precommitBlockVersionAttrs...)},
+
+		slog.Attr{Key: "round_view", Value: v.RoundView.LogValue()},
+	)
+}
+
+// sortSlogAttrsByKey does an in-place sort of attrs based on each attr's Key field.
+// This is helpful to ensure deterministic formatting of logs with block hashes.
+func sortSlogAttrsByKey(attrs []slog.Attr) {
+	slices.SortFunc(attrs, func(a, b slog.Attr) int {
+		return strings.Compare(a.Key, b.Key)
+	})
 }

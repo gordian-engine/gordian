@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestStepFromVoteSummary_AwaitingProposal(t *testing.T) {
+func TestStepFromVoteSummary(t *testing.T) {
 	t.Run("with no proposed blocks, prevotes, or precommits", func(t *testing.T) {
 		t.Parallel()
 
@@ -35,25 +35,7 @@ func TestStepFromVoteSummary_AwaitingProposal(t *testing.T) {
 		vs.SetPrevotePowers(fx.Vals(), prevoteMap)
 
 		s := tsi.GetStepFromVoteSummary(vs)
-		expectStep(t, tsi.StepAwaitingPrevotes, s)
-	})
-
-	t.Run("with minority prevote power present", func(t *testing.T) {
-		t.Parallel()
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		fx, rv := makeRV(4)
-		vs := rv.VoteSummary
-		pb1 := fx.NextProposedBlock([]byte("app_data_1"), 0)
-		prevoteMap := fx.PrevoteProofMap(ctx, 1, 0, map[string][]int{
-			string(pb1.Block.Hash): {0, 1},
-		})
-		vs.SetPrevotePowers(fx.Vals(), prevoteMap)
-
-		s := tsi.GetStepFromVoteSummary(vs)
-		expectStep(t, tsi.StepAwaitingPrevotes, s)
+		expectStep(t, tsi.StepAwaitingProposal, s)
 	})
 
 	t.Run("with majority prevote power present for one block", func(t *testing.T) {

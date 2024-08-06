@@ -3,8 +3,8 @@ package tsi
 import (
 	"context"
 
-	"github.com/rollchains/gordian/tm/tmapp"
 	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
 )
 
@@ -34,6 +34,14 @@ type RoundLifecycle struct {
 	PrevFinNextVals     []tmconsensus.Validator
 	PrevFinAppStateHash string
 
+	// By tracking the previously considered hashes,
+	// we can easily provide a hint to the consensus strategy
+	// indicating which of these proposed blocks are new.
+	//
+	// These only need to be the included blocks' hashes;
+	// no need to include blocks that were excluded due to app hash mismatches, etc.
+	PrevConsideredHashes map[string]struct{}
+
 	// Channel to alert Mirror of actions we've taken in this round.
 	// Nil when in replay mode.
 	OutgoingActionsCh chan tmeil.StateMachineRoundAction
@@ -43,8 +51,8 @@ type RoundLifecycle struct {
 	PrevoteHashCh   chan HashSelection
 	PrecommitHashCh chan HashSelection
 
-	// For the application to write directly.
-	FinalizeRespCh chan tmapp.FinalizeBlockResponse
+	// For the driver to write directly.
+	FinalizeRespCh chan tmdriver.FinalizeBlockResponse
 
 	// Values reported by the application for the finalization of the current round.
 	FinalizedValidators   []tmconsensus.Validator
@@ -76,9 +84,13 @@ func (rlc *RoundLifecycle) Reset(ctx context.Context, h uint64, r uint32) {
 	rlc.PrevoteHashCh = make(chan HashSelection, 1)
 	rlc.PrecommitHashCh = make(chan HashSelection, 1)
 
-	rlc.FinalizeRespCh = make(chan tmapp.FinalizeBlockResponse, 1)
+	rlc.FinalizeRespCh = make(chan tmdriver.FinalizeBlockResponse, 1)
 
 	rlc.CommitWaitElapsed = false
+
+	// The hashes may have been cleared already in some circumstances,
+	// but a second clear won't hurt.
+	clear(rlc.PrevConsideredHashes)
 }
 
 func (rlc RoundLifecycle) IsReplaying() bool {

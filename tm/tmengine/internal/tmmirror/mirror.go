@@ -8,10 +8,12 @@ import (
 	"runtime/trace"
 
 	"github.com/rollchains/gordian/gcrypto"
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/gchan"
 	"github.com/rollchains/gordian/internal/glog"
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
+	"github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
 	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmstore"
@@ -28,7 +30,6 @@ type Mirror struct {
 	sigScheme  tmconsensus.SignatureScheme
 	cmspScheme gcrypto.CommonMessageSignatureProofScheme
 
-	nhrRequests        chan<- (chan NetworkHeightRound)
 	snapshotRequests   chan<- tmi.SnapshotRequest
 	viewLookupRequests chan<- tmi.ViewLookupRequest
 
@@ -57,9 +58,13 @@ type MirrorConfig struct {
 
 	GossipStrategyOut chan<- tmelink.NetworkViewUpdate
 
-	StateMachineViewOut chan<- tmconsensus.VersionedRoundView
+	StateMachineRoundViewOut chan<- tmeil.StateMachineRoundView
 
-	FromStateMachineLink <-chan tmeil.StateMachineRoundActionSet
+	StateMachineRoundEntranceIn <-chan tmeil.StateMachineRoundEntrance
+
+	MetricsCollector *tmemetrics.Collector
+
+	Watchdog *gwatchdog.Watchdog
 }
 
 // toKernelConfig copies the fields from c that are duplicated in the kernel config.
@@ -81,8 +86,12 @@ func (c MirrorConfig) toKernelConfig() tmi.KernelConfig {
 
 		GossipStrategyOut: c.GossipStrategyOut,
 
-		StateMachineRoundActionsIn: c.FromStateMachineLink,
-		StateMachineViewOut:        c.StateMachineViewOut,
+		StateMachineRoundEntranceIn: c.StateMachineRoundEntranceIn,
+		StateMachineRoundViewOut:    c.StateMachineRoundViewOut,
+
+		MetricsCollector: c.MetricsCollector,
+
+		Watchdog: c.Watchdog,
 	}
 }
 
@@ -100,10 +109,8 @@ func NewMirror(
 
 	// 1-buffered because it is possible that the caller
 	// may initiate the request and do work before reading the response.
-	nhrRequests := make(chan chan NetworkHeightRound, 1)
 	snapshotRequests := make(chan tmi.SnapshotRequest, 1)
 	viewLookupRequests := make(chan tmi.ViewLookupRequest, 1)
-	kCfg.NHRRequests = nhrRequests
 	kCfg.SnapshotRequests = snapshotRequests
 	kCfg.ViewLookupRequests = viewLookupRequests
 
@@ -138,7 +145,6 @@ func NewMirror(
 		sigScheme:  cfg.SignatureScheme,
 		cmspScheme: cfg.CommonMessageSignatureProofScheme,
 
-		nhrRequests:        nhrRequests,
 		snapshotRequests:   snapshotRequests,
 		viewLookupRequests: viewLookupRequests,
 		pbCheckRequests:    pbCheckRequests,
@@ -160,26 +166,6 @@ func (m *Mirror) Wait() {
 // as navigating to an internal package to find a definition
 // is usually a poor, clunky experience.
 type NetworkHeightRound = tmi.NetworkHeightRound
-
-// NetworkHeightRound returns m's current understanding of the network's height and round.
-// This can be useful for external instrumentation.
-// Use the NetworkView method for more detail.
-func (m *Mirror) NetworkHeightRound(ctx context.Context) (NetworkHeightRound, error) {
-	defer trace.StartRegion(ctx, "NetworkHeightRound").End()
-	req := make(chan NetworkHeightRound, 1)
-
-	nhr, ok := gchan.ReqResp(
-		ctx, m.log,
-		m.nhrRequests, req,
-		req,
-		"NetworkHeightRound",
-	)
-	if !ok {
-		return NetworkHeightRound{}, context.Cause(ctx)
-	}
-
-	return nhr, nil
-}
 
 func (m *Mirror) HandleProposedBlock(ctx context.Context, pb tmconsensus.ProposedBlock) tmconsensus.HandleProposedBlockResult {
 	defer trace.StartRegion(ctx, "HandleProposedBlock").End()

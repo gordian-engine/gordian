@@ -8,6 +8,7 @@ import (
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/internal/gtest"
 	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
 	"github.com/stretchr/testify/require"
 )
@@ -34,9 +35,9 @@ func TestKernel_votesBeforeVotingRound(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			kfx := NewKernelFixture(t, 2)
+			kfx := NewKernelFixture(ctx, t, 2)
 
-			k := kfx.NewKernel(ctx)
+			k := kfx.NewKernel()
 			defer k.Wait()
 			defer cancel()
 
@@ -45,9 +46,9 @@ func TestKernel_votesBeforeVotingRound(t *testing.T) {
 			kfx.Fx.SignProposal(ctx, &pb1, 0)
 
 			// Proposed blocks are sent directly.
-			_ = gtest.ReceiveSoon(t, kfx.VotingViewOutCh)
+			_ = gtest.ReceiveSoon(t, kfx.GossipStrategyOut)
 			gtest.SendSoon(t, kfx.AddPBRequests, pb1)
-			_ = gtest.ReceiveSoon(t, kfx.VotingViewOutCh)
+			_ = gtest.ReceiveSoon(t, kfx.GossipStrategyOut)
 
 			commitProof1 := kfx.Fx.PrecommitSignatureProof(
 				ctx,
@@ -77,7 +78,7 @@ func TestKernel_votesBeforeVotingRound(t *testing.T) {
 
 			// Confirm vote applied after being accepted
 			// (since the kernel does some work in the background here).
-			votingVRV := gtest.ReceiveSoon(t, kfx.VotingViewOutCh)
+			votingVRV := gtest.ReceiveSoon(t, kfx.GossipStrategyOut).Voting
 			require.Equal(t, uint64(2), votingVRV.Height)
 
 			// Update the fixture and go through the next height.
@@ -88,7 +89,7 @@ func TestKernel_votesBeforeVotingRound(t *testing.T) {
 			pb2 := kfx.Fx.NextProposedBlock([]byte("app_data_2"), 0)
 			kfx.Fx.SignProposal(ctx, &pb2, 0)
 			gtest.SendSoon(t, kfx.AddPBRequests, pb2)
-			_ = gtest.ReceiveSoon(t, kfx.VotingViewOutCh)
+			_ = gtest.ReceiveSoon(t, kfx.GossipStrategyOut)
 
 			commitProof2 := kfx.Fx.PrecommitSignatureProof(
 				ctx,
@@ -117,7 +118,7 @@ func TestKernel_votesBeforeVotingRound(t *testing.T) {
 			require.Equal(t, tmi.AddVoteAccepted, resp)
 
 			// Confirm on voting height 3.
-			votingVRV = gtest.ReceiveSoon(t, kfx.VotingViewOutCh)
+			votingVRV = gtest.ReceiveSoon(t, kfx.GossipStrategyOut).Voting
 			require.Equal(t, uint64(3), votingVRV.Height)
 
 			// Check if we need to advance the voting round.
@@ -148,7 +149,7 @@ func TestKernel_votesBeforeVotingRound(t *testing.T) {
 				require.Equal(t, tmi.AddVoteAccepted, resp)
 
 				// Confirm on voting height 3, round 1.
-				votingVRV = gtest.ReceiveSoon(t, kfx.VotingViewOutCh)
+				votingVRV = gtest.ReceiveSoon(t, kfx.GossipStrategyOut).Voting
 				require.Equal(t, uint64(3), votingVRV.Height)
 				require.Equal(t, uint32(1), votingVRV.Round)
 			}
@@ -223,4 +224,61 @@ func TestKernel_votesBeforeVotingRound(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Regression test: if the state update is not a clone of the kernel's VRV,
+// there is a possible data race when the kernel next modifies that VRV.
+func TestKernel_initialStateUpdateToStateMachineUsesVRVClone(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	kfx := NewKernelFixture(ctx, t, 4)
+
+	k := kfx.NewKernel()
+	defer k.Wait()
+	defer cancel()
+
+	// Simulate the state machine round action input.
+	re := tmeil.StateMachineRoundEntrance{
+		H: 1, R: 0,
+
+		PubKey: nil,
+
+		Actions: make(chan tmeil.StateMachineRoundAction, 3),
+
+		Response: make(chan tmeil.RoundEntranceResponse, 1),
+	}
+
+	gtest.SendSoon(t, kfx.StateMachineRoundEntranceIn, re)
+
+	rer := gtest.ReceiveSoon(t, re.Response)
+
+	// Now we will do three modifications to be extra sure this is a clone.
+	// Change the version, add a proposed block directly, and modify the vote summary directly.
+	// None of these are likely to happen in practice,
+	// but they are simple checks to ensure we have a clone, not a reference.
+	pb3 := kfx.Fx.NextProposedBlock([]byte("val3"), 3)
+	origVersion := rer.VRV.Version
+	rer.VRV.Version = 12345
+	rer.VRV.ProposedBlocks = append(rer.VRV.ProposedBlocks, pb3)
+	rer.VRV.VoteSummary.PrevoteBlockPower["not_a_block"] = 1
+
+	// If those fields were modified on the kernel's copy of the VRV,
+	// those would be included in the next update we force by sending a different proposed block.
+	pb1 := kfx.Fx.NextProposedBlock([]byte("app_data_1"), 0)
+	kfx.Fx.SignProposal(ctx, &pb1, 0)
+
+	gtest.SendSoon(t, kfx.AddPBRequests, pb1)
+
+	vrv := gtest.ReceiveSoon(t, kfx.StateMachineRoundViewOut).VRV
+
+	// It didn't keep our version change.
+	require.Equal(t, origVersion+1, vrv.Version)
+	// It only has the proposed block we simulated from the network.
+	// (Dubious test since the VRV slice may have been nil.)
+	require.Equal(t, []tmconsensus.ProposedBlock{pb1}, vrv.ProposedBlocks)
+	// And it doesn't have the bogus change we added to our copy of the vote summary.
+	require.Empty(t, vrv.VoteSummary.PrevoteBlockPower)
 }

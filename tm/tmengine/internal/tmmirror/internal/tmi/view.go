@@ -21,8 +21,6 @@ const (
 type View struct {
 	VRV      tmconsensus.VersionedRoundView
 	Outgoing OutgoingView
-
-	// TODO: vote power tracking
 }
 
 func (v *View) UpdateOutgoing() {

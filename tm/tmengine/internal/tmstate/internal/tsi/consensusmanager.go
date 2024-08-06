@@ -18,7 +18,7 @@ type ConsensusManager struct {
 	strat tmconsensus.ConsensusStrategy
 
 	EnterRoundRequests             chan EnterRoundRequest
-	ConsiderProposedBlocksRequests chan ChooseProposedBlockRequest
+	ConsiderProposedBlocksRequests chan ConsiderProposedBlocksRequest
 	ChooseProposedBlockRequests    chan ChooseProposedBlockRequest
 
 	DecidePrecommitRequests chan DecidePrecommitRequest
@@ -35,6 +35,30 @@ type EnterRoundRequest struct {
 	// If the strategy is going to propose a block for this round,
 	// the proposal data must be sent on this channel.
 	ProposalOut chan tmconsensus.Proposal
+}
+
+// ConsiderProposedBlocksRequest is the request type sent by the state machine
+// requesting a call to [tmconsensus.ConsensusStrategy.ConsiderProposedBlocks].
+type ConsiderProposedBlocksRequest struct {
+	PBs    []tmconsensus.ProposedBlock
+	Reason tmconsensus.ConsiderProposedBlocksReason
+	Result chan HashSelection
+}
+
+// MarkNewHashes compares the incoming PBs on r with rlc.PrevConsideredHashes.
+// Any blocks that are not in rlc.PrevConsideredHashes are noted in r.Reason.NewProposedBlocks,
+// and marked on rlc.PrevConsideredHashes.
+func (r *ConsiderProposedBlocksRequest) MarkReasonNewHashes(rlc *RoundLifecycle) {
+	for _, pb := range r.PBs {
+		// Casting a byte slice to a string in a map access,
+		// as a memory optimization, seems to still be relevant in Go 1.22.
+		if _, ok := rlc.PrevConsideredHashes[string(pb.Block.Hash)]; ok {
+			continue
+		}
+		h := string(pb.Block.Hash)
+		r.Reason.NewProposedBlocks = append(r.Reason.NewProposedBlocks, h)
+		rlc.PrevConsideredHashes[h] = struct{}{}
+	}
 }
 
 // ChooseProposedBlockRequest is the request type sent by the state machine
@@ -69,7 +93,7 @@ func NewConsensusManager(
 		// Unbuffered since the state machine synchronizes on this.
 		EnterRoundRequests: make(chan EnterRoundRequest),
 
-		ConsiderProposedBlocksRequests: make(chan ChooseProposedBlockRequest, 1),
+		ConsiderProposedBlocksRequests: make(chan ConsiderProposedBlocksRequest, 1),
 		ChooseProposedBlockRequests:    make(chan ChooseProposedBlockRequest, 1),
 
 		DecidePrecommitRequests: make(chan DecidePrecommitRequest, 1),
@@ -127,10 +151,10 @@ func (m *ConsensusManager) handleEnterRound(ctx context.Context, req EnterRoundR
 	)
 }
 
-func (m *ConsensusManager) handleConsiderPBs(ctx context.Context, req ChooseProposedBlockRequest) {
+func (m *ConsensusManager) handleConsiderPBs(ctx context.Context, req ConsiderProposedBlocksRequest) {
 	defer trace.StartRegion(ctx, "handleConsiderPBs").End()
 
-	hash, err := m.strat.ConsiderProposedBlocks(ctx, req.PBs)
+	hash, err := m.strat.ConsiderProposedBlocks(ctx, req.PBs, req.Reason)
 	if err == tmconsensus.ErrProposedBlockChoiceNotReady {
 		// Don't bother with a send if we aren't choosing yet.
 		return

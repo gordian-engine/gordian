@@ -1,0 +1,33 @@
+From 4735741e4cdd1e5d7f526d04ffc071e3a7ddf134 Mon Sep 17 00:00:00 2001
+From: Mark Rushakoff <mark@strange.love>
+Date: Mon, 29 Jul 2024 11:57:21 -0400
+Subject: [PATCH 6/6] feat: add (AppManager[T]).SimulateWithState
+
+I think we can use simulation to determine whether an incoming
+transaction is acceptable, but if we had any prior transactions, they
+all need to build upon previous state; the app manager did not have a
+SimulateWithState method already, so we add it here.
+---
+ server/v2/appmanager/appmanager.go | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/server/v2/appmanager/appmanager.go b/server/v2/appmanager/appmanager.go
+index cef0fc57cc..e1df20d91f 100644
+--- a/server/v2/appmanager/appmanager.go
++++ b/server/v2/appmanager/appmanager.go
+@@ -171,3 +171,12 @@ func (a AppManager[T]) QueryWithState(
+ ) (transaction.Msg, error) {
+ 	return a.stf.Query(ctx, state, a.config.QueryGasLimit, request)
+ }
++
++// SimulateWithState has been added in as a patch, for gcosmos.
++func (a AppManager[T]) SimulateWithState(
++	ctx context.Context,
++	state corestore.ReaderMap,
++	tx T,
++) (appmanager.TxResult, corestore.WriterMap) {
++	return a.stf.Simulate(ctx, state, a.config.SimulationGasLimit, tx)
++}
+--
+2.44.0
+

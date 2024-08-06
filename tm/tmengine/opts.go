@@ -2,11 +2,14 @@ package tmengine
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmapp"
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
+	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmgossip"
 	"github.com/rollchains/gordian/tm/tmstore"
 )
@@ -141,7 +144,7 @@ func WithGenesis(g *tmconsensus.ExternalGenesis) Opt {
 
 // WithInitChainChannel sets the init chain channel for the engine to send on.
 // This option is only required if the chain has not yet been initialized.
-func WithInitChainChannel(ch chan<- tmapp.InitChainRequest) Opt {
+func WithInitChainChannel(ch chan<- tmdriver.InitChainRequest) Opt {
 	return func(e *Engine, _ *tmstate.StateMachineConfig) error {
 		e.initChainCh = ch
 		return nil
@@ -152,9 +155,20 @@ func WithInitChainChannel(ch chan<- tmapp.InitChainRequest) Opt {
 // when a block is due to be finalized.
 // The application must receive from this channel.
 // This option is required.
-func WithBlockFinalizationChannel(ch chan<- tmapp.FinalizeBlockRequest) Opt {
+func WithBlockFinalizationChannel(ch chan<- tmdriver.FinalizeBlockRequest) Opt {
 	return func(_ *Engine, smc *tmstate.StateMachineConfig) error {
 		smc.FinalizeBlockRequestCh = ch
+		return nil
+	}
+}
+
+// WithAppDataArrivalChannel sets the channel that the engine reads from
+// in order to refresh the consensus strategy,
+// in the event that application data is received
+// later than a proposed block is received.
+func WithBlockDataArrivalChannel(ch <-chan tmelink.BlockDataArrival) Opt {
+	return func(_ *Engine, smc *tmstate.StateMachineConfig) error {
+		smc.BlockDataArrivalCh = ch
 		return nil
 	}
 }
@@ -177,4 +191,28 @@ func WithInternalRoundTimer(rt roundTimer) Opt {
 // The context value controls the lifecycle of the timer.
 func WithTimeoutStrategy(ctx context.Context, s TimeoutStrategy) Opt {
 	return WithInternalRoundTimer(tmstate.NewStandardRoundTimer(ctx, s))
+}
+
+// WithWatchdog sets the engine's watchdog, propagating it through subsystems of the engine.
+// This option is required.
+// For tests, the caller may use [gwatchdog.NewNopWatchdog] to avoid creating unnecessary goroutines.
+func WithWatchdog(wd *gwatchdog.Watchdog) Opt {
+	return func(e *Engine, smc *tmstate.StateMachineConfig) error {
+		e.watchdog = wd
+		e.mCfg.Watchdog = wd
+		smc.Watchdog = wd
+		return nil
+	}
+}
+
+// WithMetricsChannel sets the channel where the engine
+// emits metrics for its subsystems.
+func WithMetricsChannel(ch chan<- Metrics) Opt {
+	return func(e *Engine, _ *tmstate.StateMachineConfig) error {
+		if len(ch) != 0 {
+			return errors.New("WithMetricsChannel: ch must be unbuffered")
+		}
+		e.metricsCh = ch
+		return nil
+	}
 }

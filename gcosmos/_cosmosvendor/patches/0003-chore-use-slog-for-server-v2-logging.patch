@@ -1,0 +1,89 @@
+From c8858635537a58f117e5b74dab093d930b0355f5 Mon Sep 17 00:00:00 2001
+From: Mark Rushakoff <mark@strange.love>
+Date: Tue, 9 Jul 2024 14:12:55 -0400
+Subject: [PATCH 3/6] chore: use slog for server v2 logging
+
+This just plugs in easier with gcosmos tests, for now at least.
+---
+ server/v2/commands.go |  9 +++++----
+ server/v2/slog.go     | 41 +++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 46 insertions(+), 4 deletions(-)
+ create mode 100644 server/v2/slog.go
+
+diff --git a/server/v2/commands.go b/server/v2/commands.go
+index a0b2b05ae9..50a073cd9c 100644
+--- a/server/v2/commands.go
++++ b/server/v2/commands.go
+@@ -3,6 +3,7 @@ package serverv2
+ import (
+ 	"context"
+ 	"errors"
++	"log/slog"
+ 	"os"
+ 	"os/signal"
+ 	"path/filepath"
+@@ -169,10 +170,10 @@ func configHandle[T transaction.Tx](s *Server[T], cmd *cobra.Command) error {
+ 		return err
+ 	}
+ 
+-	log, err := NewLogger(v, cmd.OutOrStdout())
+-	if err != nil {
+-		return err
+-	}
++	// Override the logger to slog and stderr so we can stream it to stderr during test.
++	log := NewSlogLogger(
++		slog.New(slog.NewTextHandler(os.Stderr, nil)),
++	)
+ 
+ 	return SetCmdServerContext(cmd, v, log)
+ }
+diff --git a/server/v2/slog.go b/server/v2/slog.go
+new file mode 100644
+index 0000000000..997dd02909
+--- /dev/null
++++ b/server/v2/slog.go
+@@ -0,0 +1,41 @@
++package serverv2
++
++import (
++	"log/slog"
++
++	clog "cosmossdk.io/log"
++)
++
++var _ clog.Logger = SlogLogger{}
++
++type SlogLogger struct {
++	log *slog.Logger
++}
++
++func NewSlogLogger(log *slog.Logger) SlogLogger {
++	return SlogLogger{log: log}
++}
++
++func (l SlogLogger) Info(msg string, keyVals ...any) {
++	l.log.Info(msg, keyVals...)
++}
++
++func (l SlogLogger) Warn(msg string, keyVals ...any) {
++	l.log.Warn(msg, keyVals...)
++}
++
++func (l SlogLogger) Error(msg string, keyVals ...any) {
++	l.log.Error(msg, keyVals...)
++}
++
++func (l SlogLogger) Debug(msg string, keyVals ...any) {
++	l.log.Debug(msg, keyVals...)
++}
++
++func (l SlogLogger) With(keyVals ...any) clog.Logger {
++	return SlogLogger{log: l.log.With(keyVals...)}
++}
++
++func (l SlogLogger) Impl() any {
++	return l.log
++}
+-- 
+2.44.0
+

@@ -10,8 +10,8 @@ import (
 
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmapp"
 	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/rollchains/gordian/tm/tmdriver"
 )
 
 type echoConfig struct {
@@ -31,8 +31,8 @@ type echoApp struct {
 func newEchoApp(
 	ctx context.Context,
 	log *slog.Logger,
-	initChainRequests <-chan tmapp.InitChainRequest,
-	finBlockRequests <-chan tmapp.FinalizeBlockRequest,
+	initChainRequests <-chan tmdriver.InitChainRequest,
+	finBlockRequests <-chan tmdriver.FinalizeBlockRequest,
 ) *echoApp {
 	a := &echoApp{
 		log:  log,
@@ -44,8 +44,8 @@ func newEchoApp(
 
 func (a *echoApp) background(
 	ctx context.Context,
-	initChainRequests <-chan tmapp.InitChainRequest,
-	finalizeBlockRequests <-chan tmapp.FinalizeBlockRequest,
+	initChainRequests <-chan tmdriver.InitChainRequest,
+	finalizeBlockRequests <-chan tmdriver.FinalizeBlockRequest,
 ) {
 	defer close(a.done)
 
@@ -62,7 +62,7 @@ func (a *echoApp) background(
 
 		stateHash := sha256.Sum256([]byte(""))
 		select {
-		case req.Resp <- tmapp.InitChainResponse{
+		case req.Resp <- tmdriver.InitChainResponse{
 			AppStateHash: stateHash[:],
 
 			// Omitting validators since we want to match the input.
@@ -84,7 +84,7 @@ func (a *echoApp) background(
 			return
 
 		case req := <-finalizeBlockRequests:
-			resp := tmapp.FinalizeBlockResponse{
+			resp := tmdriver.FinalizeBlockResponse{
 				Height:    req.Block.Height,
 				Round:     req.Round,
 				BlockHash: req.Block.Hash,
@@ -147,7 +147,7 @@ func (s *echoConsensusStrategy) EnterRound(ctx context.Context, rv tmconsensus.R
 		appData := fmt.Sprintf("Height: %d; Round: %d", s.curH, s.curR)
 		dataHash := sha256.Sum256([]byte(appData))
 		proposalOut <- tmconsensus.Proposal{
-			AppDataID: string(dataHash[:]),
+			DataID: string(dataHash[:]),
 		}
 		s.Log.Info("Proposing block", "h", s.curH, "r", s.curR)
 	}
@@ -155,7 +155,11 @@ func (s *echoConsensusStrategy) EnterRound(ctx context.Context, rv tmconsensus.R
 	return nil
 }
 
-func (s *echoConsensusStrategy) ConsiderProposedBlocks(ctx context.Context, pbs []tmconsensus.ProposedBlock) (string, error) {
+func (s *echoConsensusStrategy) ConsiderProposedBlocks(
+	ctx context.Context,
+	pbs []tmconsensus.ProposedBlock,
+	_ tmconsensus.ConsiderProposedBlocksReason,
+) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -191,7 +195,7 @@ func (s *echoConsensusStrategy) ConsiderProposedBlocks(ctx context.Context, pbs 
 
 func (s *echoConsensusStrategy) ChooseProposedBlock(ctx context.Context, pbs []tmconsensus.ProposedBlock) (string, error) {
 	// Follow the ConsiderProposedBlocks logic...
-	hash, err := s.ConsiderProposedBlocks(ctx, pbs)
+	hash, err := s.ConsiderProposedBlocks(ctx, pbs, tmconsensus.ConsiderProposedBlocksReason{})
 	if err == tmconsensus.ErrProposedBlockChoiceNotReady {
 		// ... and if there is no choice ready, then vote nil.
 		return "", nil

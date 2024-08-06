@@ -85,11 +85,11 @@ func TestSimpleSignatureScheme(t *testing.T) {
 				name string
 				a    tmconsensus.Annotations
 			}{
-				{name: "empty but non-nil app annotation", a: tmconsensus.Annotations{App: []byte{}}},
-				{name: "populated app annotation", a: tmconsensus.Annotations{App: []byte("app")}},
-				{name: "empty but non-nil engine annotation", a: tmconsensus.Annotations{Engine: []byte{}}},
-				{name: "populated engine annotation", a: tmconsensus.Annotations{Engine: []byte("engine")}},
-				{name: "both engine and app populated", a: tmconsensus.Annotations{App: []byte("app"), Engine: []byte("engine")}},
+				{name: "empty but non-nil user annotation", a: tmconsensus.Annotations{User: []byte{}}},
+				{name: "populated user annotation", a: tmconsensus.Annotations{User: []byte("user")}},
+				{name: "empty but non-nil driver annotation", a: tmconsensus.Annotations{Driver: []byte{}}},
+				{name: "populated driver annotation", a: tmconsensus.Annotations{Driver: []byte("driver")}},
+				{name: "both driver and user populated", a: tmconsensus.Annotations{User: []byte("user"), Driver: []byte("driver")}},
 			} {
 				tc := tc
 				t.Run(tc.name, func(t *testing.T) {

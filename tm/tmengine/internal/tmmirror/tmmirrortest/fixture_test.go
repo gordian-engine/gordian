@@ -20,7 +20,7 @@ func TestFixture_CommitInitialHeight(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			mfx := tmmirrortest.NewFixture(t, nVals)
+			mfx := tmmirrortest.NewFixture(ctx, t, nVals)
 
 			committers := make([]int, nVals)
 			for i := range committers {

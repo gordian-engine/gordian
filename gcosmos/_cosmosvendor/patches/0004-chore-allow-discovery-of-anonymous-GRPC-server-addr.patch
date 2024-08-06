@@ -1,0 +1,85 @@
+From 781a04049e7d46cafd1558d889e499dc2be1de70 Mon Sep 17 00:00:00 2001
+From: Mark Rushakoff <mark@strange.love>
+Date: Wed, 17 Jul 2024 09:51:38 -0400
+Subject: [PATCH 4/6] chore: allow discovery of anonymous GRPC server addr
+
+Add a --grpc-address-file argument, so that if the gRPC server is
+configured to bind to :0, that file, in a predetermined location, will
+contain the actual bound address.
+
+And fix the server start command to actually expose that flag.
+---
+ server/v2/api/grpc/server.go | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/server/v2/api/grpc/server.go b/server/v2/api/grpc/server.go
+index 5bce26508b..163e7ffee3 100644
+--- a/server/v2/api/grpc/server.go
++++ b/server/v2/api/grpc/server.go
+@@ -6,9 +6,11 @@ import (
+ 	"fmt"
+ 	"io"
+ 	"net"
++	"os"
+ 	"strconv"
+ 
+ 	"github.com/cosmos/gogoproto/proto"
++
+ 	"github.com/spf13/pflag"
+ 	"github.com/spf13/viper"
+ 	"golang.org/x/exp/maps"
+@@ -35,6 +37,8 @@ type Server[T transaction.Tx] struct {
+ 	cfgOptions []CfgOption
+ 
+ 	grpcSrv *grpc.Server
++
++	v *viper.Viper
+ }
+ 
+ // New creates a new grpc server.
+@@ -70,6 +74,7 @@ func (s *Server[T]) Init(appI serverv2.AppI[T], v *viper.Viper, logger log.Logge
+ 	s.grpcSrv = grpcSrv
+ 	s.config = cfg
+ 	s.logger = logger.With(log.ModuleKey, s.Name())
++	s.v = v
+ 
+ 	return nil
+ }
+@@ -77,6 +82,7 @@ func (s *Server[T]) Init(appI serverv2.AppI[T], v *viper.Viper, logger log.Logge
+ func (s *Server[T]) StartCmdFlags() *pflag.FlagSet {
+ 	flags := pflag.NewFlagSet(s.Name(), pflag.ExitOnError)
+ 	flags.String(FlagAddress, "localhost:9090", "Listen address")
++	flags.String(prefix(addrFileFlag), "", "Write the actual listen address to the given file (useful for tests when configured to listen on :0)")
+ 	return flags
+ }
+ 
+@@ -161,6 +167,12 @@ func (s *Server[T]) Config() any {
+ 	return s.config
+ }
+ 
++// This flag has a leading dot to ensure it does not conflict with
++// the core grpc configuration,
++// as SDK setup involves prefix matching that will sometimes match
++// this flag as a false positive.
++const addrFileFlag = "address-file"
++
+ func (s *Server[T]) Start(ctx context.Context) error {
+ 	if !s.config.Enable {
+ 		return nil
+@@ -171,6 +183,13 @@ func (s *Server[T]) Start(ctx context.Context) error {
+ 		return fmt.Errorf("failed to listen on address %s: %w", s.config.Address, err)
+ 	}
+ 
++	addrFile := s.v.GetString(addrFileFlag)
++	if addrFile != "" {
++		if err := os.WriteFile(addrFile, []byte(listener.Addr().String()+"\n"), 0600); err != nil {
++			panic(fmt.Errorf("failed to write addr file: %w", err))
++		}
++	}
++
+ 	errCh := make(chan error)
+ 
+ 	// Start the gRPC in an external goroutine as Serve is blocking and will return
+-- 
+2.44.0
+

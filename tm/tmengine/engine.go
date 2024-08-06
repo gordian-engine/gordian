@@ -7,11 +7,13 @@ import (
 	"log/slog"
 
 	"github.com/rollchains/gordian/gcrypto"
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/gchan"
 	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmapp"
 	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
+	"github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
 	"github.com/rollchains/gordian/tm/tmengine/tmelink"
@@ -38,20 +40,23 @@ type Engine struct {
 
 	sm *tmstate.StateMachine
 
-	initChainCh chan<- tmapp.InitChainRequest
+	initChainCh chan<- tmdriver.InitChainRequest
+	metricsCh   chan<- Metrics
+
+	watchdog *gwatchdog.Watchdog
 }
 
 func New(ctx context.Context, log *slog.Logger, opts ...Opt) (*Engine, error) {
 	// These channels must be unbuffered so that all communication is synchronized.
-	smViewCh := make(chan tmconsensus.VersionedRoundView)
+	smViewCh := make(chan tmeil.StateMachineRoundView)
 	gsCh := make(chan tmelink.NetworkViewUpdate)
 
 	e := &Engine{
 		log: log,
 
 		mCfg: tmmirror.MirrorConfig{
-			GossipStrategyOut:   gsCh,
-			StateMachineViewOut: smViewCh,
+			GossipStrategyOut:        gsCh,
+			StateMachineRoundViewOut: smViewCh,
 		},
 	}
 
@@ -71,6 +76,12 @@ func New(ctx context.Context, log *slog.Logger, opts ...Opt) (*Engine, error) {
 		return nil, err
 	}
 
+	if e.metricsCh != nil {
+		mc := tmemetrics.NewCollector(ctx, 4, e.metricsCh)
+		smCfg.MetricsCollector = mc
+		e.mCfg.MetricsCollector = mc
+	}
+
 	// The assigned genesis may be a zero value if the chain was already initialized,
 	// but the state machine should be able to handle that.
 	smCfg.Genesis, err = e.maybeInitializeChain(ctx, smCfg.FinalizationStore)
@@ -83,7 +94,15 @@ func New(ctx context.Context, log *slog.Logger, opts ...Opt) (*Engine, error) {
 	e.initChainCh = nil
 
 	e.mCfg.InitialHeight = e.genesis.InitialHeight
-	e.mCfg.InitialValidators = e.genesis.GenesisValidators // TODO: this needs to respect overridden validators from InitChain.
+
+	// Prefer to set the mirror config's validators
+	// to match the state machine's validators that resulted from the InitChain call.
+	// But if that is nil (probably because we didn't need to InitChain),
+	// then fall back to the configured genesis validators.
+	e.mCfg.InitialValidators = smCfg.Genesis.Validators
+	if e.mCfg.InitialValidators == nil {
+		e.mCfg.InitialValidators = e.genesis.GenesisValidators
+	}
 
 	// Set up a cancelable context in case any of the subsystems fail to create.
 	// We cancel the context in any error path to stop the subsystems,
@@ -93,9 +112,9 @@ func New(ctx context.Context, log *slog.Logger, opts ...Opt) (*Engine, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // Suppress unused cancel warning.
 
-	mirrorStateMachineLink := make(chan tmeil.StateMachineRoundActionSet)
-	e.mCfg.FromStateMachineLink = mirrorStateMachineLink
-	smCfg.ToMirrorCh = mirrorStateMachineLink
+	stateMachineRoundEntrances := make(chan tmeil.StateMachineRoundEntrance)
+	e.mCfg.StateMachineRoundEntranceIn = stateMachineRoundEntrances
+	smCfg.RoundEntranceOutCh = stateMachineRoundEntrances
 
 	e.m, err = tmmirror.NewMirror(ctx, log.With("e_sys", "mirror"), e.mCfg)
 	if err != nil {
@@ -126,6 +145,9 @@ func (e *Engine) Wait() {
 	}
 	if e.gs != nil {
 		e.gs.Wait()
+	}
+	if e.mCfg.MetricsCollector != nil {
+		e.mCfg.MetricsCollector.Wait()
 	}
 }
 
@@ -170,6 +192,10 @@ func (e *Engine) validateSettings(smc tmstate.StateMachineConfig) error {
 		err = errors.Join(err, errors.New("no validator store set (use tmengine.WithValidatorStore)"))
 	}
 
+	if e.watchdog == nil {
+		err = errors.Join(err, errors.New("no watchdog set (use tmengine.WithWatchdog)"))
+	}
+
 	if smc.ConsensusStrategy == nil {
 		err = errors.Join(err, errors.New("no consensus strategy set (use tmengine.WithConsensusStrategy)"))
 	}
@@ -177,6 +203,11 @@ func (e *Engine) validateSettings(smc tmstate.StateMachineConfig) error {
 	if smc.FinalizeBlockRequestCh == nil {
 		err = errors.Join(err, errors.New("no block finalization channel set (use tmengine.WithBlockFinalizationChannel)"))
 	}
+
+	// TODO: we are currently not validating the presence of the AppDataArrival channel.
+	// Add a WithoutAppDataArrival() option so that the rare case
+	// of not needing to separately retrieve app data is explicitly opt-in.
+	// Fail validation if both or neither of the option pair is provided.
 
 	// This is one special case.
 	// Tests instantiate a tmstate.MockRoundTimer to avoid reliance on the wall clock.
@@ -238,8 +269,8 @@ func (e *Engine) maybeInitializeChain(
 
 	// We have a valid init chain channel, so make the request.
 	e.log.Info("Making init chain request to application")
-	respCh := make(chan tmapp.InitChainResponse) // Unbuffered since we block on the read.
-	req := tmapp.InitChainRequest{
+	respCh := make(chan tmdriver.InitChainResponse) // Unbuffered since we block on the read.
+	req := tmdriver.InitChainRequest{
 		Genesis: *e.genesis,
 		Resp:    respCh,
 	}

@@ -2,18 +2,23 @@ package tmstate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/trace"
 	"slices"
+	"time"
 
 	"github.com/rollchains/gordian/gcrypto"
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/gchan"
 	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmapp"
 	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
+	"github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate/internal/tsi"
+	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmstore"
 )
 
@@ -34,9 +39,14 @@ type StateMachine struct {
 
 	cm *tsi.ConsensusManager
 
-	viewInCh               <-chan tmconsensus.VersionedRoundView
-	toMirrorCh             chan<- tmeil.StateMachineRoundActionSet
-	finalizeBlockRequestCh chan<- tmapp.FinalizeBlockRequest
+	mc *tmemetrics.Collector
+
+	wd *gwatchdog.Watchdog
+
+	viewInCh               <-chan tmeil.StateMachineRoundView
+	roundEntranceOutCh     chan<- tmeil.StateMachineRoundEntrance
+	finalizeBlockRequestCh chan<- tmdriver.FinalizeBlockRequest
+	blockDataArrivalCh     <-chan tmelink.BlockDataArrival
 
 	kernelDone chan struct{}
 }
@@ -56,10 +66,16 @@ type StateMachineConfig struct {
 
 	ConsensusStrategy tmconsensus.ConsensusStrategy
 
-	RoundViewInCh <-chan tmconsensus.VersionedRoundView
-	ToMirrorCh    chan<- tmeil.StateMachineRoundActionSet
+	RoundViewInCh      <-chan tmeil.StateMachineRoundView
+	RoundEntranceOutCh chan<- tmeil.StateMachineRoundEntrance
 
-	FinalizeBlockRequestCh chan<- tmapp.FinalizeBlockRequest
+	BlockDataArrivalCh <-chan tmelink.BlockDataArrival
+
+	FinalizeBlockRequestCh chan<- tmdriver.FinalizeBlockRequest
+
+	MetricsCollector *tmemetrics.Collector
+
+	Watchdog *gwatchdog.Watchdog
 }
 
 func NewStateMachine(ctx context.Context, log *slog.Logger, cfg StateMachineConfig) (*StateMachine, error) {
@@ -80,9 +96,14 @@ func NewStateMachine(ctx context.Context, log *slog.Logger, cfg StateMachineConf
 
 		cm: tsi.NewConsensusManager(ctx, log.With("sm_sys", "consmgr"), cfg.ConsensusStrategy),
 
+		mc: cfg.MetricsCollector,
+
+		wd: cfg.Watchdog,
+
 		viewInCh:               cfg.RoundViewInCh,
-		toMirrorCh:             cfg.ToMirrorCh,
+		roundEntranceOutCh:     cfg.RoundEntranceOutCh,
 		finalizeBlockRequestCh: cfg.FinalizeBlockRequestCh,
+		blockDataArrivalCh:     cfg.BlockDataArrivalCh,
 
 		kernelDone: make(chan struct{}),
 	}
@@ -114,24 +135,54 @@ func (m *StateMachine) kernel(ctx context.Context) {
 		return
 	}
 
+	wSig := m.wd.Monitor(ctx, gwatchdog.MonitorConfig{
+		Name:     "StateMachine",
+		Interval: 10 * time.Second, Jitter: time.Second,
+		ResponseTimeout: time.Second,
+	})
+
+	defer func() {
+		if !gwatchdog.IsTermination(ctx) {
+			return
+		}
+
+		m.log.Info(
+			"WATCHDOG TERMINATING; DUMPING STATE",
+			"rlc", slog.GroupValue(
+				slog.Uint64("H", rlc.H), slog.Uint64("R", uint64(rlc.R)),
+				slog.Any("S", rlc.S),
+
+				slog.Any("PrevVRV", rlc.PrevVRV),
+			),
+		)
+	}()
+
 	for {
 		if rlc.IsReplaying() {
-			if !m.handleReplayEvent(ctx, &rlc) {
+			if !m.handleReplayEvent(ctx, wSig, &rlc) {
 				return
 			}
 		} else {
-			if !m.handleLiveEvent(ctx, &rlc) {
+			if !m.handleLiveEvent(ctx, wSig, &rlc) {
 				return
 			}
 		}
 	}
 }
 
-func (m *StateMachine) handleReplayEvent(ctx context.Context, rlc *tsi.RoundLifecycle) (ok bool) {
+func (m *StateMachine) handleReplayEvent(
+	ctx context.Context,
+	wSig <-chan gwatchdog.Signal,
+	rlc *tsi.RoundLifecycle,
+) (ok bool) {
 	return false
 }
 
-func (m *StateMachine) handleLiveEvent(ctx context.Context, rlc *tsi.RoundLifecycle) (ok bool) {
+func (m *StateMachine) handleLiveEvent(
+	ctx context.Context,
+	wSig <-chan gwatchdog.Signal,
+	rlc *tsi.RoundLifecycle,
+) (ok bool) {
 	defer trace.StartRegion(ctx, "handleLiveEvent").End()
 
 	select {
@@ -144,8 +195,8 @@ func (m *StateMachine) handleLiveEvent(ctx context.Context, rlc *tsi.RoundLifecy
 		)
 		return false
 
-	case vrv := <-m.viewInCh:
-		m.handleViewUpdate(ctx, rlc, vrv)
+	case v := <-m.viewInCh:
+		m.handleViewUpdate(ctx, rlc, v)
 
 	case p := <-rlc.ProposalCh:
 		if !m.recordProposedBlock(ctx, *rlc, p) {
@@ -187,12 +238,23 @@ func (m *StateMachine) handleLiveEvent(ctx context.Context, rlc *tsi.RoundLifecy
 			return false
 		}
 
-		rlc.FinalizeRespCh = nil
+		// The other cases unconditionally set the rlc-associated channel to nil,
+		// but it is actually conditionally changed in the m.handleFinalization call.
+		// If we set it to nil following a height change which may have happend in m.handleFinalization,
+		// the state machine will deadlock when the app attempts to send its finalization to a nil channel.
 
 	case <-rlc.StepTimer:
 		if !m.handleTimerElapsed(ctx, rlc) {
 			return false
 		}
+
+	case a := <-m.blockDataArrivalCh:
+		if !m.handleBlockDataArrival(ctx, rlc, a) {
+			return false
+		}
+
+	case sig := <-wSig:
+		close(sig.Alive)
 	}
 
 	return true
@@ -214,24 +276,39 @@ func (m *StateMachine) initializeRLC(ctx context.Context) (rlc tsi.RoundLifecycl
 }
 
 // beginRoundLive updates some fields on rlc,
-// makes appropriate calls into the consensus strategy based on data in update,
+// makes appropriate calls into the consensus strategy based on the initVRV value,
 // and starts any necessary timers.
-// The initVRV value seeds the RoundLifecycle.
 func (m *StateMachine) beginRoundLive(
 	ctx context.Context, rlc *tsi.RoundLifecycle, initVRV tmconsensus.VersionedRoundView,
 ) (ok bool) {
+	// Update the state machine's height/round metric,
+	// if we are tracking metrics.
+	if m.mc != nil {
+		m.mc.UpdateStateMachine(tmemetrics.StateMachineMetrics{
+			H: initVRV.Height, R: initVRV.Round,
+		})
+	}
+
 	// Only calculate the step if we are dealing with a round view,
 	// not if we have a committed block.
 	curStep := tsi.GetStepFromVoteSummary(initVRV.VoteSummary)
 	switch curStep {
 	case tsi.StepAwaitingProposal:
-		if len(initVRV.ProposedBlocks) > 0 {
+		// Only send the filtered proposed blocks.
+		if okPBs := rejectMismatchedProposedBlocks(
+			initVRV.ProposedBlocks,
+			rlc.PrevFinAppStateHash,
+			rlc.CurVals,
+			rlc.PrevFinNextVals,
+		); len(okPBs) > 0 {
+			req := tsi.ConsiderProposedBlocksRequest{
+				PBs:    okPBs,
+				Result: rlc.PrevoteHashCh,
+			}
+			req.MarkReasonNewHashes(rlc)
 			if !gchan.SendC(
 				ctx, m.log,
-				m.cm.ConsiderProposedBlocksRequests, tsi.ChooseProposedBlockRequest{
-					PBs:    initVRV.ProposedBlocks,
-					Result: rlc.PrevoteHashCh,
-				},
+				m.cm.ConsiderProposedBlocksRequests, req,
 				"making consider proposed blocks request from initial state",
 			) {
 				// Context cancelled and logged. Quit.
@@ -240,17 +317,13 @@ func (m *StateMachine) beginRoundLive(
 		}
 
 	case tsi.StepAwaitingPrevotes:
-		if !gchan.SendC(
-			ctx, m.log,
-			m.cm.ConsiderProposedBlocksRequests, tsi.ChooseProposedBlockRequest{
-				PBs:    initVRV.ProposedBlocks,
-				Result: rlc.PrevoteHashCh,
-			},
-			"making consider proposed blocks request from initial state",
-		) {
-			// Context cancelled and logged. Quit.
-			return false
-		}
+		// See comments in GetStepFromVoteSummary.
+		// If above minority prevotes but below majority,
+		// we will just wait for a proposal as normal.
+		// At worse, we time out on the proposal and prevote nil.
+		panic(errors.New(
+			"BUG: tsi.GetStepFromVoteSummary must not return tsi.StepAwaitingPrevotes",
+		))
 
 	case tsi.StepAwaitingPrecommits:
 		if !gchan.SendC(
@@ -274,31 +347,14 @@ func (m *StateMachine) beginRoundLive(
 			return m.advanceRound(ctx, rlc)
 		}
 
-		// Otherwise we have a non-nil block to finalize.
-		idx := slices.IndexFunc(initVRV.ProposedBlocks, func(pb tmconsensus.ProposedBlock) bool {
-			return string(pb.Block.Hash) == committingHash
-		})
-		if idx < 0 {
-			panic(fmt.Errorf(
-				"TODO: beginRoundLive: handle committing a block that we don't have yet (height=%d hash=%x)",
-				rlc.H, committingHash,
-			))
-		}
-		if !gchan.SendC(
-			ctx, m.log,
-			m.finalizeBlockRequestCh, tmapp.FinalizeBlockRequest{
-				// Not including Ctx. That field needs to go away for 0.3.
-				// We would never cancel a finalize request due to local state in the state machine.
-
-				Block: initVRV.ProposedBlocks[idx].Block,
-				Round: initVRV.Round,
-
-				Resp: rlc.FinalizeRespCh,
-			},
-			"making finalize block request from initial state",
-		) {
+		// Another special case -- the beginCommit method assigns rlc.S and its timers.
+		// So we don't want to go past the end of the switch statement
+		// which will reassign the timers.
+		if !m.beginCommit(ctx, rlc, initVRV) {
 			return false
 		}
+		rlc.PrevVRV = &initVRV
+		return true
 
 	default:
 		panic(fmt.Errorf("BUG: unhandled initial step %s", curStep))
@@ -334,40 +390,44 @@ func (m *StateMachine) startInitialTimer(ctx context.Context, rlc *tsi.RoundLife
 // it logs an appropriate error and reports false.
 func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 	rlc tsi.RoundLifecycle,
-	su tmeil.StateUpdate,
+	rer tmeil.RoundEntranceResponse,
 	ok bool,
 ) {
 	// Assume for now that we start up with no history.
 	// We have to send our height and round to the mirror.
-	initActionSet := tmeil.StateMachineRoundActionSet{
+	initRE := tmeil.StateMachineRoundEntrance{
 		H: m.genesis.InitialHeight, R: 0,
 
-		StateResponse: make(chan tmeil.StateUpdate, 1),
+		Response: make(chan tmeil.RoundEntranceResponse, 1),
 	}
 	if m.signer != nil {
-		initActionSet.PubKey = m.signer.PubKey()
-		initActionSet.Actions = make(chan tmeil.StateMachineRoundAction, 3)
+		initRE.PubKey = m.signer.PubKey()
+		initRE.Actions = make(chan tmeil.StateMachineRoundAction, 3)
 	}
-	update, ok := gchan.ReqResp(
+	rer, ok = gchan.ReqResp(
 		ctx, m.log,
-		m.toMirrorCh, initActionSet,
-		initActionSet.StateResponse,
+		m.roundEntranceOutCh, initRE,
+		initRE.Response,
 		"seeding initial state from mirror",
 	)
 	if !ok {
-		return rlc, update, false
+		return rlc, rer, false
 	}
-	// Closing the outgoing StateResponse channel is not strictly necessary,
-	// but it is a little helpful in tests in case a StateMachineRoundActionSet is mistakenly reused.
-	close(initActionSet.StateResponse)
+	// Closing the outgoing Response channel is not strictly necessary,
+	// but it is a little helpful in tests in case a StateMachineRoundEntrance is mistakenly reused.
+	close(initRE.Response)
+
+	// Initialize this to a default size;
+	// it needs to be a non-nil map regardless of the initial update.
+	rlc.PrevConsideredHashes = map[string]struct{}{}
 
 	// We have a response -- do we need to call into the consensus strategy,
 	// or do we only need to replay the block?
-	if update.IsVRV() {
-		rlc.Reset(ctx, initActionSet.H, initActionSet.R)
-		rlc.OutgoingActionsCh = initActionSet.Actions // Should this be part of the Reset method instead?
+	if rer.IsVRV() {
+		rlc.Reset(ctx, initRE.H, initRE.R)
+		rlc.OutgoingActionsCh = initRE.Actions // Should this be part of the Reset method instead?
 
-		// Still assuming we are initializing at genesis,
+		// Still assuming we are initializing at the chain's initial height,
 		// which will not always be a correct assumption.
 		rlc.PrevFinNextVals = slices.Clone(m.genesis.Validators)
 		rlc.PrevFinAppStateHash = string(m.genesis.CurrentAppStateHash)
@@ -385,10 +445,22 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 		}
 		rlc.PrevBlockHash = string(b.Hash)
 
+		// TODO: this should be setting rlc.PrevVRV somewhere.
+		// We need a test in place for that.
+
+		// Overwrite the proposed blocks we present to the consensus strategy,
+		// to exclude any known invalid blocks according to the genesis we just parsed.
+		rer.VRV.RoundView.ProposedBlocks = rejectMismatchedProposedBlocks(
+			rer.VRV.RoundView.ProposedBlocks,
+			rlc.PrevFinAppStateHash,
+			rlc.CurVals, rlc.PrevFinNextVals,
+		)
+
 		// We have to synchronously enter the round,
 		// but we still enter through the consensus manager for this.
+
 		req := tsi.EnterRoundRequest{
-			RV:     update.VRV.RoundView,
+			RV:     rer.VRV.RoundView,
 			Result: make(chan error), // Unbuffered since both sides sync on this.
 
 			ProposalOut: rlc.ProposalCh,
@@ -402,7 +474,7 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 		)
 		if !ok {
 			// Context cancelled, we cannot continue.
-			return rlc, update, false
+			return rlc, rer, false
 		}
 		if err != nil {
 			panic(fmt.Errorf(
@@ -412,13 +484,12 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 	} else {
 		// TODO: there should be a different method for resetting
 		// in expectation of handling a replayed block.
-		rlc.Reset(ctx, initActionSet.H, initActionSet.R)
+		rlc.Reset(ctx, initRE.H, initRE.R)
 
-		// This is a replay, so we can just tell the app to finalize it.
-		finReq := tmapp.FinalizeBlockRequest{
-			Ctx:   ctx, // Is this the right context? Do we even still need context?
-			Block: update.CB.Block,
-			Round: update.CB.Proof.Round,
+		// This is a replay, so we can just tell the driver to finalize it.
+		finReq := tmdriver.FinalizeBlockRequest{
+			Block: rer.CB.Block,
+			Round: rer.CB.Proof.Round,
 
 			Resp: rlc.FinalizeRespCh,
 		}
@@ -430,15 +501,25 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 		)
 	}
 
-	return rlc, update, ok
+	return rlc, rer, ok
 }
 
 func (m *StateMachine) handleViewUpdate(
 	ctx context.Context,
 	rlc *tsi.RoundLifecycle,
-	vrv tmconsensus.VersionedRoundView,
+	v tmeil.StateMachineRoundView,
 ) {
 	defer trace.StartRegion(ctx, "handleViewUpdate").End()
+
+	vrv := v.VRV
+	if vrv.Height == 0 {
+		if v.JumpAheadRoundView == nil {
+			panic(errors.New("BUG: received view update with empty VRV and nil JumpAheadRoundView"))
+		}
+
+		m.handleJumpAhead(ctx, rlc, *v.JumpAheadRoundView)
+		return
+	}
 
 	if vrv.Height != rlc.H || vrv.Round != rlc.R {
 		m.log.Debug(
@@ -455,6 +536,15 @@ func (m *StateMachine) handleViewUpdate(
 			"h", rlc.H, "r", rlc.R, "step", rlc.S,
 			"prev_version", rlc.PrevVRV.Version, "cur_version", vrv.Version,
 		)
+
+		m.log.Info(
+			"STATE DUMP DUE TO STALE UPDATE BUG",
+			"h", rlc.H, "r", rlc.R, "step", rlc.S,
+			"prev_vrv", rlc.PrevVRV,
+			"new_vrv", vrv,
+		)
+
+		m.wd.Terminate("state machine got non-increasing round view")
 		return
 	}
 
@@ -466,10 +556,7 @@ func (m *StateMachine) handleViewUpdate(
 	case tsi.StepAwaitingPrecommits, tsi.StepPrecommitDelay:
 		m.handlePrecommitViewUpdate(ctx, rlc, vrv)
 	case tsi.StepCommitWait, tsi.StepAwaitingFinalization:
-		// Nothing to do here, for now.
-		// By the time we are in commit wait, we've already made a finalization request.
-		// In the future we might find a way to notify an in-progress finalization request
-		// that there are updated precommits.
+		m.handleCommitWaitViewUpdate(ctx, rlc, vrv)
 	default:
 		panic(fmt.Errorf("TODO: handle view update for step %q", rlc.S))
 	}
@@ -481,6 +568,15 @@ func (m *StateMachine) handleViewUpdate(
 
 		// Assuming it's okay to take ownership of vrv as opposed to copying in to our value.
 		rlc.PrevVRV = &vrv
+	}
+
+	if v.JumpAheadRoundView != nil {
+		// If the state machine was slow to read,
+		// we may have received an update with a VRV and a jump ahead signal.
+		// If it was necessary to jump ahead,
+		// the VRV value would not have advanced the round,
+		// so the call here should be safe.
+		m.handleJumpAhead(ctx, rlc, *v.JumpAheadRoundView)
 	}
 }
 
@@ -496,12 +592,88 @@ func (m *StateMachine) handleProposalViewUpdate(
 	min := tmconsensus.ByzantineMinority(vrv.VoteSummary.AvailablePower)
 	maj := tmconsensus.ByzantineMajority(vrv.VoteSummary.AvailablePower)
 
+	if vrv.VoteSummary.TotalPrecommitPower >= maj {
+		// The majority of the network is on precommit and we are just expecting a proposal.
+
+		// We can start by canceling the proposal timer.
+		rlc.CancelTimer()
+		rlc.StepTimer = nil
+		rlc.CancelTimer = nil
+
+		// There is no point in submitting a prevote at this point,
+		// because the majority of the network has already seen enough prevotes
+		// to make their precommit decision.
+
+		// If the majority has already reached consensus then
+		// we will attempt to submit our own precommit
+		// based on the prevotes we have right now.
+		vs := vrv.VoteSummary
+		maxBlockPow := vs.PrecommitBlockPower[vs.MostVotedPrecommitHash]
+		if maxBlockPow >= maj {
+			// There is consensus on a hash,
+			// but we have to treat nil differently from a particular block.
+			if vs.MostVotedPrecommitHash == "" {
+				// For now, we just advance the round without submitting our own precommit.
+				// We do have sufficient information to submit a precommit,
+				// but we ought to adjust the way the consensus strategy is structured
+				// in order to indicate that the round is terminating
+				// and that the consensus strategy is allowed to elect not to precommit.
+				_ = m.advanceRound(ctx, rlc)
+				return
+			}
+
+			// Otherwise it must be a particular block.
+			// Just like the nil precommit case,
+			// we are currently not consulting the consensus strategy.
+			_ = m.beginCommit(ctx, rlc, vrv)
+			return
+		}
+
+		// There was majority precommit power present but it was not for a particular block.
+		// Start the precommit delay.
+		rlc.S = tsi.StepPrecommitDelay
+		rlc.StepTimer, rlc.CancelTimer = m.rt.PrecommitDelayTimer(ctx, rlc.H, rlc.R)
+
+		// And we need to submit our own precommit decision still.
+		_ = gchan.SendC(
+			ctx, m.log,
+			m.cm.DecidePrecommitRequests, tsi.DecidePrecommitRequest{
+				VS:     vrv.VoteSummary.Clone(), // Clone under assumption to avoid data race.
+				Result: rlc.PrecommitHashCh,     // Is it ever possible this channel is nil?
+			},
+			"deciding precommit following observation of majority precommit while expecting proposal",
+		)
+
+		return
+	}
+
 	if vrv.VoteSummary.TotalPrecommitPower >= min {
-		panic("TODO: handle jumping to precommit when expecting proposed blocks")
+		// A sufficient portion of the rest of the network
+		// has decided they have enough information to precommit.
+		// So we will begin our precommit too.
+
+		// We can start by canceling the proposal timer.
+		rlc.CancelTimer()
+		rlc.StepTimer = nil
+		rlc.CancelTimer = nil
+
+		rlc.S = tsi.StepAwaitingPrecommits
+
+		// And we need to submit our own precommit decision still.
+		_ = gchan.SendC(
+			ctx, m.log,
+			m.cm.DecidePrecommitRequests, tsi.DecidePrecommitRequest{
+				VS:     vrv.VoteSummary.Clone(), // Clone under assumption to avoid data race.
+				Result: rlc.PrecommitHashCh,     // Is it ever possible this channel is nil?
+			},
+			"deciding precommit following observation of minority precommit while expecting proposal",
+		)
+
+		return
 	}
 
 	if vrv.VoteSummary.TotalPrevotePower >= maj {
-		// Everyone else has made their prevote.
+		// The majority has made their prevote.
 
 		// We are switching to either awaiting precommits or prevote delay.
 		// Either way, when we entered this method, we had a proposal timer,
@@ -512,7 +684,11 @@ func (m *StateMachine) handleProposalViewUpdate(
 
 		// And we are making a request to choose or consider in either case too.
 		req := tsi.ChooseProposedBlockRequest{
-			PBs: vrv.ProposedBlocks,
+			PBs: rejectMismatchedProposedBlocks(
+				vrv.ProposedBlocks,
+				rlc.PrevFinAppStateHash,
+				rlc.CurVals, rlc.PrevFinNextVals,
+			),
 
 			Result: rlc.PrevoteHashCh,
 		}
@@ -527,8 +703,13 @@ func (m *StateMachine) handleProposalViewUpdate(
 			case m.cm.ChooseProposedBlockRequests <- req:
 				// Okay.
 			default:
-				panic("TODO: handle blocked send to ChooseProposedBlocksRequests")
+				panic("TODO: handle blocked send to ChooseProposedBlockRequests")
 			}
+
+			// Don't need to hold on to any of the previously sent hashes
+			// after sending the choose request.
+			clear(rlc.PrevConsideredHashes)
+
 			return
 		}
 
@@ -538,11 +719,21 @@ func (m *StateMachine) handleProposalViewUpdate(
 		rlc.S = tsi.StepPrevoteDelay
 		rlc.StepTimer, rlc.CancelTimer = m.rt.PrevoteDelayTimer(ctx, rlc.H, rlc.R)
 
-		select {
-		case m.cm.ConsiderProposedBlocksRequests <- req:
-			// Okay.
-		default:
-			panic("TODO: handle blocked send to ConsiderProposedBlocksRequests")
+		if len(req.PBs) > 0 {
+			// If we filtered out invalid proposed blocks,
+			// don't send the request.
+			req := tsi.ConsiderProposedBlocksRequest{
+				PBs:    req.PBs, // Outer declaration of req as a choose request.
+				Result: rlc.PrevoteHashCh,
+			}
+			req.MarkReasonNewHashes(rlc)
+			req.Reason.MajorityVotingPowerPresent = true
+			select {
+			case m.cm.ConsiderProposedBlocksRequests <- req:
+				// Okay.
+			default:
+				panic("TODO: handle blocked send to ConsiderProposedBlocksRequests")
+			}
 		}
 		return
 	}
@@ -551,12 +742,47 @@ func (m *StateMachine) handleProposalViewUpdate(
 
 	if len(vrv.ProposedBlocks) > len(rlc.PrevVRV.ProposedBlocks) {
 		// At least one new proposed block.
+		// We are going to inform the consensus strategy (by way of the consensus manager)
+		// of the new proposed blocks,
+		// but first we need to reject any invalid ones.
+		//
+		// The guarantee from the mirror (as of writing)
+		// is that the incoming proposed block has a valid hash and signature.
+		// The mirror does not assume that the state machine
+		// has correct state in regard to the rest of the network.
+		// So, we need to exclude any incoming proposed blocks that
+		// do not match our expected state -- in particular,
+		// the previous app state hash and the validator set.
+		//
+		// Operate on clones to avoid mutating either of the canonical slices.
+
+		incoming := rejectMismatchedProposedBlocks(
+			vrv.ProposedBlocks,
+			rlc.PrevFinAppStateHash,
+			rlc.CurVals,
+			rlc.PrevFinNextVals,
+		)
+		have := rejectMismatchedProposedBlocks(
+			rlc.PrevVRV.ProposedBlocks,
+			rlc.PrevFinAppStateHash,
+			rlc.CurVals,
+			rlc.PrevFinNextVals,
+		)
+		// TODO: we could be more efficient than building up the have slice
+		// only to check its length.
+		if len(incoming) <= len(have) {
+			// After filtering, no new entries.
+			// Can't send a request to the consensus manager in this case.
+			return
+		}
+
 		// The timer hasn't elapsed yet so it is only a Consider call at this point.
-		req := tsi.ChooseProposedBlockRequest{
-			PBs: vrv.ProposedBlocks,
+		req := tsi.ConsiderProposedBlocksRequest{
+			PBs: incoming,
 
 			Result: rlc.PrevoteHashCh,
 		}
+		req.MarkReasonNewHashes(rlc)
 		select {
 		case m.cm.ConsiderProposedBlocksRequests <- req:
 			// Okay.
@@ -577,6 +803,52 @@ func (m *StateMachine) handlePrevoteViewUpdate(
 
 	vs := vrv.VoteSummary
 	maj := tmconsensus.ByzantineMajority(vs.AvailablePower)
+
+	if vs.TotalPrecommitPower >= maj {
+		// We are going to transition out of the current step, so clear timers now.
+		if rlc.S == tsi.StepPrevoteDelay {
+			rlc.CancelTimer()
+			rlc.StepTimer = nil
+			rlc.CancelTimer = nil
+		}
+
+		// There is sufficient power for a commit -- is there a chosen block?
+		maxBlockPow := vs.PrecommitBlockPower[vs.MostVotedPrecommitHash]
+		if maxBlockPow >= maj {
+			if vs.MostVotedPrecommitHash == "" {
+				// If the consensus is for nil, advance the round.
+				// Currently we do not submit our own precommit,
+				// but we probably should in the future.
+				_ = m.advanceRound(ctx, rlc)
+				return
+			}
+
+			// Otherwise it must be a particular block.
+			// Just like the nil precommit case,
+			// we are currently not consulting the consensus strategy.
+			_ = m.beginCommit(ctx, rlc, vrv)
+			return
+		}
+
+		// Not for a block, so we need to just submit our own precommit.
+		rlc.S = tsi.StepPrecommitDelay
+		rlc.StepTimer, rlc.CancelTimer = m.rt.PrecommitDelayTimer(ctx, rlc.H, rlc.R)
+
+		_ = gchan.SendC(
+			ctx, m.log,
+			m.cm.DecidePrecommitRequests, tsi.DecidePrecommitRequest{
+				VS:     vrv.VoteSummary.Clone(), // Clone under assumption to avoid data race.
+				Result: rlc.PrecommitHashCh,     // Is it ever possible this channel is nil?
+			},
+			"choosing precommit after observing majority precommit while expecting prevotes",
+		)
+
+		return
+	}
+
+	// If the total precommit power only exceeded the minority threshold,
+	// we don't need to do anything special; continue handling prevotes as normal.
+
 	if vs.TotalPrevotePower >= maj {
 		// We have majority vote power present;
 		// do we have majority vote power on a single block?
@@ -591,24 +863,23 @@ func (m *StateMachine) handlePrevoteViewUpdate(
 
 			rlc.S = tsi.StepAwaitingPrecommits
 
-			if !gchan.SendC(
+			_ = gchan.SendC(
 				ctx, m.log,
 				m.cm.DecidePrecommitRequests, tsi.DecidePrecommitRequest{
 					VS:     vrv.VoteSummary.Clone(), // Clone under assumption to avoid data race.
 					Result: rlc.PrecommitHashCh,     // Is it ever possible this channel is nil?
 				},
 				"choosing precommit following majority prevote",
-			) {
-				// Context cancelled and logged. Quit.
-				return
-			}
-		} else {
-			// We have majority prevotes but not on a single block.
-			// Only start the timer if we were not already in prevote delay.
-			if rlc.S == tsi.StepAwaitingPrevotes {
-				rlc.S = tsi.StepPrevoteDelay
-				rlc.StepTimer, rlc.CancelTimer = m.rt.PrevoteDelayTimer(ctx, rlc.H, rlc.R)
-			}
+			)
+
+			return
+		}
+
+		// We have majority prevotes but not on a single block.
+		// Only start the timer if we were not already in prevote delay.
+		if rlc.S == tsi.StepAwaitingPrevotes {
+			rlc.S = tsi.StepPrevoteDelay
+			rlc.StepTimer, rlc.CancelTimer = m.rt.PrevoteDelayTimer(ctx, rlc.H, rlc.R)
 		}
 	}
 }
@@ -695,44 +966,21 @@ func (m *StateMachine) handlePrecommitViewUpdate(
 				rlc.CancelTimer = nil
 			}
 
-			rlc.S = tsi.StepCommitWait
-			rlc.StepTimer, rlc.CancelTimer = m.rt.CommitWaitTimer(ctx, rlc.H, rlc.R)
+			_ = m.beginCommit(ctx, rlc, vrv)
+			return
+		}
 
-			idx := slices.IndexFunc(vrv.ProposedBlocks, func(pb tmconsensus.ProposedBlock) bool {
-				return string(pb.Block.Hash) == vs.MostVotedPrecommitHash
-			})
-			if idx < 0 {
-				panic(fmt.Errorf(
-					"TODO: handlePrecommitViewUpdate: handle committing a block that we don't have yet (height=%d hash=%x)",
-					rlc.H, vs.MostVotedPrecommitHash,
-				))
-			}
-
-			if !gchan.SendC(
-				ctx, m.log,
-				m.finalizeBlockRequestCh, tmapp.FinalizeBlockRequest{
-					// Not including Ctx. That field needs to go away for 0.3.
-					// We would never cancel a finalize request due to local state in the state machine.
-
-					Block: vrv.ProposedBlocks[idx].Block,
-					Round: vrv.Round,
-
-					Resp: rlc.FinalizeRespCh,
-				},
-				"making finalize block request from precommit update",
-			) {
-				return
-			}
-		} else if vs.TotalPrecommitPower == vs.AvailablePower {
+		if vs.TotalPrecommitPower == vs.AvailablePower {
 			// Reached 100% precommits but didn't reach consensus on a single block or nil.
 			_ = m.advanceRound(ctx, rlc)
-		} else {
-			// We have majority precommits but not on a single block.
-			// Only start the timer if we were not already in precommit delay.
-			if rlc.S == tsi.StepAwaitingPrecommits {
-				rlc.S = tsi.StepPrecommitDelay
-				rlc.StepTimer, rlc.CancelTimer = m.rt.PrecommitDelayTimer(ctx, rlc.H, rlc.R)
-			}
+			return
+		}
+
+		// We have majority precommits but not on a single block.
+		// Only start the timer if we were not already in precommit delay.
+		if rlc.S == tsi.StepAwaitingPrecommits {
+			rlc.S = tsi.StepPrecommitDelay
+			rlc.StepTimer, rlc.CancelTimer = m.rt.PrecommitDelayTimer(ctx, rlc.H, rlc.R)
 		}
 	}
 }
@@ -787,6 +1035,52 @@ func (m *StateMachine) recordPrecommit(
 	return true
 }
 
+func (m *StateMachine) handleCommitWaitViewUpdate(
+	ctx context.Context,
+	rlc *tsi.RoundLifecycle,
+	vrv tmconsensus.VersionedRoundView,
+) {
+	// Currently, the only action we may take here is creating a finalization request
+	// if we lacked the proposed block before.
+	// We don't currently have a way to notify an in-progress finalization request of anything.
+
+	if rlc.FinalizeRespCh == nil {
+		// The finalization has already completed,
+		// so there is nothing to do.
+		return
+	}
+
+	pbIdx := slices.IndexFunc(rlc.PrevVRV.ProposedBlocks, func(pb tmconsensus.ProposedBlock) bool {
+		return string(pb.Block.Hash) == rlc.PrevVRV.VoteSummary.MostVotedPrecommitHash
+	})
+	if pbIdx >= 0 {
+		// The previous VRV already had the proposed block,
+		// so we can assume we already made the finalization request.
+		return
+	}
+
+	// Now does the new VRV have the proposed block?
+	pbIdx = slices.IndexFunc(vrv.ProposedBlocks, func(pb tmconsensus.ProposedBlock) bool {
+		return string(pb.Block.Hash) == vrv.VoteSummary.MostVotedPrecommitHash
+	})
+	if pbIdx < 0 {
+		// Not there yet, so don't do anything.
+		return
+	}
+
+	// We have a valid index, so we can make the finalization request now.
+	_ = gchan.SendC(
+		ctx, m.log,
+		m.finalizeBlockRequestCh, tmdriver.FinalizeBlockRequest{
+			Block: vrv.ProposedBlocks[pbIdx].Block,
+			Round: vrv.Round,
+
+			Resp: rlc.FinalizeRespCh,
+		},
+		"making finalize block request from handleCommitWaitViewUpdate",
+	)
+}
+
 func (m *StateMachine) recordProposedBlock(
 	ctx context.Context,
 	rlc tsi.RoundLifecycle,
@@ -805,26 +1099,18 @@ func (m *StateMachine) recordProposedBlock(
 			Validators:     slices.Clone(rlc.CurVals),
 			NextValidators: slices.Clone(rlc.PrevFinNextVals),
 
-			DataID: []byte(p.AppDataID),
+			DataID: []byte(p.DataID),
 
 			PrevAppStateHash: []byte(rlc.PrevFinAppStateHash),
 
-			Annotations: tmconsensus.Annotations{
-				App: p.BlockAnnotation,
-
-				// TODO: where will the engine annotations come from?
-			},
+			Annotations: p.BlockAnnotations,
 		},
 
 		Round: r,
 
 		ProposerPubKey: m.signer.PubKey(),
 
-		Annotations: tmconsensus.Annotations{
-			App: p.ProposalAnnotation,
-
-			// TODO: where will the engine annotations come from?
-		},
+		Annotations: p.ProposalAnnotations,
 	}
 
 	hash, err := m.hashScheme.Block(pb.Block)
@@ -859,10 +1145,46 @@ func (m *StateMachine) recordProposedBlock(
 	return true
 }
 
+// beginCommit emits a FinalizeBlockRequest for the most voted precommit hash.
+func (m *StateMachine) beginCommit(
+	ctx context.Context,
+	rlc *tsi.RoundLifecycle,
+	vrv tmconsensus.VersionedRoundView,
+) (ok bool) {
+	defer trace.StartRegion(ctx, "beginCommit").End()
+
+	rlc.S = tsi.StepCommitWait
+	rlc.StepTimer, rlc.CancelTimer = m.rt.CommitWaitTimer(ctx, rlc.H, rlc.R)
+
+	idx := slices.IndexFunc(vrv.ProposedBlocks, func(pb tmconsensus.ProposedBlock) bool {
+		return string(pb.Block.Hash) == vrv.VoteSummary.MostVotedPrecommitHash
+	})
+	if idx < 0 {
+		m.log.Warn(
+			"Reached commit wait step but don't have the proposed block to commit yet",
+			"height", rlc.H,
+			"round", rlc.R,
+			"committing_hash", glog.Hex(vrv.VoteSummary.MostVotedPrecommitHash),
+		)
+		return
+	}
+
+	return gchan.SendC(
+		ctx, m.log,
+		m.finalizeBlockRequestCh, tmdriver.FinalizeBlockRequest{
+			Block: vrv.ProposedBlocks[idx].Block,
+			Round: vrv.Round,
+
+			Resp: rlc.FinalizeRespCh,
+		},
+		"making finalize block request from beginCommit",
+	)
+}
+
 func (m *StateMachine) handleFinalization(
 	ctx context.Context,
 	rlc *tsi.RoundLifecycle,
-	resp tmapp.FinalizeBlockResponse,
+	resp tmdriver.FinalizeBlockResponse,
 ) (ok bool) {
 	if len(resp.Validators) == 0 {
 		panic(fmt.Errorf(
@@ -915,14 +1237,24 @@ func (m *StateMachine) handleTimerElapsed(ctx context.Context, rlc *tsi.RoundLif
 		if !gchan.SendC(
 			ctx, m.log,
 			m.cm.ChooseProposedBlockRequests, tsi.ChooseProposedBlockRequest{
-				PBs:    slices.Clone(rlc.PrevVRV.ProposedBlocks), // Clone under assumption to avoid data race.
-				Result: rlc.PrevoteHashCh,                        // Is it ever possible this channel is nil?
+				// Exclude invalid proposed blocks.
+				PBs: rejectMismatchedProposedBlocks(
+					rlc.PrevVRV.ProposedBlocks,
+					rlc.PrevFinAppStateHash,
+					rlc.CurVals,
+					rlc.PrevFinNextVals,
+				),
+				Result: rlc.PrevoteHashCh, // Is it ever possible this channel is nil?
 			},
 			"choosing proposed block following proposal timeout",
 		) {
 			// Context cancelled and logged. Quit.
 			return false
 		}
+
+		// Don't need to hold on to any of the previously sent hashes
+		// after sending the choose request.
+		clear(rlc.PrevConsideredHashes)
 
 		// Move on to awaiting prevotes.
 		rlc.S = tsi.StepAwaitingPrevotes
@@ -987,26 +1319,123 @@ func (m *StateMachine) handleTimerElapsed(ctx context.Context, rlc *tsi.RoundLif
 	return true
 }
 
+// handleBlockDataArrival is called from the kernel when a new block data arrival value is received.
+//
+// It filters the incoming arrival, and then scans m.BlockDataArrivalCh for any other queued values.
+// If any of those match a proposed block we already had,
+// it makes a new call to consider the proposed blocks, setting the reason as appropriate.
+func (m *StateMachine) handleBlockDataArrival(ctx context.Context, rlc *tsi.RoundLifecycle, a tmelink.BlockDataArrival) (ok bool) {
+	defer trace.StartRegion(ctx, "handleBlockDataArrival").End()
+
+	// We've already submitted a prevote for this round,
+	// so just ignore the arrival notification.
+	if rlc.PrevoteHashCh == nil {
+		return true
+	}
+
+	// If the prevote hash channel is not nil,
+	// then confirm that the arrived data matches rlc.
+	if a.Height != rlc.H || a.Round != rlc.R {
+		return true
+	}
+
+	// The height and round match, and we are able to prevote,
+	// so now we need to construct the consider block request.
+	okPBs := rejectMismatchedProposedBlocks(
+		rlc.PrevVRV.ProposedBlocks,
+		rlc.PrevFinAppStateHash,
+		rlc.CurVals,
+		rlc.PrevFinNextVals,
+	)
+	if len(okPBs) == 0 {
+		return true
+	}
+
+	req := tsi.ConsiderProposedBlocksRequest{
+		PBs:    okPBs,
+		Result: rlc.PrevoteHashCh,
+	}
+
+	// We don't call req.MarkReasonNewHashes here, because we did not receive new hashes.
+	// But we do need to construct the slice of updated block IDs.
+	// Gather any other incoming data arrivals.
+	dataIDMap := make(map[string]struct{}, 1+len(m.blockDataArrivalCh))
+	dataIDMap[a.ID] = struct{}{}
+GATHER_ARRIVALS:
+	for {
+		select {
+		case x := <-m.blockDataArrivalCh:
+			// Another arrival is queued.
+			// Include it if it matches the height and round.
+			if x.Height != a.Height || x.Round != a.Round {
+				continue GATHER_ARRIVALS
+			}
+			dataIDMap[x.ID] = struct{}{}
+		case <-ctx.Done():
+			m.log.Info(
+				"Quitting due to context cancellation while gathering block data arrivals",
+				"cause", context.Cause(ctx),
+			)
+			return false
+		default:
+			// Nothing left on the channel.
+			break GATHER_ARRIVALS
+		}
+	}
+
+	// We have a list of data IDs that have arrived.
+	// Exclude any that do not map to the proposed blocks we are re-checking.
+	req.Reason.UpdatedBlockDataIDs = make([]string, 0, max(len(req.PBs), len(dataIDMap)))
+	for _, pb := range req.PBs {
+		_, dataArrived := dataIDMap[string(pb.Block.DataID)]
+		if !dataArrived {
+			continue
+		}
+
+		req.Reason.UpdatedBlockDataIDs = append(req.Reason.UpdatedBlockDataIDs, string(pb.Block.DataID))
+	}
+
+	if len(req.Reason.UpdatedBlockDataIDs) == 0 {
+		// We had IDs arrive, but nothing matched the proposed blocks we have.
+		return true
+	}
+
+	// We may have overallocated capacity, so trim it off to help GC.
+	req.Reason.UpdatedBlockDataIDs = slices.Clip(req.Reason.UpdatedBlockDataIDs)
+
+	// Now we can finally make the request.
+	if !gchan.SendC(
+		ctx, m.log,
+		m.cm.ConsiderProposedBlocksRequests, req,
+		"making consider proposed blocks request following block data arrival",
+	) {
+		// Context cancelled and logged. Quit.
+		return false
+	}
+
+	return true
+}
+
 func (m *StateMachine) advanceHeight(ctx context.Context, rlc *tsi.RoundLifecycle) (ok bool) {
 	rlc.CycleFinalization()
 	rlc.Reset(ctx, rlc.H+1, 0)
 
-	as := tmeil.StateMachineRoundActionSet{
+	re := tmeil.StateMachineRoundEntrance{
 		H: rlc.H,
 		R: 0,
 
-		StateResponse: make(chan tmeil.StateUpdate, 1),
+		Response: make(chan tmeil.RoundEntranceResponse, 1),
 	}
 
 	if m.signer != nil {
-		as.PubKey = m.signer.PubKey()
-		as.Actions = make(chan tmeil.StateMachineRoundAction, 3)
+		re.PubKey = m.signer.PubKey()
+		re.Actions = make(chan tmeil.StateMachineRoundAction, 3)
 	}
 
 	update, ok := gchan.ReqResp(
 		ctx, m.log,
-		m.toMirrorCh, as,
-		as.StateResponse,
+		m.roundEntranceOutCh, re,
+		re.Response,
 		"seeding initial state from mirror",
 	)
 	if !ok {
@@ -1017,7 +1446,7 @@ func (m *StateMachine) advanceHeight(ctx context.Context, rlc *tsi.RoundLifecycl
 	// but it differs because at this point it is impossible for us to be on the initial height;
 	// and the rlc has some state we are reusing through the earlier call to rlc.CycleFinalization.
 	if update.IsVRV() {
-		rlc.OutgoingActionsCh = as.Actions // Should this be part of the Reset method instead?
+		rlc.OutgoingActionsCh = re.Actions // Should this be part of the Reset method instead?
 
 		// We have to synchronously enter the round,
 		// but we still enter through the consensus manager for this.
@@ -1060,35 +1489,35 @@ func (m *StateMachine) advanceRound(ctx context.Context, rlc *tsi.RoundLifecycle
 	// TODO: do we need to do anything with the finalizations?
 	rlc.Reset(ctx, rlc.H, rlc.R+1)
 
-	as := tmeil.StateMachineRoundActionSet{
+	re := tmeil.StateMachineRoundEntrance{
 		H: rlc.H,
 		R: rlc.R,
 
-		StateResponse: make(chan tmeil.StateUpdate, 1),
+		Response: make(chan tmeil.RoundEntranceResponse, 1),
 	}
 
 	if m.signer != nil {
-		as.PubKey = m.signer.PubKey()
-		as.Actions = make(chan tmeil.StateMachineRoundAction, 3)
+		re.PubKey = m.signer.PubKey()
+		re.Actions = make(chan tmeil.StateMachineRoundAction, 3)
 	}
 
 	update, ok := gchan.ReqResp(
 		ctx, m.log,
-		m.toMirrorCh, as,
-		as.StateResponse,
+		m.roundEntranceOutCh, re,
+		re.Response,
 		"seeding initial round state from mirror",
 	)
 	if !ok {
 		return false
 	}
-	// Closing the outgoing StateResponse channel is not strictly necessary,
-	// but it is a little helpful in tests in case a StateMachineRoundActionSet is mistakenly reused.
-	close(as.StateResponse)
+	// Closing the outgoing Response channel is not strictly necessary,
+	// but it is a little helpful in tests in case a StateMachineRoundEntrance is mistakenly reused.
+	close(re.Response)
 
 	if update.IsVRV() {
 		// TODO: this is probably missing some setup to handle initial height.
 
-		rlc.OutgoingActionsCh = as.Actions // Should this be part of the Reset method instead?
+		rlc.OutgoingActionsCh = re.Actions // Should this be part of the Reset method instead?
 
 		// We have to synchronously enter the round,
 		// but we still enter through the consensus manager for this.
@@ -1125,4 +1554,33 @@ func (m *StateMachine) advanceRound(ctx context.Context, rlc *tsi.RoundLifecycle
 	}
 
 	return true
+}
+
+func (m *StateMachine) handleJumpAhead(
+	ctx context.Context,
+	rlc *tsi.RoundLifecycle,
+	vrv tmconsensus.VersionedRoundView,
+) {
+	if vrv.Height != rlc.H {
+		panic(fmt.Errorf(
+			"BUG: attempted to jump ahead to height %d when on height %d",
+			vrv.Height, rlc.H,
+		))
+	}
+
+	if vrv.Round <= rlc.R {
+		panic(fmt.Errorf(
+			"BUG: attempted to jump ahead to round %d when on height %d, round %d",
+			vrv.Round, rlc.H, rlc.R,
+		))
+	}
+
+	// It's a valid round-forward move.
+	oldRound := rlc.R
+	_ = m.advanceRound(ctx, rlc)
+	m.log.Info(
+		"Jumped ahead following signal from mirror",
+		"height", rlc.H,
+		"old_round", oldRound, "new_round", rlc.R,
+	)
 }

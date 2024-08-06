@@ -6,10 +6,11 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmapp"
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate/tmstatetest"
 	"github.com/rollchains/gordian/tm/tmgossip/tmgossiptest"
@@ -31,18 +32,29 @@ type Fixture struct {
 	RoundStore        *tmmemstore.RoundStore
 	ValidatorStore    *tmmemstore.ValidatorStore
 
-	InitChainCh chan tmapp.InitChainRequest
+	InitChainCh chan tmdriver.InitChainRequest
 
-	FinalizeBlockRequests chan tmapp.FinalizeBlockRequest
+	FinalizeBlockRequests chan tmdriver.FinalizeBlockRequest
 
 	RoundTimer *tmstatetest.MockRoundTimer
+
+	Watchdog    *gwatchdog.Watchdog
+	WatchdogCtx context.Context
 }
 
-func NewFixture(t *testing.T, nVals int) *Fixture {
+func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
 	fx := tmconsensustest.NewStandardFixture(nVals)
 
+	log := gtest.NewLogger(t)
+
+	wd, wCtx := gwatchdog.NewNopWatchdog(ctx, log.With("sys", "watchdog"))
+
+	// Ensure the watchdog doesn't log after test completion.
+	// There ought to be a defer cancel before the call to NewFixture anyway.
+	t.Cleanup(wd.Wait)
+
 	return &Fixture{
-		Log: gtest.NewLogger(t),
+		Log: log,
 
 		Fx: fx,
 
@@ -56,16 +68,19 @@ func NewFixture(t *testing.T, nVals int) *Fixture {
 		RoundStore:        tmmemstore.NewRoundStore(),
 		ValidatorStore:    fx.NewMemValidatorStore(),
 
-		InitChainCh: make(chan tmapp.InitChainRequest, 1),
+		InitChainCh: make(chan tmdriver.InitChainRequest, 1),
 
-		FinalizeBlockRequests: make(chan tmapp.FinalizeBlockRequest, 1),
+		FinalizeBlockRequests: make(chan tmdriver.FinalizeBlockRequest, 1),
 
 		RoundTimer: new(tmstatetest.MockRoundTimer),
+
+		Watchdog:    wd,
+		WatchdogCtx: wCtx,
 	}
 }
 
-func (f *Fixture) MustNewEngine(ctx context.Context, opts ...tmengine.Opt) *tmengine.Engine {
-	e, err := tmengine.New(ctx, f.Log, opts...)
+func (f *Fixture) MustNewEngine(opts ...tmengine.Opt) *tmengine.Engine {
+	e, err := tmengine.New(f.WatchdogCtx, f.Log, opts...)
 	if err != nil {
 		panic(err)
 	}
@@ -115,6 +130,8 @@ func (f *Fixture) BaseOptionMap() OptionMap {
 		"WithBlockFinalizationChannel": tmengine.WithBlockFinalizationChannel(f.FinalizeBlockRequests),
 
 		"WithInternalRoundTimer": tmengine.WithInternalRoundTimer(f.RoundTimer),
+
+		"WithWatchdog": tmengine.WithWatchdog(f.Watchdog),
 	}
 }
 

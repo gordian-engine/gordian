@@ -5,12 +5,14 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmapp"
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
+	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmstore/tmmemstore"
 )
 
@@ -26,26 +28,40 @@ type Fixture struct {
 
 	RoundTimer *MockRoundTimer
 
-	RoundViewInCh         chan tmconsensus.VersionedRoundView
-	ToMirrorCh            chan tmeil.StateMachineRoundActionSet
-	FinalizeBlockRequests chan tmapp.FinalizeBlockRequest
+	RoundViewInCh         chan tmeil.StateMachineRoundView
+	RoundEntranceOutCh    chan tmeil.StateMachineRoundEntrance
+	FinalizeBlockRequests chan tmdriver.FinalizeBlockRequest
+	BlockDataArrivalCh    chan tmelink.BlockDataArrival
 
 	Cfg tmstate.StateMachineConfig
+
+	WatchdogCtx context.Context
 }
 
-func NewFixture(t *testing.T, nVals int) *Fixture {
+func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
 	fx := tmconsensustest.NewStandardFixture(nVals)
 
 	cStrat := tmconsensustest.NewMockConsensusStrategy()
 
 	rt := new(MockRoundTimer)
 
-	roundViewInCh := make(chan tmconsensus.VersionedRoundView)
-	toMirrorCh := make(chan tmeil.StateMachineRoundActionSet)
-	finReq := make(chan tmapp.FinalizeBlockRequest)
+	roundViewInCh := make(chan tmeil.StateMachineRoundView)
+	roundEntranceOutCh := make(chan tmeil.StateMachineRoundEntrance)
+	finReq := make(chan tmdriver.FinalizeBlockRequest)
+
+	// Normally this channel would be buffered,
+	// but for test we prefer a synchronous channel.
+	blockDataArrivalCh := make(chan tmelink.BlockDataArrival)
+
+	log := gtest.NewLogger(t)
+	wd, wCtx := gwatchdog.NewNopWatchdog(ctx, log.With("sys", "watchdog"))
+
+	// Ensure the watchdog doesn't log after test completion.
+	// There ought to be a defer cancel before the call to NewFixture anyway.
+	t.Cleanup(wd.Wait)
 
 	return &Fixture{
-		Log: gtest.NewLogger(t),
+		Log: log,
 
 		Fx: fx,
 
@@ -54,8 +70,9 @@ func NewFixture(t *testing.T, nVals int) *Fixture {
 		RoundTimer: rt,
 
 		RoundViewInCh:         roundViewInCh,
-		ToMirrorCh:            toMirrorCh,
+		RoundEntranceOutCh:    roundEntranceOutCh,
 		FinalizeBlockRequests: finReq,
+		BlockDataArrivalCh:    blockDataArrivalCh,
 
 		Cfg: tmstate.StateMachineConfig{
 			// Default to the first signer.
@@ -76,14 +93,19 @@ func NewFixture(t *testing.T, nVals int) *Fixture {
 			ConsensusStrategy: cStrat,
 
 			RoundViewInCh:          roundViewInCh,
-			ToMirrorCh:             toMirrorCh,
+			RoundEntranceOutCh:     roundEntranceOutCh,
 			FinalizeBlockRequestCh: finReq,
+			BlockDataArrivalCh:     blockDataArrivalCh,
+
+			Watchdog: wd,
 		},
+
+		WatchdogCtx: wCtx,
 	}
 }
 
-func (f *Fixture) NewStateMachine(ctx context.Context) *tmstate.StateMachine {
-	sm, err := tmstate.NewStateMachine(ctx, f.Log, f.Cfg)
+func (f *Fixture) NewStateMachine() *tmstate.StateMachine {
+	sm, err := tmstate.NewStateMachine(f.WatchdogCtx, f.Log, f.Cfg)
 	if err != nil {
 		panic(err)
 	}

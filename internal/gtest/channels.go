@@ -124,3 +124,30 @@ func IsSending[T any](tb TestingFatalHelper, ch <-chan T) T {
 		panic("unreachable")
 	}
 }
+
+// NotSendingSoon asserts that a read from ch is blocked for a reasonable, short duration.
+//
+// If there are any other synchronization events available, [NotSending] should be preferred,
+// because this will block the test for a short duration.
+func NotSendingSoon[T any](tb TestingFatalHelper, ch <-chan T) {
+	tb.Helper()
+
+	if ch == nil {
+		tb.Fatalf("immediate failure to check that a nil channel is not sending (%T %v)", ch, ch)
+		panic("unreachable")
+	}
+
+	timer := time.NewTimer(time.Duration(ScaleMs(75)))
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		// Okay.
+	case x := <-ch:
+		tb.Fatalf(
+			"received value %v on channel %T %v, when it was expected not to send any values",
+			x, ch, ch,
+		)
+		panic("unreachable")
+	}
+}

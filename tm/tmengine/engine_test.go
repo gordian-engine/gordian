@@ -6,10 +6,11 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmapp"
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate/tmstatetest"
 	"github.com/rollchains/gordian/tm/tmengine/tmenginetest"
@@ -24,13 +25,13 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	efx := tmenginetest.NewFixture(t, 4)
+	efx := tmenginetest.NewFixture(ctx, t, 4)
 
 	var engine *tmengine.Engine
 	eReady := make(chan struct{})
 	go func() {
 		defer close(eReady)
-		engine = efx.MustNewEngine(ctx, efx.SigningOptionMap().ToSlice()...)
+		engine = efx.MustNewEngine(efx.SigningOptionMap().ToSlice()...)
 	}()
 
 	defer func() {
@@ -49,7 +50,7 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 
 	const initAppStateHash = "app_state_0"
 
-	gtest.SendSoon(t, icReq.Resp, tmapp.InitChainResponse{
+	gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
 		AppStateHash: []byte(initAppStateHash),
 	})
 
@@ -100,7 +101,7 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 
 		// Application proposes a data hash.
 		erc.ProposalOut <- tmconsensus.Proposal{
-			AppDataID: "app_data_1",
+			DataID: "app_data_1",
 		}
 
 		// This causes a voting view update to be sent to the gossip strategy.
@@ -144,8 +145,9 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 		// That update will include the new proposed block.
 		// When the state machine receives that new proposed block,
 		// it calls the consensus strategy's ConsiderProposedBlocks method.
-		cReq := gtest.ReceiveSoon(t, efx.ConsensusStrategy.ConsiderProposedBlockRequests)
-		require.Equal(t, []tmconsensus.ProposedBlock{pb}, cReq.Input)
+		cReq := gtest.ReceiveSoon(t, efx.ConsensusStrategy.ConsiderProposedBlocksRequests)
+		require.Equal(t, []tmconsensus.ProposedBlock{pb}, cReq.PBs)
+		require.Equal(t, []string{string(pb.Block.Hash)}, cReq.Reason.NewProposedBlocks)
 
 		// The state machine votes for the block it proposed.
 		cReq.ChoiceHash <- blockHash
@@ -230,7 +232,7 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 		efx.RoundTimer.RequireActiveCommitWaitTimer(t, 1, 0)
 
 		// Under normal circumstances, the finalize request will complete before the timeout.
-		gtest.SendSoon(t, finReq.Resp, tmapp.FinalizeBlockResponse{
+		gtest.SendSoon(t, finReq.Resp, tmdriver.FinalizeBlockResponse{
 			Height: 1, Round: 0,
 			BlockHash: pb.Block.Hash,
 
@@ -326,8 +328,9 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 		efx.Fx.SignProposal(ctx, &pb21, 1)
 		require.Equal(t, tmconsensus.HandleProposedBlockAccepted, engine.HandleProposedBlock(ctx, pb21))
 
-		cpbReq := gtest.ReceiveSoon(t, cs.ConsiderProposedBlockRequests)
-		require.Equal(t, []tmconsensus.ProposedBlock{pb21}, cpbReq.Input)
+		cpbReq := gtest.ReceiveSoon(t, cs.ConsiderProposedBlocksRequests)
+		require.Equal(t, []tmconsensus.ProposedBlock{pb21}, cpbReq.PBs)
+		require.Equal(t, []string{string(pb21.Block.Hash)}, cpbReq.Reason.NewProposedBlocks)
 
 		// There is technically a data race on asserting this timer active
 		// immediately after making the enter round call.
@@ -380,7 +383,7 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 		// Expect enter round before we send the finalization response.
 		ercCh := cs.ExpectEnterRound(3, 0, nil)
 
-		finReq.Resp <- tmapp.FinalizeBlockResponse{
+		finReq.Resp <- tmdriver.FinalizeBlockResponse{
 			Height: 2, Round: 1,
 			BlockHash: pb21.Block.Hash,
 
@@ -401,13 +404,13 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	efx := tmenginetest.NewFixture(t, 4)
+	efx := tmenginetest.NewFixture(ctx, t, 4)
 
 	var engine *tmengine.Engine
 	eReady := make(chan struct{})
 	go func() {
 		defer close(eReady)
-		engine = efx.MustNewEngine(ctx, efx.SigningOptionMap().ToSlice()...)
+		engine = efx.MustNewEngine(efx.SigningOptionMap().ToSlice()...)
 	}()
 
 	defer func() {
@@ -424,7 +427,7 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 
 	const initAppStateHash = "app_state_0"
 
-	gtest.SendSoon(t, icReq.Resp, tmapp.InitChainResponse{
+	gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
 		AppStateHash: []byte(initAppStateHash),
 	})
 
@@ -451,6 +454,8 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 	})
 
 	pb103 := efx.Fx.NextProposedBlock([]byte("app_data_1_0_3"), 3)
+	pb103.Block.PrevAppStateHash = []byte(initAppStateHash)
+	efx.Fx.RecalculateHash(&pb103.Block)
 	efx.Fx.SignProposal(ctx, &pb103, 3)
 	t.Run("proposed block from network", func(t *testing.T) {
 		require.Equal(t, tmconsensus.HandleProposedBlockAccepted, engine.HandleProposedBlock(ctx, pb103))
@@ -464,7 +469,8 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 		require.Nil(t, u.Committing)
 		require.Nil(t, u.NextRound)
 
-		cReq := gtest.ReceiveSoon(t, cs.ConsiderProposedBlockRequests)
+		cReq := gtest.ReceiveSoon(t, cs.ConsiderProposedBlocksRequests)
+		require.Equal(t, []string{string(pb103.Block.Hash)}, cReq.Reason.NewProposedBlocks)
 		gtest.SendSoon(t, cReq.ChoiceError, tmconsensus.ErrProposedBlockChoiceNotReady)
 	})
 
@@ -472,7 +478,7 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 	var blockHash100 string
 	t.Run("proposed block from state machine", func(t *testing.T) {
 		gtest.SendSoon(t, erc.ProposalOut, tmconsensus.Proposal{
-			AppDataID: "app_data_1_0_0",
+			DataID: "app_data_1_0_0",
 		})
 
 		// The proposed blocks that arrive from the state machine
@@ -530,7 +536,8 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 	})
 
 	t.Run("prevote from state machine", func(t *testing.T) {
-		cReq := gtest.ReceiveSoon(t, cs.ConsiderProposedBlockRequests)
+		cReq := gtest.ReceiveSoon(t, cs.ConsiderProposedBlocksRequests)
+		require.Equal(t, []string{blockHash100}, cReq.Reason.NewProposedBlocks)
 		gtest.SendSoon(t, cReq.ChoiceHash, blockHash100)
 
 		u := gtest.ReceiveSoon(t, gs.Updates)
@@ -625,7 +632,7 @@ func TestEngine_initChain(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		efx := tmenginetest.NewFixture(t, 2)
+		efx := tmenginetest.NewFixture(ctx, t, 2)
 
 		// NewEngine blocks in the main goroutine on the init chain call,
 		// so we have to create it in the background,
@@ -635,7 +642,7 @@ func TestEngine_initChain(t *testing.T) {
 		eReady := make(chan struct{})
 		go func() {
 			defer close(eReady)
-			engine = efx.MustNewEngine(ctx, efx.SigningOptionMap().ToSlice()...)
+			engine = efx.MustNewEngine(efx.SigningOptionMap().ToSlice()...)
 		}()
 
 		defer func() {
@@ -654,7 +661,7 @@ func TestEngine_initChain(t *testing.T) {
 		// The NewEngine call still hasn't returned before we respond.
 		gtest.NotSending(t, eReady)
 
-		gtest.SendSoon(t, icReq.Resp, tmapp.InitChainResponse{
+		gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
 			AppStateHash: []byte("app_state_0"),
 		})
 
@@ -662,10 +669,9 @@ func TestEngine_initChain(t *testing.T) {
 		_ = gtest.ReceiveSoon(t, eReady)
 
 		// And this means the finalization store is populated.
-		round, blockHash, vals, appStateHash, err := efx.FinalizationStore.LoadFinalizationByHeight(ctx, 0)
+		round, _, vals, appStateHash, err := efx.FinalizationStore.LoadFinalizationByHeight(ctx, 0)
 		require.NoError(t, err)
 		require.Zero(t, round)
-		_ = blockHash
 		require.True(t, tmconsensus.ValidatorSlicesEqual(vals, efx.Fx.Vals()))
 		require.Equal(t, "app_state_0", appStateHash)
 	})
@@ -676,7 +682,7 @@ func TestEngine_initChain(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		efx := tmenginetest.NewFixture(t, 2)
+		efx := tmenginetest.NewFixture(ctx, t, 2)
 
 		// NewEngine blocks in the main goroutine on the init chain call,
 		// so we have to create it in the background,
@@ -686,7 +692,7 @@ func TestEngine_initChain(t *testing.T) {
 		eReady := make(chan struct{})
 		go func() {
 			defer close(eReady)
-			engine = efx.MustNewEngine(ctx, efx.SigningOptionMap().ToSlice()...)
+			engine = efx.MustNewEngine(efx.SigningOptionMap().ToSlice()...)
 		}()
 
 		defer func() {
@@ -707,7 +713,7 @@ func TestEngine_initChain(t *testing.T) {
 
 		newVals := tmconsensustest.DeterministicValidatorsEd25519(3).Vals()
 
-		gtest.SendSoon(t, icReq.Resp, tmapp.InitChainResponse{
+		gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
 			AppStateHash: []byte("app_state_0"),
 			Validators:   newVals,
 		})
@@ -716,10 +722,66 @@ func TestEngine_initChain(t *testing.T) {
 		_ = gtest.ReceiveSoon(t, eReady)
 
 		// And this means the finalization store is populated.
-		round, blockHash, vals, appStateHash, err := efx.FinalizationStore.LoadFinalizationByHeight(ctx, 0)
+		round, _, vals, appStateHash, err := efx.FinalizationStore.LoadFinalizationByHeight(ctx, 0)
 		require.NoError(t, err)
 		require.Zero(t, round)
-		_ = blockHash
+		require.True(t, tmconsensus.ValidatorSlicesEqual(vals, newVals))
+		require.Equal(t, "app_state_0", appStateHash)
+	})
+
+	t.Run("default startup flow requiring InitChain call, with no initial validators but with a validator override", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		efx := tmenginetest.NewFixture(ctx, t, 2)
+
+		var engine *tmengine.Engine
+		eReady := make(chan struct{})
+		go func() {
+			defer close(eReady)
+			// Overwrite the WithGenesis option so that it has no GenesisValidators specified.
+			optMap := efx.SigningOptionMap()
+			optMap["WithGenesis"] = tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
+				ChainID:           "my-chain",
+				InitialHeight:     1,
+				InitialAppState:   new(bytes.Buffer),
+				GenesisValidators: nil, // Explicitly nil initial validators.
+			})
+			engine = efx.MustNewEngine(optMap.ToSlice()...)
+		}()
+
+		defer func() {
+			cancel()
+			<-eReady
+			engine.Wait()
+		}()
+
+		// We may or may not reach EnterRound as this test finishes,
+		// so we need to set an expectation on the mock consensus strategy.
+		_ = efx.ConsensusStrategy.ExpectEnterRound(1, 0, nil)
+
+		// It makes an init chain request.
+		icReq := gtest.ReceiveSoon(t, efx.InitChainCh)
+
+		// The NewEngine call still hasn't returned before we respond.
+		gtest.NotSending(t, eReady)
+
+		newVals := tmconsensustest.DeterministicValidatorsEd25519(3).Vals()
+
+		gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
+			AppStateHash: []byte("app_state_0"),
+			Validators:   newVals,
+		})
+
+		// After we send the response, the engine is ready.
+		_ = gtest.ReceiveSoon(t, eReady)
+
+		// And this means the finalization store is populated.
+		round, _, vals, appStateHash, err := efx.FinalizationStore.LoadFinalizationByHeight(ctx, 0)
+		require.NoError(t, err)
+		require.Zero(t, round)
 		require.True(t, tmconsensus.ValidatorSlicesEqual(vals, newVals))
 		require.Equal(t, "app_state_0", appStateHash)
 	})
@@ -730,7 +792,7 @@ func TestEngine_initChain(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		efx := tmenginetest.NewFixture(t, 2)
+		efx := tmenginetest.NewFixture(ctx, t, 2)
 
 		// Before starting the engine, save a finalization.
 		require.NoError(t, efx.FinalizationStore.SaveFinalization(
@@ -747,7 +809,7 @@ func TestEngine_initChain(t *testing.T) {
 		eReady := make(chan struct{})
 		go func() {
 			defer close(eReady)
-			engine = efx.MustNewEngine(ctx, efx.SigningOptionMap().ToSlice()...)
+			engine = efx.MustNewEngine(efx.SigningOptionMap().ToSlice()...)
 		}()
 
 		defer func() {
@@ -775,7 +837,7 @@ func TestEngine_initChain(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		efx := tmenginetest.NewFixture(t, 2)
+		efx := tmenginetest.NewFixture(ctx, t, 2)
 
 		// Before starting the engine, set the network height-round.
 		// This will cause the engine to not consult the finalization store.
@@ -787,7 +849,7 @@ func TestEngine_initChain(t *testing.T) {
 		eReady := make(chan struct{})
 		go func() {
 			defer close(eReady)
-			engine = efx.MustNewEngine(ctx, efx.SigningOptionMap().ToSlice()...)
+			engine = efx.MustNewEngine(efx.SigningOptionMap().ToSlice()...)
 		}()
 
 		defer func() {
@@ -833,6 +895,10 @@ func TestEngine_configuration(t *testing.T) {
 		GenesisValidators: fx.Vals(),
 	}
 
+	// NOTE: Uncancellable root context means this leaks a goroutine.
+	// Making this cancellable would require some rework on the parallel subtests.
+	wd, _ := gwatchdog.NewNopWatchdog(context.Background(), gtest.NewLogger(t))
+
 	fullOptions := map[string]tmengine.Opt{
 		"WithGenesis": tmengine.WithGenesis(eg),
 
@@ -857,7 +923,9 @@ func TestEngine_configuration(t *testing.T) {
 		// the engine returns an error indicating that the WithTimeoutStrategy option was missed.
 		"WithTimeoutStrategy": tmengine.WithInternalRoundTimer(new(tmstatetest.MockRoundTimer)),
 
-		"WithBlockFinalizationChannel": tmengine.WithBlockFinalizationChannel(make(chan tmapp.FinalizeBlockRequest)),
+		"WithBlockFinalizationChannel": tmengine.WithBlockFinalizationChannel(make(chan tmdriver.FinalizeBlockRequest)),
+
+		"WithWatchdog": tmengine.WithWatchdog(wd),
 	}
 
 	requiredWithSignerOptions := map[string]tmengine.Opt{
@@ -961,4 +1029,149 @@ func TestEngine_configuration(t *testing.T) {
 			require.Nil(t, e)
 		})
 	}
+}
+
+func TestEngine_mirrorSkipsAhead(t *testing.T) {
+	t.Run("skip to next round due to minority prevote", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		efx := tmenginetest.NewFixture(ctx, t, 4)
+
+		var engine *tmengine.Engine
+		eReady := make(chan struct{})
+		go func() {
+			defer close(eReady)
+			opts := efx.SigningOptionMap()
+			delete(opts, "WithSigner")
+			engine = efx.MustNewEngine(opts.ToSlice()...)
+		}()
+
+		defer func() {
+			cancel()
+			<-eReady
+			engine.Wait()
+		}()
+
+		icReq := gtest.ReceiveSoon(t, efx.InitChainCh)
+
+		const initAppStateHash = "app_state_0"
+
+		gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
+			AppStateHash: []byte(initAppStateHash),
+		})
+
+		// After we send the response, the engine is ready.
+		_ = gtest.ReceiveSoon(t, eReady)
+
+		_ = efx.ConsensusStrategy.ExpectEnterRound(1, 0, nil)
+
+		// At the very beginning, the entire network submits a nil prevote at 1/0.
+		keyHash, _ := efx.Fx.ValidatorHashes()
+		fullPrevotes := efx.Fx.SparsePrevoteProofMap(ctx, 1, 0, map[string][]int{
+			"": {0, 1, 2, 3},
+		})
+		prevoteSparseProof := tmconsensus.PrevoteSparseProof{
+			Height: 1, Round: 0,
+			PubKeyHash: keyHash,
+			Proofs:     fullPrevotes,
+		}
+		require.Equal(t, tmconsensus.HandleVoteProofsAccepted, engine.HandlePrevoteProofs(ctx, prevoteSparseProof))
+
+		// Now we get half precommits, but not enough to proceed.
+		partialPrecommits := efx.Fx.SparsePrecommitProofMap(ctx, 1, 0, map[string][]int{
+			"": {0, 1},
+		})
+		precommitSparseProof := tmconsensus.PrecommitSparseProof{
+			Height: 1, Round: 0,
+			PubKeyHash: keyHash,
+			Proofs:     partialPrecommits,
+		}
+		require.Equal(t, tmconsensus.HandleVoteProofsAccepted, engine.HandlePrecommitProofs(ctx, precommitSparseProof))
+
+		// Now, the state machine is able to handle events, but the mock consensus strategy
+		// is currently blocked on a ChooseProposedBlock call.
+		// It would be better if that had was associated with the round
+		// and had a context that automatically canceled,
+		// but for now we will just respond to unblock the mock consensus strategy.
+		cbReq := gtest.ReceiveSoon(t, efx.ConsensusStrategy.ChooseProposedBlockRequests)
+		gtest.SendSoon(t, cbReq.ChoiceHash, "")
+
+		// Now before completing the precommits at 1/0,
+		// we see half the prevotes for nil at 1/1,
+		// which should cause our state machine to jump ahead.
+		ercCh := efx.ConsensusStrategy.ExpectEnterRound(1, 1, nil)
+
+		partialPrevotes := efx.Fx.SparsePrevoteProofMap(ctx, 1, 1, map[string][]int{
+			"": {2, 3},
+		})
+		prevoteSparseProof = tmconsensus.PrevoteSparseProof{
+			Height: 1, Round: 1,
+			PubKeyHash: keyHash,
+			Proofs:     partialPrevotes,
+		}
+		require.Equal(t, tmconsensus.HandleVoteProofsAccepted, engine.HandlePrevoteProofs(ctx, prevoteSparseProof))
+
+		// Wait for state machine to enter 1/1.
+		_ = gtest.ReceiveSoon(t, ercCh)
+	})
+}
+
+func TestEngine_metrics(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	efx := tmenginetest.NewFixture(ctx, t, 4)
+
+	metricsCh := make(chan tmengine.Metrics)
+	var engine *tmengine.Engine
+	eReady := make(chan struct{})
+	go func() {
+		defer close(eReady)
+		opts := efx.SigningOptionMap().ToSlice()
+		opts = append(opts, tmengine.WithMetricsChannel(metricsCh))
+		engine = efx.MustNewEngine(opts...)
+	}()
+
+	defer func() {
+		cancel()
+		<-eReady
+		engine.Wait()
+	}()
+
+	// Set up the EnterRound expectation before any other actions,
+	// to avoid it happening early and causing a panic.
+	cs := efx.ConsensusStrategy
+	ercCh := cs.ExpectEnterRound(1, 0, nil)
+
+	// It makes an init chain request.
+	icReq := gtest.ReceiveSoon(t, efx.InitChainCh)
+
+	const initAppStateHash = "app_state_0"
+
+	gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
+		AppStateHash: []byte(initAppStateHash),
+	})
+
+	// After we send the response, the engine is ready.
+	_ = gtest.ReceiveSoon(t, eReady)
+
+	// The network proposes a block and it is received.
+	pb103 := efx.Fx.NextProposedBlock([]byte("app_data_1_0_3"), 3)
+	efx.Fx.SignProposal(ctx, &pb103, 3)
+	require.Equal(t, tmconsensus.HandleProposedBlockAccepted, engine.HandleProposedBlock(ctx, pb103))
+	_ = gtest.ReceiveSoon(t, ercCh)
+
+	// Since the mirror and state machine must have seen the proposed block,
+	// it should be safe to assume they have both reported height 1 and round 0 to the metrics collector.
+	m := gtest.ReceiveSoon(t, metricsCh)
+	require.Equal(t, uint64(1), m.MirrorVotingHeight)
+	require.Zero(t, m.MirrorVotingRound)
+	require.Zero(t, m.MirrorCommittingHeight)
+	require.Equal(t, uint64(1), m.StateMachineHeight)
+	require.Zero(t, m.StateMachineRound)
 }

@@ -1,0 +1,34 @@
+From 442093e1b06b1e1cfd3871b2d97b5603ae879130 Mon Sep 17 00:00:00 2001
+From: Mark Rushakoff <mark@strange.love>
+Date: Mon, 1 Jul 2024 14:43:02 -0400
+Subject: [PATCH 2/6] fix: store root dir respects --home flag
+
+It was hardcoded to the default home, which is incompatible with tests
+that use a temporary directory per simapp instance.
+---
+ simapp/v2/app_di.go | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/simapp/v2/app_di.go b/simapp/v2/app_di.go
+index 7cde4042f3..4e87bcc305 100644
+--- a/simapp/v2/app_di.go
++++ b/simapp/v2/app_di.go
+@@ -12,7 +12,6 @@ import (
+ 	"cosmossdk.io/depinject"
+ 	"cosmossdk.io/log"
+ 	"cosmossdk.io/runtime/v2"
+-	serverv2 "cosmossdk.io/server/v2"
+ 	"cosmossdk.io/x/accounts"
+ 	authkeeper "cosmossdk.io/x/auth/keeper"
+ 	authzkeeper "cosmossdk.io/x/authz/keeper"
+@@ -92,7 +91,6 @@ func NewSimApp[T transaction.Tx](
+ 	logger log.Logger,
+ 	viper *viper.Viper,
+ ) *SimApp[T] {
+-	viper.Set(serverv2.FlagHome, DefaultNodeHome) // TODO possibly set earlier when viper is created
+ 	var (
+ 		app        = &SimApp[T]{}
+ 		appBuilder *runtime.AppBuilder[T]
+-- 
+2.44.0
+

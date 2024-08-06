@@ -18,7 +18,7 @@ type jsonProposedBlock struct {
 
 	Signature []byte
 
-	AppAnnotation, EngineAnnotation []byte
+	UserAnnotation, DriverAnnotation []byte
 }
 
 func (jpb jsonProposedBlock) ToProposedBlock(
@@ -44,8 +44,8 @@ func (jpb jsonProposedBlock) ToProposedBlock(
 		ProposerPubKey: pubKey,
 		Signature:      jpb.Signature,
 		Annotations: tmconsensus.Annotations{
-			App:    jpb.AppAnnotation,
-			Engine: jpb.EngineAnnotation,
+			User:   jpb.UserAnnotation,
+			Driver: jpb.DriverAnnotation,
 		},
 	}, nil
 }
@@ -57,8 +57,8 @@ func toJSONProposedBlock(pb tmconsensus.ProposedBlock, reg *gcrypto.Registry) js
 		ProposerPubKey: reg.Marshal(pb.ProposerPubKey),
 		Signature:      pb.Signature,
 
-		AppAnnotation:    pb.Annotations.App,
-		EngineAnnotation: pb.Annotations.Engine,
+		UserAnnotation:   pb.Annotations.User,
+		DriverAnnotation: pb.Annotations.Driver,
 	}
 }
 
@@ -78,7 +78,7 @@ type jsonBlock struct {
 	DataID           []byte
 	PrevAppStateHash []byte
 
-	AppAnnotation, EngineAnnotation []byte
+	UserAnnotation, DriverAnnotation []byte
 }
 
 func (jb jsonBlock) ToBlock(
@@ -139,8 +139,8 @@ func (jb jsonBlock) ToBlock(
 		PrevAppStateHash: jb.PrevAppStateHash,
 
 		Annotations: tmconsensus.Annotations{
-			App:    jb.AppAnnotation,
-			Engine: jb.EngineAnnotation,
+			User:   jb.UserAnnotation,
+			Driver: jb.DriverAnnotation,
 		},
 	}, nil
 }
@@ -170,8 +170,8 @@ func toJSONBlock(b tmconsensus.Block, reg *gcrypto.Registry) jsonBlock {
 		DataID:           b.DataID,
 		PrevAppStateHash: b.PrevAppStateHash,
 
-		AppAnnotation:    b.Annotations.App,
-		EngineAnnotation: b.Annotations.Engine,
+		UserAnnotation:   b.Annotations.User,
+		DriverAnnotation: b.Annotations.Driver,
 	}
 }
 

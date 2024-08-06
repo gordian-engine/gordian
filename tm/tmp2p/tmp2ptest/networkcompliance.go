@@ -76,8 +76,6 @@ func (n *GenericNetwork[C]) Stabilize(ctx context.Context) error {
 }
 
 func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
-	t.Parallel()
-
 	t.Run("child connections are closed on main context cancellation", func(t *testing.T) {
 		t.Parallel()
 
@@ -151,9 +149,9 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		require.NoError(t, err)
 
 		handler1 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn1.SetConsensusHandler(handler1)
+		conn1.SetConsensusHandler(ctx, handler1)
 		handler2 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn2.SetConsensusHandler(handler2)
+		conn2.SetConsensusHandler(ctx, handler2)
 
 		require.NoError(t, net.Stabilize(ctx))
 
@@ -195,11 +193,11 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		require.NoError(t, err)
 
 		handler1 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn1.SetConsensusHandler(handler1)
+		conn1.SetConsensusHandler(ctx, handler1)
 		handler2 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn2.SetConsensusHandler(handler2)
+		conn2.SetConsensusHandler(ctx, handler2)
 		handler3 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn3.SetConsensusHandler(handler3)
+		conn3.SetConsensusHandler(ctx, handler3)
 
 		require.NoError(t, net.Stabilize(ctx))
 
@@ -262,10 +260,10 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		require.NoError(t, err)
 
 		handler1 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn1.SetConsensusHandler(handler1)
+		conn1.SetConsensusHandler(ctx, handler1)
 
 		handler2 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn2.SetConsensusHandler(handler2)
+		conn2.SetConsensusHandler(ctx, handler2)
 
 		require.NoError(t, net.Stabilize(ctx))
 
@@ -324,9 +322,9 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		require.NoError(t, err)
 
 		handler1 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn1.SetConsensusHandler(handler1)
+		conn1.SetConsensusHandler(ctx, handler1)
 		handler2 := tmconsensustest.NewChannelConsensusHandler(1)
-		conn2.SetConsensusHandler(handler2)
+		conn2.SetConsensusHandler(ctx, handler2)
 
 		require.NoError(t, net.Stabilize(ctx))
 

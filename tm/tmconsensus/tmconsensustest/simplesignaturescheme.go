@@ -35,16 +35,16 @@ DataID=%x
 		return n, err
 	}
 
-	if pbAnnotations.App != nil {
-		m, err := fmt.Fprintf(w, "AppAnnotation=%x\n", pbAnnotations.App)
+	if pbAnnotations.User != nil {
+		m, err := fmt.Fprintf(w, "UserAnnotation=%x\n", pbAnnotations.User)
 		n += m
 		if err != nil {
 			return n, err
 		}
 	}
 
-	if pbAnnotations.Engine != nil {
-		m, err := fmt.Fprintf(w, "EngineAnnotation=%x\n", pbAnnotations.Engine)
+	if pbAnnotations.Driver != nil {
+		m, err := fmt.Fprintf(w, "DriverAnnotation=%x\n", pbAnnotations.Driver)
 		n += m
 		if err != nil {
 			return n, err

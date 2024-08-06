@@ -16,8 +16,8 @@ type hr struct {
 // MockConsensusStrategy is an implementation of [tmconsensus.ConsensusStrategy]
 // for ease of testing.
 type MockConsensusStrategy struct {
-	ConsiderProposedBlockRequests <-chan ChooseProposedBlockRequest // Exported receive-only.
-	considerPBReqs                chan<- ChooseProposedBlockRequest // Unexported send-only.
+	ConsiderProposedBlocksRequests <-chan ConsiderProposedBlocksRequest // Exported receive-only.
+	considerPBReqs                 chan<- ConsiderProposedBlocksRequest // Unexported send-only.
 
 	ChooseProposedBlockRequests <-chan ChooseProposedBlockRequest // Exported receive-only.
 	choosePBReqs                chan<- ChooseProposedBlockRequest // Unexported send-only.
@@ -39,8 +39,22 @@ type EnterRoundCall struct {
 	ProposalOut chan<- tmconsensus.Proposal
 }
 
+// ConsiderProposedBlocksRequest is sent on [MockConsensusStrategy.ConsiderProposedBlocksRequest]
+// upon a call to ConsiderProposedBlocks.
+//
+// The test must send one value on either of the 1-buffered ChoiceHash or ChoiceError channels
+// in order for the ChooseProposedBlock method to return
+// (or cancel the context passed to the method).
+type ConsiderProposedBlocksRequest struct {
+	PBs         []tmconsensus.ProposedBlock
+	Reason      tmconsensus.ConsiderProposedBlocksReason
+	ChoiceHash  chan string
+	ChoiceError chan error
+}
+
 // ChooseProposedBlockRequest is sent on [MockConsensusStrategy.ChooseProposedBlockRequests]
 // upon a call to ChooseProposedBlock.
+//
 // The test must send one value on either of the 1-buffered ChoiceHash or ChoiceError channels
 // in order for the ChooseProposedBlock method to return
 // (or cancel the context passed to the method).
@@ -57,12 +71,12 @@ type DecidePrecommitRequest struct {
 }
 
 func NewMockConsensusStrategy() *MockConsensusStrategy {
-	considerPBReqCh := make(chan ChooseProposedBlockRequest, 1)
+	considerPBReqCh := make(chan ConsiderProposedBlocksRequest, 1)
 	choosePBReqCh := make(chan ChooseProposedBlockRequest, 1)
 	decidePrecommitReqCh := make(chan DecidePrecommitRequest, 1)
 	return &MockConsensusStrategy{
-		ConsiderProposedBlockRequests: considerPBReqCh,
-		considerPBReqs:                considerPBReqCh,
+		ConsiderProposedBlocksRequests: considerPBReqCh,
+		considerPBReqs:                 considerPBReqCh,
 
 		ChooseProposedBlockRequests: choosePBReqCh,
 		choosePBReqs:                choosePBReqCh,
@@ -127,10 +141,13 @@ func (s *MockConsensusStrategy) EnterRound(
 }
 
 func (s *MockConsensusStrategy) ConsiderProposedBlocks(
-	ctx context.Context, pbs []tmconsensus.ProposedBlock,
+	ctx context.Context,
+	pbs []tmconsensus.ProposedBlock,
+	reason tmconsensus.ConsiderProposedBlocksReason,
 ) (string, error) {
-	req := ChooseProposedBlockRequest{
-		Input:       pbs,
+	req := ConsiderProposedBlocksRequest{
+		PBs:         pbs,
+		Reason:      reason,
 		ChoiceHash:  make(chan string, 1),
 		ChoiceError: make(chan error, 1),
 	}

@@ -92,11 +92,15 @@ func GetStepFromVoteSummary(vs tmconsensus.VoteSummary) Step {
 		return StepPrevoteDelay
 	}
 
-	if vs.TotalPrevotePower >= min {
-		return StepAwaitingPrevotes
-	}
-
-	// Neither prevotes nor precommits have crossed minority power,
+	// Neither prevotes nor precommits have crossed a corresponding threshold,
 	// so we are in the default position of awaiting a proposal.
+	//
+	// We explicitly do not have special treatment
+	// for total prevote power exceeding the minority vote.
+	// A minority prevote for anything does not force us to prevote;
+	// we may still wait for proposed blocks,
+	// or propose our own block.
+	//
+	// At worst, we wait for the proposal delay before sending our prevote.
 	return StepAwaitingProposal
 }

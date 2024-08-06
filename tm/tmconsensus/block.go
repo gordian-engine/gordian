@@ -44,12 +44,14 @@ type Block struct {
 	// Unlike the annotations on a proposed block, these values are persisted to chain.
 	// The values must be respected in the block's hash.
 	//
-	// Components of the consensus engine may modify the Annotations.Engine field.
+	// Low-level driver code may set the Annotations.Driver field,
+	// while on-chain code may set the Annotations.User field.
 	//
-	// One example of a use case for a block annotation from the engine
+	// One example of a use case for a block annotation from the driver
 	// could be to include a timestamp with the block.
-	// One contrived example for the application annotation could be
-	// including the version of the application, and rejecting blocks that don't match the version.
+	// One contrived example for the user annotation could be
+	// including the version of the application,
+	// in order to reject blocks that don't match the version.
 	Annotations Annotations
 }
 
@@ -84,10 +86,13 @@ type ProposedBlock struct {
 	// Arbitrary data to associate with the proposed block.
 	// The annotations are considered when producing the proposed block's signature,
 	// but they are otherwise not persisted to chain.
+	// (Of course, off-chain utilities like indexers may persist the data off-chain.)
 	//
-	// Components of the consensus engine may modify the Annotations.Engine field,
-	// and the Annotations.App field may be set by populating the [Proposal.AppAnnotation] field
-	// when the Consensus Strategy provides a proposal.
+	// Low-level driver code may set the Annotations.Driver field,
+	// while on-chain code may set the Annotations.User field.
+	//
+	// The [ConsensusStrategy] may directly set either of those fields
+	// when it provides a proposed block to the engine.
 	//
 	// One example of a use case for a proposed block annotation
 	// would be for the engine to include its network address or p2p ID
@@ -128,10 +133,11 @@ type BlockFinalization struct {
 	NextValidators []Validator
 }
 
-// Annotations are arbitrary data to associate with a Block or ProposedBlock.
+// Annotations are arbitrary data to associate with a [Block] or [ProposedBlock].
 //
-// The App annotations are determined by the application associated with Gordian,
-// while the Engine annotations may be populated by components internal to Gordian.
+// The Driver annotations are set by the driver
+// (that is, the low-level code providing the [ConsensusStrategy]).
+// The User annotations are provided by the higher-level application.
 type Annotations struct {
-	App, Engine []byte
+	User, Driver []byte
 }
