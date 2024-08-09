@@ -19,7 +19,6 @@ import (
 	"github.com/cometbft/cometbft/privval"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
@@ -53,8 +52,6 @@ type Component struct {
 	rootCtx context.Context
 	cancel  context.CancelCauseFunc
 
-	serverCtx *server.Context
-
 	log *slog.Logger
 
 	app   serverv2.AppI[transaction.Tx]
@@ -86,7 +83,6 @@ type Component struct {
 // It accepts a *slog.Logger directly to avoid dealing with SDK loggers.
 func NewComponent(
 	rootCtx context.Context,
-	serverCtx *server.Context,
 	log *slog.Logger,
 	txc transaction.Codec[transaction.Tx],
 	codec codec.Codec,
@@ -96,7 +92,6 @@ func NewComponent(
 	c.log = log.With("sys", "engine")
 	c.txc = txc
 	c.codec = codec
-	c.serverCtx = serverCtx
 
 	return &c, nil
 }
@@ -169,7 +164,6 @@ func (c *Component) Start(ctx context.Context) error {
 	d, err := gsi.NewDriver(
 		c.rootCtx,
 		ctx,
-		c.serverCtx,
 		c.log.With("serversys", "driver"),
 		gsi.DriverConfig{
 			ConsensusAuthority: c.app.GetConsensusAuthority(),
