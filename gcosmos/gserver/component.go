@@ -25,6 +25,7 @@ import (
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/rollchains/gordian/gcosmos/gmempool"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/gwatchdog"
@@ -198,7 +199,16 @@ func (c *Component) Start(ctx context.Context) error {
 
 	// We needed the driver before we could make the consensus strategy.
 	opts = append(opts, tmengine.WithConsensusStrategy(
-		gsi.NewConsensusStrategy(c.log.With("serversys", "cons_strat"), d, c.signer),
+		gsi.NewConsensusStrategy(
+			c.log.With("serversys", "cons_strat"),
+			d,
+			*(c.app.GetAppManager()),
+			c.signer,
+			bufMu, txBuf,
+			gsbd.NewLibp2pProviderHost(
+				c.log.With("s_sys", "block_provider"), h.Libp2pHost(),
+			),
+		),
 	))
 
 	// Depends on conn.

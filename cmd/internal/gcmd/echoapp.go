@@ -145,7 +145,7 @@ func (s *EchoConsensusStrategy) EnterRound(ctx context.Context, rv tmconsensus.R
 		appData := fmt.Sprintf("Height: %d; Round: %d", s.curH, s.curR)
 		dataHash := sha256.Sum256([]byte(appData))
 		proposalOut <- tmconsensus.Proposal{
-			AppDataID: string(dataHash[:]),
+			DataID: string(dataHash[:]),
 		}
 		s.log.Info("Proposing block", "h", s.curH, "r", s.curR)
 	}
@@ -153,7 +153,11 @@ func (s *EchoConsensusStrategy) EnterRound(ctx context.Context, rv tmconsensus.R
 	return nil
 }
 
-func (s *EchoConsensusStrategy) ConsiderProposedBlocks(ctx context.Context, pbs []tmconsensus.ProposedBlock) (string, error) {
+func (s *EchoConsensusStrategy) ConsiderProposedBlocks(
+	ctx context.Context,
+	pbs []tmconsensus.ProposedBlock,
+	_ tmconsensus.ConsiderProposedBlocksReason,
+) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -191,7 +195,7 @@ func (s *EchoConsensusStrategy) ConsiderProposedBlocks(ctx context.Context, pbs 
 
 func (s *EchoConsensusStrategy) ChooseProposedBlock(ctx context.Context, pbs []tmconsensus.ProposedBlock) (string, error) {
 	// Follow the ConsiderProposedBlocks logic...
-	hash, err := s.ConsiderProposedBlocks(ctx, pbs)
+	hash, err := s.ConsiderProposedBlocks(ctx, pbs, tmconsensus.ConsiderProposedBlocksReason{})
 	if err == tmconsensus.ErrProposedBlockChoiceNotReady {
 		// ... and if there is no choice ready, then vote nil.
 		return "", nil

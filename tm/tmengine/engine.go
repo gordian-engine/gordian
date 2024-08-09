@@ -204,6 +204,11 @@ func (e *Engine) validateSettings(smc tmstate.StateMachineConfig) error {
 		err = errors.Join(err, errors.New("no block finalization channel set (use tmengine.WithBlockFinalizationChannel)"))
 	}
 
+	// TODO: we are currently not validating the presence of the AppDataArrival channel.
+	// Add a WithoutAppDataArrival() option so that the rare case
+	// of not needing to separately retrieve app data is explicitly opt-in.
+	// Fail validation if both or neither of the option pair is provided.
+
 	// This is one special case.
 	// Tests instantiate a tmstate.MockRoundTimer to avoid reliance on the wall clock.
 	// But, external callers are expected to only provide a TimeoutStrategy.

@@ -1,4 +1,4 @@
-package gsi
+package gsbd
 
 import (
 	"encoding/hex"
@@ -15,17 +15,12 @@ const txsHashSize = 32
 
 // We need the zero hash for the special, but probably common,
 // case of zero transactions.
-//go:generate go run ./appdataid_generate.go
+//go:generate go run ./dataid_generate.go
 
-func AppDataID(
-	height uint64,
-	round uint32,
-	txs []transaction.Tx,
-) string {
-	if len(txs) == 0 {
-		return fmt.Sprintf("%d:%d%s", height, round, zeroHashSuffix)
-	}
-
+// TxsHash returns the accumulated hash resulting from
+// the hash of the concatenated transaction hashes.
+// This is the last segment of the data ID.
+func TxsHash(txs []transaction.Tx) [txsHashSize]byte {
 	hasher, err := blake2b.New(txsHashSize, nil)
 	if err != nil {
 		panic(fmt.Errorf("impossible: blake2b.New failed: %w", err))
@@ -38,11 +33,24 @@ func AppDataID(
 
 	txsHash := make([]byte, 0, txsHashSize)
 	txsHash = hasher.Sum(txsHash)
-
-	return fmt.Sprintf("%d:%d:%d:%x", height, round, len(txs), txsHash)
+	out := [txsHashSize]byte{}
+	_ = copy(out[:], txsHash)
+	return out
 }
 
-func ParseAppDataID(id string) (
+func DataID(
+	height uint64,
+	round uint32,
+	txs []transaction.Tx,
+) string {
+	if len(txs) == 0 {
+		return fmt.Sprintf("%d:%d%s", height, round, zeroHashSuffix)
+	}
+
+	return fmt.Sprintf("%d:%d:%d:%x", height, round, len(txs), TxsHash(txs))
+}
+
+func ParseDataID(id string) (
 	height uint64, round uint32,
 	nTxs int,
 	txsHash [txsHashSize]byte,

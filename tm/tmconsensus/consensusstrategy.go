@@ -8,10 +8,32 @@ import (
 // Proposal is the data an application needs to provide,
 // for the engine to compose a [ProposedBlock].
 type Proposal struct {
-	AppDataID string // TODO: this should switch back to []byte.
+	// The ID of the data inside the block.
+	// This value will be used to set [Block.DataID].
+	DataID string // TODO: this should switch back to []byte.
 
 	// Respectively sets [ProposedBlock.Annotations] and [Block.Annotations].
 	ProposalAnnotations, BlockAnnotations Annotations
+}
+
+// ConsiderProposedBlocksReason is an argument in [ConsensusStrategy.ConsiderProposedBlocks].
+// It is a hint to the [ConsensusStrategy] about anything new to check during this call,
+// compared to the previous call.
+// The state of what has been sent previously is already available in the engine,
+// so the consensus strategy does not need to track this state on its own.
+type ConsiderProposedBlocksReason struct {
+	// The hashes of the new blocks since the previous call to ConsiderProposedBlocks.
+	NewProposedBlocks []string
+
+	// Any data IDs that have been marked as updated
+	// since the previous call to ConsensusStrategy.
+	// The data IDs are provided in an arbitrary order.
+	UpdatedBlockDataIDs []string
+
+	// Indicates whether >2/3 of voting power is present,
+	// but does not necessarily indicate that the voting power
+	// is for a single block or nil; voting may be split.
+	MajorityVotingPowerPresent bool
 }
 
 // ConsensusStrategy determines how a state machine proposes blocks
@@ -29,8 +51,13 @@ type ConsensusStrategy interface {
 	// the state machine will compose that information into a proposed block.
 	EnterRound(ctx context.Context, rv RoundView, proposalOut chan<- Proposal) error
 
-	// ConsiderProposedBlocks is called for each proposed block the state machine receives
-	// while awaiting proposed blocks and before the proposed block timeout has elapsed.
+	// ConsiderProposedBlocks is called when new proposed blocks arrive,
+	// or when new app data has arrived,
+	// so long as the proposed block timeout has not yet elapsed.
+	//
+	// The reason argument is a hint to the consensus strategy
+	// about which information is new in this call,
+	// compared to the previous call.
 	//
 	// If the returned error is nil, the returned string is assumed to be the block hash to prevote.
 	// The empty string indicates a prevote for nil.
@@ -38,7 +65,11 @@ type ConsensusStrategy interface {
 	// If the consensus strategy wants to wait longer before making a selection,
 	// it must return ErrProposedBlockChoiceNotReady.
 	// Any other error is fatal.
-	ConsiderProposedBlocks(ctx context.Context, pbs []ProposedBlock) (string, error)
+	ConsiderProposedBlocks(
+		ctx context.Context,
+		pbs []ProposedBlock,
+		reason ConsiderProposedBlocksReason,
+	) (string, error)
 
 	// ChooseProposedBlock is called when the state machine's proposal delay has elapsed.
 	// The pbs slice may be empty.

@@ -6,8 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
+	"cosmossdk.io/core/transaction"
+	"cosmossdk.io/server/v2/appmanager"
+	"github.com/rollchains/gordian/gcosmos/gmempool"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/internal/gchan"
 	"github.com/rollchains/gordian/internal/glog"
@@ -19,21 +24,42 @@ type ConsensusStrategy struct {
 
 	d *Driver
 
+	am appmanager.AppManager[transaction.Tx]
+
+	bufMu *sync.Mutex
+	txBuf *gmempool.TxBuffer
+
 	signer gcrypto.Signer
+
+	provider gsbd.Provider
 
 	curH uint64
 	curR uint32
+
+	curProposals map[string][]transaction.Tx
 }
 
 func NewConsensusStrategy(
 	log *slog.Logger,
 	d *Driver,
+	am appmanager.AppManager[transaction.Tx],
 	signer gcrypto.Signer,
+	bufMu *sync.Mutex,
+	txBuf *gmempool.TxBuffer,
+	blockDataProvider gsbd.Provider,
 ) *ConsensusStrategy {
 	return &ConsensusStrategy{
 		log:    log,
 		d:      d,
+		am:     am,
 		signer: signer,
+
+		bufMu: bufMu,
+		txBuf: txBuf,
+
+		provider: blockDataProvider,
+
+		curProposals: make(map[string][]transaction.Tx),
 	}
 }
 
@@ -66,6 +92,7 @@ func (c *ConsensusStrategy) EnterRound(
 	// Track the current height and round for later when we get to voting.
 	c.curH = rv.Height
 	c.curR = rv.Round
+	clear(c.curProposals)
 
 	// Very naive round-robin-ish proposer selection.
 	proposerIdx := (int(rv.Height) + int(rv.Round)) % len(rv.Validators)
@@ -87,12 +114,45 @@ func (c *ConsensusStrategy) EnterRound(
 		return fmt.Errorf("failed to create block annotation: %w", err)
 	}
 
+	var pendingTxs []transaction.Tx
+	func() {
+		c.bufMu.Lock()
+		defer c.bufMu.Unlock()
+		pendingTxs = c.txBuf.AddedTxs(nil)
+	}()
+
+	var blockDataID string
+	var pda []byte
+	if len(pendingTxs) == 0 {
+		blockDataID = gsbd.DataID(c.curH, c.curR, nil)
+	} else {
+		res, err := c.provider.Provide(ctx, c.curH, c.curR, pendingTxs)
+		if err != nil {
+			return fmt.Errorf("failed to provide block data: %w", err)
+		}
+
+		pda, err = json.Marshal(ProposalDriverAnnotation{
+			DataSize:  res.DataSize,
+			Locations: res.Addrs,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to marshal proposal driver annotations: %w", err)
+		}
+
+		blockDataID = res.DataID
+	}
+
+	c.curProposals[blockDataID] = pendingTxs
+
 	if !gchan.SendC(
 		ctx, c.log,
 		proposalOut, tmconsensus.Proposal{
-			AppDataID: AppDataID(rv.Height, rv.Round, nil),
+			DataID: blockDataID,
 			BlockAnnotations: tmconsensus.Annotations{
 				Driver: ba,
+			},
+			ProposalAnnotations: tmconsensus.Annotations{
+				Driver: pda,
 			},
 		},
 		"sending proposal to engine",
@@ -102,10 +162,13 @@ func (c *ConsensusStrategy) EnterRound(
 	return nil
 }
 
+// ConsiderProposedBlocks effectively chooses the first valid block in pbs.
 func (c *ConsensusStrategy) ConsiderProposedBlocks(
 	ctx context.Context,
 	pbs []tmconsensus.ProposedBlock,
+	_ tmconsensus.ConsiderProposedBlocksReason,
 ) (string, error) {
+PB_LOOP:
 	for _, pb := range pbs {
 		if pb.Block.Height != c.curH {
 			c.log.Debug(
@@ -123,7 +186,7 @@ func (c *ConsensusStrategy) ConsiderProposedBlocks(
 			continue
 		}
 
-		h, r, nTxs, _, err := ParseAppDataID(string(pb.Block.DataID))
+		h, r, nTxs, _, err := gsbd.ParseDataID(string(pb.Block.DataID))
 		if err != nil {
 			c.log.Debug(
 				"Ignoring proposed block due to unparseable app data ID",
@@ -149,10 +212,49 @@ func (c *ConsensusStrategy) ConsiderProposedBlocks(
 			)
 			continue
 		}
+
 		if nTxs != 0 {
-			panic(errors.New(
-				"TODO: handle app data IDs that indicate presence of at least one transaction",
-			))
+			txs, ok := c.curProposals[string(pb.Block.DataID)]
+			if !ok {
+				panic(errors.New(
+					"TODO: handle app data IDs that indicate presence of at least one transaction",
+				))
+			}
+
+			// Otherwise we have the transactions.
+			// Can they be applied?
+			// We know we have at least one transaction,
+			// and we needs its result to seed subsequent transactions starting state.
+			txRes, state, err := c.am.Simulate(ctx, txs[0])
+			if err != nil {
+				c.log.Debug(
+					"Ignoring proposed block due to failure to simulate",
+					"err", err,
+				)
+				continue
+			}
+			if txRes.Error != nil {
+				txHash := txs[0].Hash()
+				c.log.Debug(
+					"Ignoring proposed block due to failure to apply transaction",
+					"tx_hash", glog.Hex(txHash[:]),
+					"err", err,
+				)
+				continue
+			}
+
+			for _, tx := range txs[1:] {
+				txRes, state = c.am.SimulateWithState(ctx, state, tx)
+				if txRes.Error != nil {
+					txHash := tx.Hash()
+					c.log.Debug(
+						"Ignoring proposed block due to failure to apply transaction",
+						"tx_hash", glog.Hex(txHash[:]),
+						"err", err,
+					)
+					continue PB_LOOP
+				}
+			}
 		}
 
 		ba, err := BlockAnnotationFromBytes(pb.Block.Annotations.Driver)
@@ -191,7 +293,7 @@ func (c *ConsensusStrategy) ChooseProposedBlock(
 	ctx context.Context,
 	pbs []tmconsensus.ProposedBlock,
 ) (string, error) {
-	h, err := c.ConsiderProposedBlocks(ctx, pbs)
+	h, err := c.ConsiderProposedBlocks(ctx, pbs, tmconsensus.ConsiderProposedBlocksReason{})
 	if err == tmconsensus.ErrProposedBlockChoiceNotReady {
 		return "", nil
 	}

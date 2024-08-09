@@ -9,6 +9,7 @@ import (
 	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
+	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmgossip"
 	"github.com/rollchains/gordian/tm/tmstore"
 )
@@ -157,6 +158,17 @@ func WithInitChainChannel(ch chan<- tmdriver.InitChainRequest) Opt {
 func WithBlockFinalizationChannel(ch chan<- tmdriver.FinalizeBlockRequest) Opt {
 	return func(_ *Engine, smc *tmstate.StateMachineConfig) error {
 		smc.FinalizeBlockRequestCh = ch
+		return nil
+	}
+}
+
+// WithAppDataArrivalChannel sets the channel that the engine reads from
+// in order to refresh the consensus strategy,
+// in the event that application data is received
+// later than a proposed block is received.
+func WithBlockDataArrivalChannel(ch <-chan tmelink.BlockDataArrival) Opt {
+	return func(_ *Engine, smc *tmstate.StateMachineConfig) error {
+		smc.BlockDataArrivalCh = ch
 		return nil
 	}
 }

@@ -1,4 +1,4 @@
-From 4735741e4cdd1e5d7f526d04ffc071e3a7ddf134 Mon Sep 17 00:00:00 2001
+From 7861a111b1ebe43e4af1aaf8ed85acf7fa086834 Mon Sep 17 00:00:00 2001
 From: Mark Rushakoff <mark@strange.love>
 Date: Mon, 29 Jul 2024 11:57:21 -0400
 Subject: [PATCH 6/6] feat: add (AppManager[T]).SimulateWithState
@@ -28,6 +28,6 @@ index cef0fc57cc..e1df20d91f 100644
 +) (appmanager.TxResult, corestore.WriterMap) {
 +	return a.stf.Simulate(ctx, state, a.config.SimulationGasLimit, tx)
 +}
---
+-- 
 2.44.0
 

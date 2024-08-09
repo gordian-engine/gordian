@@ -224,13 +224,17 @@ func (s *valShuffleConsensusStrategy) EnterRound(ctx context.Context, rv tmconse
 	appData = append(appData, keyHash...)
 	appData = append(appData, powHash...)
 	proposalOut <- tmconsensus.Proposal{
-		AppDataID: string(appData),
+		DataID: string(appData),
 	}
 
 	return nil
 }
 
-func (s *valShuffleConsensusStrategy) ConsiderProposedBlocks(ctx context.Context, pbs []tmconsensus.ProposedBlock) (string, error) {
+func (s *valShuffleConsensusStrategy) ConsiderProposedBlocks(
+	ctx context.Context,
+	pbs []tmconsensus.ProposedBlock,
+	_ tmconsensus.ConsiderProposedBlocksReason,
+) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -263,7 +267,7 @@ func (s *valShuffleConsensusStrategy) ConsiderProposedBlocks(ctx context.Context
 
 func (s *valShuffleConsensusStrategy) ChooseProposedBlock(ctx context.Context, pbs []tmconsensus.ProposedBlock) (string, error) {
 	// Follow the ConsiderProposedBlocks logic...
-	hash, err := s.ConsiderProposedBlocks(ctx, pbs)
+	hash, err := s.ConsiderProposedBlocks(ctx, pbs, tmconsensus.ConsiderProposedBlocksReason{})
 	if err == tmconsensus.ErrProposedBlockChoiceNotReady {
 		// ... and if there is no choice ready, then vote nil.
 		return "", nil

@@ -1,4 +1,4 @@
-From 781a04049e7d46cafd1558d889e499dc2be1de70 Mon Sep 17 00:00:00 2001
+From 3106563b004f9c7bab34c5df18991575846a741e Mon Sep 17 00:00:00 2001
 From: Mark Rushakoff <mark@strange.love>
 Date: Wed, 17 Jul 2024 09:51:38 -0400
 Subject: [PATCH 4/6] chore: allow discovery of anonymous GRPC server addr
@@ -13,7 +13,7 @@ And fix the server start command to actually expose that flag.
  1 file changed, 19 insertions(+)
 
 diff --git a/server/v2/api/grpc/server.go b/server/v2/api/grpc/server.go
-index 5bce26508b..163e7ffee3 100644
+index 006a970e09..5c0cfd0a00 100644
 --- a/server/v2/api/grpc/server.go
 +++ b/server/v2/api/grpc/server.go
 @@ -6,9 +6,11 @@ import (

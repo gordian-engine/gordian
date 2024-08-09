@@ -18,6 +18,7 @@ import (
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate/internal/tsi"
+	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmstore"
 )
 
@@ -45,6 +46,7 @@ type StateMachine struct {
 	viewInCh               <-chan tmeil.StateMachineRoundView
 	roundEntranceOutCh     chan<- tmeil.StateMachineRoundEntrance
 	finalizeBlockRequestCh chan<- tmdriver.FinalizeBlockRequest
+	blockDataArrivalCh     <-chan tmelink.BlockDataArrival
 
 	kernelDone chan struct{}
 }
@@ -66,6 +68,8 @@ type StateMachineConfig struct {
 
 	RoundViewInCh      <-chan tmeil.StateMachineRoundView
 	RoundEntranceOutCh chan<- tmeil.StateMachineRoundEntrance
+
+	BlockDataArrivalCh <-chan tmelink.BlockDataArrival
 
 	FinalizeBlockRequestCh chan<- tmdriver.FinalizeBlockRequest
 
@@ -99,6 +103,7 @@ func NewStateMachine(ctx context.Context, log *slog.Logger, cfg StateMachineConf
 		viewInCh:               cfg.RoundViewInCh,
 		roundEntranceOutCh:     cfg.RoundEntranceOutCh,
 		finalizeBlockRequestCh: cfg.FinalizeBlockRequestCh,
+		blockDataArrivalCh:     cfg.BlockDataArrivalCh,
 
 		kernelDone: make(chan struct{}),
 	}
@@ -243,6 +248,11 @@ func (m *StateMachine) handleLiveEvent(
 			return false
 		}
 
+	case a := <-m.blockDataArrivalCh:
+		if !m.handleBlockDataArrival(ctx, rlc, a) {
+			return false
+		}
+
 	case sig := <-wSig:
 		close(sig.Alive)
 	}
@@ -291,12 +301,14 @@ func (m *StateMachine) beginRoundLive(
 			rlc.CurVals,
 			rlc.PrevFinNextVals,
 		); len(okPBs) > 0 {
+			req := tsi.ConsiderProposedBlocksRequest{
+				PBs:    okPBs,
+				Result: rlc.PrevoteHashCh,
+			}
+			req.MarkReasonNewHashes(rlc)
 			if !gchan.SendC(
 				ctx, m.log,
-				m.cm.ConsiderProposedBlocksRequests, tsi.ChooseProposedBlockRequest{
-					PBs:    okPBs,
-					Result: rlc.PrevoteHashCh,
-				},
+				m.cm.ConsiderProposedBlocksRequests, req,
 				"making consider proposed blocks request from initial state",
 			) {
 				// Context cancelled and logged. Quit.
@@ -404,6 +416,10 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 	// Closing the outgoing Response channel is not strictly necessary,
 	// but it is a little helpful in tests in case a StateMachineRoundEntrance is mistakenly reused.
 	close(initRE.Response)
+
+	// Initialize this to a default size;
+	// it needs to be a non-nil map regardless of the initial update.
+	rlc.PrevConsideredHashes = map[string]struct{}{}
 
 	// We have a response -- do we need to call into the consensus strategy,
 	// or do we only need to replay the block?
@@ -689,6 +705,11 @@ func (m *StateMachine) handleProposalViewUpdate(
 			default:
 				panic("TODO: handle blocked send to ChooseProposedBlockRequests")
 			}
+
+			// Don't need to hold on to any of the previously sent hashes
+			// after sending the choose request.
+			clear(rlc.PrevConsideredHashes)
+
 			return
 		}
 
@@ -701,6 +722,12 @@ func (m *StateMachine) handleProposalViewUpdate(
 		if len(req.PBs) > 0 {
 			// If we filtered out invalid proposed blocks,
 			// don't send the request.
+			req := tsi.ConsiderProposedBlocksRequest{
+				PBs:    req.PBs, // Outer declaration of req as a choose request.
+				Result: rlc.PrevoteHashCh,
+			}
+			req.MarkReasonNewHashes(rlc)
+			req.Reason.MajorityVotingPowerPresent = true
 			select {
 			case m.cm.ConsiderProposedBlocksRequests <- req:
 				// Okay.
@@ -750,11 +777,12 @@ func (m *StateMachine) handleProposalViewUpdate(
 		}
 
 		// The timer hasn't elapsed yet so it is only a Consider call at this point.
-		req := tsi.ChooseProposedBlockRequest{
+		req := tsi.ConsiderProposedBlocksRequest{
 			PBs: incoming,
 
 			Result: rlc.PrevoteHashCh,
 		}
+		req.MarkReasonNewHashes(rlc)
 		select {
 		case m.cm.ConsiderProposedBlocksRequests <- req:
 			// Okay.
@@ -1071,7 +1099,7 @@ func (m *StateMachine) recordProposedBlock(
 			Validators:     slices.Clone(rlc.CurVals),
 			NextValidators: slices.Clone(rlc.PrevFinNextVals),
 
-			DataID: []byte(p.AppDataID),
+			DataID: []byte(p.DataID),
 
 			PrevAppStateHash: []byte(rlc.PrevFinAppStateHash),
 
@@ -1224,6 +1252,10 @@ func (m *StateMachine) handleTimerElapsed(ctx context.Context, rlc *tsi.RoundLif
 			return false
 		}
 
+		// Don't need to hold on to any of the previously sent hashes
+		// after sending the choose request.
+		clear(rlc.PrevConsideredHashes)
+
 		// Move on to awaiting prevotes.
 		rlc.S = tsi.StepAwaitingPrevotes
 
@@ -1282,6 +1314,103 @@ func (m *StateMachine) handleTimerElapsed(ctx context.Context, rlc *tsi.RoundLif
 
 	default:
 		panic(fmt.Errorf("BUG: unhandled timer elapse for step %s", rlc.S))
+	}
+
+	return true
+}
+
+// handleBlockDataArrival is called from the kernel when a new block data arrival value is received.
+//
+// It filters the incoming arrival, and then scans m.BlockDataArrivalCh for any other queued values.
+// If any of those match a proposed block we already had,
+// it makes a new call to consider the proposed blocks, setting the reason as appropriate.
+func (m *StateMachine) handleBlockDataArrival(ctx context.Context, rlc *tsi.RoundLifecycle, a tmelink.BlockDataArrival) (ok bool) {
+	defer trace.StartRegion(ctx, "handleBlockDataArrival").End()
+
+	// We've already submitted a prevote for this round,
+	// so just ignore the arrival notification.
+	if rlc.PrevoteHashCh == nil {
+		return true
+	}
+
+	// If the prevote hash channel is not nil,
+	// then confirm that the arrived data matches rlc.
+	if a.Height != rlc.H || a.Round != rlc.R {
+		return true
+	}
+
+	// The height and round match, and we are able to prevote,
+	// so now we need to construct the consider block request.
+	okPBs := rejectMismatchedProposedBlocks(
+		rlc.PrevVRV.ProposedBlocks,
+		rlc.PrevFinAppStateHash,
+		rlc.CurVals,
+		rlc.PrevFinNextVals,
+	)
+	if len(okPBs) == 0 {
+		return true
+	}
+
+	req := tsi.ConsiderProposedBlocksRequest{
+		PBs:    okPBs,
+		Result: rlc.PrevoteHashCh,
+	}
+
+	// We don't call req.MarkReasonNewHashes here, because we did not receive new hashes.
+	// But we do need to construct the slice of updated block IDs.
+	// Gather any other incoming data arrivals.
+	dataIDMap := make(map[string]struct{}, 1+len(m.blockDataArrivalCh))
+	dataIDMap[a.ID] = struct{}{}
+GATHER_ARRIVALS:
+	for {
+		select {
+		case x := <-m.blockDataArrivalCh:
+			// Another arrival is queued.
+			// Include it if it matches the height and round.
+			if x.Height != a.Height || x.Round != a.Round {
+				continue GATHER_ARRIVALS
+			}
+			dataIDMap[x.ID] = struct{}{}
+		case <-ctx.Done():
+			m.log.Info(
+				"Quitting due to context cancellation while gathering block data arrivals",
+				"cause", context.Cause(ctx),
+			)
+			return false
+		default:
+			// Nothing left on the channel.
+			break GATHER_ARRIVALS
+		}
+	}
+
+	// We have a list of data IDs that have arrived.
+	// Exclude any that do not map to the proposed blocks we are re-checking.
+	req.Reason.UpdatedBlockDataIDs = make([]string, 0, max(len(req.PBs), len(dataIDMap)))
+	for _, pb := range req.PBs {
+		_, dataArrived := dataIDMap[string(pb.Block.DataID)]
+		if !dataArrived {
+			continue
+		}
+
+		req.Reason.UpdatedBlockDataIDs = append(req.Reason.UpdatedBlockDataIDs, string(pb.Block.DataID))
+	}
+
+	if len(req.Reason.UpdatedBlockDataIDs) == 0 {
+		// We had IDs arrive, but nothing matched the proposed blocks we have.
+		return true
+	}
+
+	// We may have overallocated capacity, so trim it off to help GC.
+	req.Reason.UpdatedBlockDataIDs = slices.Clip(req.Reason.UpdatedBlockDataIDs)
+
+	// Now we can finally make the request.
+	if !gchan.SendC(
+		ctx, m.log,
+		m.cm.ConsiderProposedBlocksRequests, req,
+		"making consider proposed blocks request following block data arrival",
+	) {
+		// Context cancelled and logged. Quit.
+		return false
 	}
 
 	return true

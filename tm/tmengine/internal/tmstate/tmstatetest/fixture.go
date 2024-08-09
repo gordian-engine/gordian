@@ -12,6 +12,7 @@ import (
 	"github.com/rollchains/gordian/tm/tmdriver"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
 	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
+	"github.com/rollchains/gordian/tm/tmengine/tmelink"
 	"github.com/rollchains/gordian/tm/tmstore/tmmemstore"
 )
 
@@ -30,6 +31,7 @@ type Fixture struct {
 	RoundViewInCh         chan tmeil.StateMachineRoundView
 	RoundEntranceOutCh    chan tmeil.StateMachineRoundEntrance
 	FinalizeBlockRequests chan tmdriver.FinalizeBlockRequest
+	BlockDataArrivalCh    chan tmelink.BlockDataArrival
 
 	Cfg tmstate.StateMachineConfig
 
@@ -46,6 +48,10 @@ func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
 	roundViewInCh := make(chan tmeil.StateMachineRoundView)
 	roundEntranceOutCh := make(chan tmeil.StateMachineRoundEntrance)
 	finReq := make(chan tmdriver.FinalizeBlockRequest)
+
+	// Normally this channel would be buffered,
+	// but for test we prefer a synchronous channel.
+	blockDataArrivalCh := make(chan tmelink.BlockDataArrival)
 
 	log := gtest.NewLogger(t)
 	wd, wCtx := gwatchdog.NewNopWatchdog(ctx, log.With("sys", "watchdog"))
@@ -66,6 +72,7 @@ func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
 		RoundViewInCh:         roundViewInCh,
 		RoundEntranceOutCh:    roundEntranceOutCh,
 		FinalizeBlockRequests: finReq,
+		BlockDataArrivalCh:    blockDataArrivalCh,
 
 		Cfg: tmstate.StateMachineConfig{
 			// Default to the first signer.
@@ -88,6 +95,7 @@ func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
 			RoundViewInCh:          roundViewInCh,
 			RoundEntranceOutCh:     roundEntranceOutCh,
 			FinalizeBlockRequestCh: finReq,
+			BlockDataArrivalCh:     blockDataArrivalCh,
 
 			Watchdog: wd,
 		},
