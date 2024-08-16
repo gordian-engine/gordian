@@ -1,0 +1,20 @@
+[package]
+name = "gordian-grpc"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "gcosmos-build"
+path = "build.rs"
+
+[[bin]] # Bin to run the HelloWorld gRPC client
+name = "gcosmos-client"
+path = "src/main.rs"
+
+[dependencies]
+tonic = "0.12"
+prost = "0.13"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[build-dependencies]
+tonic-build = "0.12"
