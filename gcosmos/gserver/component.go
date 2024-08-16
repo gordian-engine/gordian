@@ -22,6 +22,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
 	"github.com/rollchains/gordian/gcrypto"
@@ -76,6 +77,7 @@ type Component struct {
 	ms         tmstore.MirrorStore
 	fs         tmstore.FinalizationStore
 	httpServer *gsi.HTTPServer
+	grpcServer *ggrpc.GordianGRPC
 }
 
 // NewComponent returns a new server component
@@ -268,6 +270,8 @@ func (c *Component) Start(ctx context.Context) error {
 			TxBuffer: txBuf,
 		})
 	}
+
+	c.grpcServer = ggrpc.NewGordianGRPCServer(ctx, nil, c.ms)
 
 	return nil
 }

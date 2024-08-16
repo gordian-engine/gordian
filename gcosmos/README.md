@@ -38,14 +38,26 @@ but sometimes a local patch makes more sense.
 Begin running the updated siampp commands from the `gcosmos` directory.
 
 ```bash
-go run . init moniker
-echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > $HOME/.simappv2/mnemonic.txt
+rm -rf ~/.simappv2/
+go build -o gcosmos .
 
-go run . keys add val --recover --source $HOME/.simappv2/mnemonic.txt
+./gcosmos init moniker
+echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > mnemonic.txt
 
-go run . genesis add-genesis-account val 1000000stake --keyring-backend=test
-go run . genesis gentx val 1000000stake --keyring-backend=test --chain-id=gcosmos
-go run . genesis collect-gentxs
+./gcosmos keys add val --recover --source mnemonic.txt
+./gcosmos genesis add-genesis-account val 1000000stake --keyring-backend=test
+./gcosmos genesis gentx val 1000000stake --keyring-backend=test --chain-id=gcosmos
+./gcosmos genesis collect-gentxs
 
-go run . start
+# rm -rf ~/.simappv2/data/application.db/
+./gcosmos start --g-http-addr 127.0.0.1:26657
+```
+
+# Interact
+```bash
+# go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+
+grpcurl -plaintext localhost:9092 list
+grpcurl -plaintext localhost:9092 server.GordianGRPC/GetBlocksWatermark
+
 ```

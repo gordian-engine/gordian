@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/grpc";
+
+package server;
+
+service GordianGRPC {
+    rpc GetBlocksWatermark(CurrentBlockRequest) returns (CurrentBlockResponse) {}
+}
+
+message CurrentBlockRequest {}
+
+message CurrentBlockResponse {
+    uint64 voting_height = 1;
+    uint32 voting_round = 2;
+
+    uint64 committing_height = 3;
+    uint32 committing_round = 4;
+}
