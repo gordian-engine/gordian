@@ -3,5 +3,3 @@
 
 # go build . will make a binary named gcosmos, which we never want to commit.
 gcosmos
-
-rust/target/
