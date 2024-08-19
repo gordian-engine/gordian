@@ -335,7 +335,7 @@ func (c *Component) Stop(_ context.Context) error {
 			// which will probably happen before our call to close the listener here.
 			// Don't log if the error already indicated the network connection was closed.
 			if !errors.Is(err, net.ErrClosed) {
-				c.log.Warn("Error closing HTTP listener", "err", err)
+				c.log.Warn("Error closing gRPC listener", "err", err)
 			}
 		}
 		if c.grpcServer != nil {

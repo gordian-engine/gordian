@@ -88,7 +88,6 @@ func (g *GordianGRPC) Start() {
 	grpcServer.Serve(g.cfg.Listener)
 }
 
-// /blocks/watermark
 // GetBlocksWatermark implements GordianGRPCServer.
 func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockRequest) (*CurrentBlockResponse, error) {
 	ms := g.cfg.MirrorStore
