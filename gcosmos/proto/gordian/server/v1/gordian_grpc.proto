@@ -2,11 +2,11 @@ syntax = "proto3";
 
 option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc";
 
-package server;
+package gordian.server.v1;
 
-service GordianGRPC {
+service GordianGRPCService {
     // GetBlocksWatermark returns the current block information.
-    rpc GetBlocksWatermark(CurrentBlockRequest) returns (CurrentBlockResponse) {}
+    rpc GetBlocksWatermark(GetBlocksWatermarkRequest) returns (GetBlocksWatermarkResponse) {}
     // GetValidators returns the validator set.
     rpc GetValidators(GetValidatorsRequest) returns (GetValidatorsResponse) {}
 
@@ -20,8 +20,8 @@ service GordianGRPC {
     rpc QueryAccountBalance(QueryAccountBalanceRequest) returns (QueryAccountBalanceResponse) {}
 }
 
-message CurrentBlockRequest {}
-message CurrentBlockResponse {
+message GetBlocksWatermarkRequest {}
+message GetBlocksWatermarkResponse {
     uint64 voting_height = 1;
     uint32 voting_round = 2;
 

@@ -80,7 +80,7 @@ type Component struct {
 	ms         tmstore.MirrorStore
 	fs         tmstore.FinalizationStore
 	httpServer *gsi.HTTPServer
-	grpcServer *ggrpc.GordianGRPC
+	grpcServer *ggrpc.GordianGRPCServer
 }
 
 // NewComponent returns a new server component

@@ -15,7 +15,7 @@ func NewTxRespError(err error) (*TxResultResponse, error) {
 }
 
 // SubmitTransaction implements GordianGRPCServer.
-func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransactionRequest) (*TxResultResponse, error) {
+func (g *GordianGRPCServer) SubmitTransaction(ctx context.Context, req *SubmitTransactionRequest) (*TxResultResponse, error) {
 	b := req.Tx
 	tx, err := g.cfg.TxCodec.DecodeJSON(b)
 	if err != nil {
@@ -57,7 +57,7 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 }
 
 // SimulateTransaction implements GordianGRPCServer.
-func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimulationTransactionRequest) (*TxResultResponse, error) {
+func (g *GordianGRPCServer) SimulateTransaction(ctx context.Context, req *SubmitSimulationTransactionRequest) (*TxResultResponse, error) {
 	b := req.Tx
 	tx, err := g.cfg.TxCodec.DecodeJSON(b)
 	if err != nil {
@@ -91,7 +91,7 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 }
 
 // PendingTransactions implements GordianGRPCServer.
-func (g *GordianGRPC) PendingTransactions(ctx context.Context, req *PendingTransactionsRequest) (*PendingTransactionsResponse, error) {
+func (g *GordianGRPCServer) PendingTransactions(ctx context.Context, req *PendingTransactionsRequest) (*PendingTransactionsResponse, error) {
 	txs := g.cfg.TxBuf.Buffered(ctx, nil)
 
 	encodedTxs := make([][]byte, len(txs))
@@ -109,7 +109,7 @@ func (g *GordianGRPC) PendingTransactions(ctx context.Context, req *PendingTrans
 }
 
 // QueryAccountBalance implements GordianGRPCServer.
-func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error) {
+func (g *GordianGRPCServer) QueryAccountBalance(ctx context.Context, req *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error) {
 	cdc := g.cfg.Codec
 	am := g.cfg.AppManager
 

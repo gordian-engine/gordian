@@ -60,9 +60,12 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 # go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
 
 grpcurl -plaintext localhost:9092 list
-grpcurl -plaintext localhost:9092 server.GordianGRPC/GetBlocksWatermark
-grpcurl -plaintext localhost:9092 server.GordianGRPC/GetValidators
+grpcurl -plaintext localhost:9092 list gordian.server.v1alpha1.GordianGRPCService
 
+grpcurl -plaintext localhost:9092 gordian.server.v1alpha1.GordianGRPCService/GetBlocksWatermark
+grpcurl -plaintext localhost:9092 gordian.server.v1alpha1.GordianGRPCService/GetValidators
+
+# gordian.server.v1.GordianGRPCService/QueryAccountBalance
 grpcurl -plaintext -d '{"address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 server.GordianGRPC/QueryAccountBalance
 ```
 

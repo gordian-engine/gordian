@@ -22,10 +22,10 @@ var (
 // keyFile    = flag.String("key_file", "", "The TLS key file")
 )
 
-var _ GordianGRPCServer = (*GordianGRPC)(nil)
+var _ GordianGRPCServiceServer = (*GordianGRPCServer)(nil)
 
-type GordianGRPC struct {
-	UnimplementedGordianGRPCServer
+type GordianGRPCServer struct {
+	UnimplementedGordianGRPCServiceServer
 
 	cfg GRPCServerConfig
 	log *slog.Logger
@@ -48,8 +48,8 @@ type GRPCServerConfig struct {
 	Codec      codec.Codec
 }
 
-func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPC {
-	srv := &GordianGRPC{
+func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPCServer {
+	srv := &GordianGRPCServer{
 		cfg:  cfg,
 		log:  log,
 		done: make(chan struct{}),
@@ -60,11 +60,11 @@ func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerC
 	return srv
 }
 
-func (g *GordianGRPC) Wait() {
+func (g *GordianGRPCServer) Wait() {
 	<-g.done
 }
 
-func (g *GordianGRPC) waitForShutdown(ctx context.Context) {
+func (g *GordianGRPCServer) waitForShutdown(ctx context.Context) {
 	select {
 	case <-g.done:
 		// g.serve returned on its own, nothing left to do here.
@@ -74,26 +74,26 @@ func (g *GordianGRPC) waitForShutdown(ctx context.Context) {
 	}
 }
 
-func (g *GordianGRPC) Start() {
+func (g *GordianGRPCServer) Start() {
 	flag.Parse()
 	var opts []grpc.ServerOption
 	// TODO: TLS
 	grpcServer := grpc.NewServer(opts...)
-	RegisterGordianGRPCServer(grpcServer, g)
+	RegisterGordianGRPCServiceServer(grpcServer, g)
 	reflection.Register(grpcServer)
 
 	grpcServer.Serve(g.cfg.Listener)
 }
 
 // GetBlocksWatermark implements GordianGRPCServer.
-func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockRequest) (*CurrentBlockResponse, error) {
+func (g *GordianGRPCServer) GetBlocksWatermark(ctx context.Context, req *GetBlocksWatermarkRequest) (*GetBlocksWatermarkResponse, error) {
 	ms := g.cfg.MirrorStore
 	vh, vr, ch, cr, err := ms.NetworkHeightRound(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &CurrentBlockResponse{
+	return &GetBlocksWatermarkResponse{
 		VotingHeight:     vh,
 		VotingRound:      vr,
 		CommittingHeight: ch,
@@ -102,7 +102,7 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 }
 
 // GetValidators implements GordianGRPCServer.
-func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsRequest) (*GetValidatorsResponse, error) {
+func (g *GordianGRPCServer) GetValidators(ctx context.Context, req *GetValidatorsRequest) (*GetValidatorsResponse, error) {
 	ms := g.cfg.MirrorStore
 	fs := g.cfg.FinalizationStore
 	reg := g.cfg.CryptoRegistry
