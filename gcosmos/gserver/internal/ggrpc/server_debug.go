@@ -10,9 +10,7 @@ import (
 
 func NewTxRespError(err error) *TxResultResponse {
 	return &TxResultResponse{
-		// TxHash: "",
-		// Error:  err.Error(),
-		TxResult: fmt.Sprintf(`{"error": "%s"}`, err.Error()),
+		TxResultJson: fmt.Sprintf(`{"error": "%s"}`, err.Error()),
 	}
 }
 
@@ -51,7 +49,7 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 	}
 
 	return &TxResultResponse{
-		TxResult: string(jsonBz),
+		TxResultJson: string(jsonBz),
 	}, nil
 }
 
@@ -82,7 +80,7 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 	}
 
 	return &TxResultResponse{
-		TxResult: string(jsonBz),
+		TxResultJson: string(jsonBz),
 	}, nil
 }
 
@@ -91,7 +89,7 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 	cdc := g.cfg.Codec
 	am := g.cfg.AppManager
 
-	if req.AccountId == "" {
+	if req.Address == "" {
 		return nil, fmt.Errorf("account id is required")
 	}
 
@@ -101,7 +99,7 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 	}
 
 	msg, err := am.Query(ctx, 0, &banktypes.QueryBalanceRequest{
-		Address: req.AccountId,
+		Address: req.Address,
 		Denom:   denom,
 	})
 	if err != nil {

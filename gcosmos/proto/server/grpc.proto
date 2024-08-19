@@ -51,13 +51,8 @@ message PendingTransactionResponse {
     repeated string txs = 1;
 }
 
-
-
 // cosmos-sdk/core/app/app.go#TxResult
 // TODO: import this directly from the SDK? or use our own?
-
-// what if we just return the entire bytes from consensus?
-// then we dont have to deal with any SDK encoding.
 message TxResultResponse {
     // TODO: tx hash?
     // repeated string events = 1;
@@ -71,11 +66,11 @@ message TxResultResponse {
     // uint64 gas_used = 9;
     // string codespace = 10;
 
-    string tx_result = 1; // json
+    string tx_result_json = 1;
 }
 
 message QueryAccountBalanceRequest {
-    string account_id = 1;
+    string address = 1;
     string denom = 2;
 }
 

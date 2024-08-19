@@ -26,7 +26,7 @@ var (
 var _ GordianGRPCServer = (*GordianGRPC)(nil)
 
 type GordianGRPC struct {
-	// UnimplementedGordianGRPCServer
+	UnimplementedGordianGRPCServer
 
 	cfg GRPCServerConfig
 	log *slog.Logger
@@ -49,7 +49,6 @@ type GRPCServerConfig struct {
 	Codec      codec.Codec
 }
 
-// func NewGordianGRPCServer(ctx context.Context, bs tmstore.BlockStore, ms tmstore.MirrorStore) *GordianGRPC {
 func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPC {
 	srv := &GordianGRPC{
 		cfg:  cfg,
@@ -69,10 +68,9 @@ func (g *GordianGRPC) Wait() {
 func (g *GordianGRPC) waitForShutdown(ctx context.Context) {
 	select {
 	case <-g.done:
-		// h.serve returned on its own, nothing left to do here.
+		// g.serve returned on its own, nothing left to do here.
 		return
 	case <-ctx.Done():
-		// TODO: hard close grpc server?
 		close(g.done)
 	}
 }
@@ -132,9 +130,4 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	return &GetValidatorsResponse{
 		Validators: jsonValidators,
 	}, nil
-}
-
-// mustEmbedUnimplementedGordianGRPCServer implements GordianGRPCServer.
-func (g *GordianGRPC) mustEmbedUnimplementedGordianGRPCServer() {
-	panic("unimplemented")
 }
