@@ -1,4 +1,4 @@
-package gsi
+package txmanager
 
 import (
 	"context"

@@ -4,8 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 
+	"cosmossdk.io/core/transaction"
+	"cosmossdk.io/server/v2/appmanager"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/tm/tmstore"
 	grpc "google.golang.org/grpc"
@@ -21,9 +26,10 @@ var (
 var _ GordianGRPCServer = (*GordianGRPC)(nil)
 
 type GordianGRPC struct {
-	UnimplementedGordianGRPCServer
+	// UnimplementedGordianGRPCServer
 
 	cfg GRPCServerConfig
+	log *slog.Logger
 
 	done chan struct{}
 }
@@ -35,13 +41,19 @@ type GRPCServerConfig struct {
 	MirrorStore       tmstore.MirrorStore
 
 	CryptoRegistry *gcrypto.Registry
+
+	// debug handler
+	TxCodec    transaction.Codec[transaction.Tx]
+	AppManager appmanager.AppManager[transaction.Tx]
+	TxBuf      *txmanager.SDKTxBuf
+	Codec      codec.Codec
 }
 
 // func NewGordianGRPCServer(ctx context.Context, bs tmstore.BlockStore, ms tmstore.MirrorStore) *GordianGRPC {
-func NewGordianGRPCServer(ctx context.Context, cfg GRPCServerConfig) *GordianGRPC {
+func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPC {
 	srv := &GordianGRPC{
-		cfg: cfg,
-
+		cfg:  cfg,
+		log:  log,
 		done: make(chan struct{}),
 	}
 	go srv.Start()
@@ -121,4 +133,9 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	return &GetValidatorsResponse{
 		Validators: jsonValidators,
 	}, nil
+}
+
+// mustEmbedUnimplementedGordianGRPCServer implements GordianGRPCServer.
+func (g *GordianGRPC) mustEmbedUnimplementedGordianGRPCServer() {
+	panic("unimplemented")
 }
