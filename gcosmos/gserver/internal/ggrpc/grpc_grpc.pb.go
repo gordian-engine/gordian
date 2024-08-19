@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	GordianGRPC_GetBlocksWatermark_FullMethodName = "/server.GordianGRPC/GetBlocksWatermark"
+	GordianGRPC_GetValidators_FullMethodName      = "/server.GordianGRPC/GetValidators"
 )
 
 // GordianGRPCClient is the client API for GordianGRPC service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GordianGRPCClient interface {
 	GetBlocksWatermark(ctx context.Context, in *CurrentBlockRequest, opts ...grpc.CallOption) (*CurrentBlockResponse, error)
+	GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error)
 }
 
 type gordianGRPCClient struct {
@@ -46,11 +48,21 @@ func (c *gordianGRPCClient) GetBlocksWatermark(ctx context.Context, in *CurrentB
 	return out, nil
 }
 
+func (c *gordianGRPCClient) GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error) {
+	out := new(GetValidatorsResponse)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetValidators_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GordianGRPCServer is the server API for GordianGRPC service.
 // All implementations must embed UnimplementedGordianGRPCServer
 // for forward compatibility
 type GordianGRPCServer interface {
 	GetBlocksWatermark(context.Context, *CurrentBlockRequest) (*CurrentBlockResponse, error)
+	GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error)
 	mustEmbedUnimplementedGordianGRPCServer()
 }
 
@@ -60,6 +72,9 @@ type UnimplementedGordianGRPCServer struct {
 
 func (UnimplementedGordianGRPCServer) GetBlocksWatermark(context.Context, *CurrentBlockRequest) (*CurrentBlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlocksWatermark not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetValidators not implemented")
 }
 func (UnimplementedGordianGRPCServer) mustEmbedUnimplementedGordianGRPCServer() {}
 
@@ -92,6 +107,24 @@ func _GordianGRPC_GetBlocksWatermark_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GordianGRPC_GetValidators_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetValidatorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetValidators(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetValidators_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetValidators(ctx, req.(*GetValidatorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GordianGRPC_ServiceDesc is the grpc.ServiceDesc for GordianGRPC service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -102,6 +135,10 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBlocksWatermark",
 			Handler:    _GordianGRPC_GetBlocksWatermark_Handler,
+		},
+		{
+			MethodName: "GetValidators",
+			Handler:    _GordianGRPC_GetValidators_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

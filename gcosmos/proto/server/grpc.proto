@@ -1,11 +1,13 @@
 syntax = "proto3";
 
-option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/grpc";
+option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc";
 
 package server;
 
 service GordianGRPC {
     rpc GetBlocksWatermark(CurrentBlockRequest) returns (CurrentBlockResponse) {}
+
+    rpc GetValidators(GetValidatorsRequest) returns (GetValidatorsResponse) {}
 }
 
 message CurrentBlockRequest {}
@@ -16,4 +18,15 @@ message CurrentBlockResponse {
 
     uint64 committing_height = 3;
     uint32 committing_round = 4;
+}
+
+message GetValidatorsRequest {}
+
+message validator {
+    bytes pub_key = 1;
+    uint64 power = 2;
+}
+
+message GetValidatorsResponse {
+    repeated validator validators = 1;
 }

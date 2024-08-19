@@ -73,7 +73,9 @@ type Component struct {
 
 	seedAddrs string
 
-	httpLn     net.Listener
+	httpLn net.Listener
+	grpcLn net.Listener
+
 	ms         tmstore.MirrorStore
 	fs         tmstore.FinalizationStore
 	httpServer *gsi.HTTPServer
@@ -251,6 +253,16 @@ func (c *Component) Start(ctx context.Context) error {
 		Handler: e,
 	})
 
+	if c.grpcLn != nil {
+		// TODO; share this with the http server as a wrapper.
+		c.grpcServer = ggrpc.NewGordianGRPCServer(ctx, ggrpc.GRPCServerConfig{
+			Listener:          c.grpcLn,
+			FinalizationStore: c.fs,
+			MirrorStore:       c.ms,
+			CryptoRegistry:    reg,
+		})
+	}
+
 	if c.httpLn != nil {
 		c.httpServer = gsi.NewHTTPServer(ctx, c.log.With("sys", "http"), gsi.HTTPServerConfig{
 			Listener: c.httpLn,
@@ -270,8 +282,6 @@ func (c *Component) Start(ctx context.Context) error {
 			TxBuffer: txBuf,
 		})
 	}
-
-	c.grpcServer = ggrpc.NewGordianGRPCServer(ctx, nil, c.ms)
 
 	return nil
 }
@@ -309,6 +319,20 @@ func (c *Component) Stop(_ context.Context) error {
 			c.httpServer.Wait()
 		}
 	}
+	if c.grpcLn != nil {
+		if err := c.grpcLn.Close(); err != nil {
+			// If the GRPC server is closed directly,
+			// it will close the underlying listener,
+			// which will probably happen before our call to close the listener here.
+			// Don't log if the error already indicated the network connection was closed.
+			if !errors.Is(err, net.ErrClosed) {
+				c.log.Warn("Error closing HTTP listener", "err", err)
+			}
+		}
+		if c.grpcServer != nil {
+			c.grpcServer.Wait()
+		}
+	}
 	return nil
 }
 
@@ -328,15 +352,17 @@ func (c *Component) Init(app serverv2.AppI[transaction.Tx], v *viper.Viper, log 
 			return fmt.Errorf("failed to listen for HTTP on %q: %w", httpAddr, err)
 		}
 
-		if f := v.GetString(httpAddrFileFlag); f != "" {
-			// TODO: we should probably track this file and delete it on shutdown.
-			addr := ln.Addr().String() + "\n"
-			if err := os.WriteFile(f, []byte(addr), 0600); err != nil {
-				return fmt.Errorf("failed to write HTTP address to file %q: %w", f, err)
-			}
+		c.httpLn = ln
+	}
+
+	// Maybe set up the GRPC server.
+	if grpcAddrFlag := v.GetString(grpcAddrFlag); grpcAddrFlag != "" {
+		ln, err := net.Listen("tcp", grpcAddrFlag)
+		if err != nil {
+			return fmt.Errorf("failed to listen for GRPC on %q: %w", grpcAddrFlag, err)
 		}
 
-		c.httpLn = ln
+		c.grpcLn = ln
 	}
 
 	c.seedAddrs = v.GetString(seedAddrsFlag)
@@ -410,6 +436,7 @@ func (c *Component) Init(app serverv2.AppI[transaction.Tx], v *viper.Viper, log 
 
 const (
 	httpAddrFlag     = "g-http-addr"
+	grpcAddrFlag     = "g-grpc-addr"
 	httpAddrFileFlag = "g-http-addr-file"
 
 	seedAddrsFlag = "g-seed-addrs"
@@ -419,6 +446,7 @@ func (c *Component) StartCmdFlags() *pflag.FlagSet {
 	flags := pflag.NewFlagSet("gserver", pflag.ExitOnError)
 
 	flags.String(httpAddrFlag, "", "TCP address of Gordian's introspective HTTP server; if blank, server will not be started")
+	flags.String(grpcAddrFlag, "", "GRPC address of Gordian's introspective GRPC server; if blank, server will not be started")
 	flags.String(httpAddrFileFlag, "", "Write the actual Gordian HTTP listen address to the given file (useful for tests when configured to listen on :0)")
 
 	flags.String(seedAddrsFlag, "", "Newline-separated multiaddrs to connect to; if omitted, relies on incoming connections to discover peers")
