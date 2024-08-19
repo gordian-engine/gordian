@@ -41,6 +41,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 // The various interfaces we expect a Component to satisfy.
@@ -255,7 +256,6 @@ func (c *Component) Start(ctx context.Context) error {
 	})
 
 	if c.grpcLn != nil {
-		// TODO; share this with the http server as a wrapper.
 		c.grpcServer = ggrpc.NewGordianGRPCServer(ctx, c.log.With("sys", "grpc"), ggrpc.GRPCServerConfig{
 			Listener: c.grpcLn,
 
@@ -273,22 +273,14 @@ func (c *Component) Start(ctx context.Context) error {
 	}
 
 	if c.httpLn != nil {
+		gRPCClient, err := grpc.DialContext(ctx, c.grpcLn.Addr().String(), grpc.WithInsecure())
+		if err != nil {
+			return fmt.Errorf("failed to dial gRPC server: %w", err)
+		}
+
 		c.httpServer = gsi.NewHTTPServer(ctx, c.log.With("sys", "http"), gsi.HTTPServerConfig{
-			Listener: c.httpLn,
-
-			MirrorStore:       c.ms,
-			FinalizationStore: c.fs,
-
-			CryptoRegistry: reg,
-
-			Libp2pHost: c.h,
-			Libp2pconn: c.conn,
-
-			AppManager: am,
-			TxCodec:    c.txc,
-			Codec:      c.codec,
-
-			TxBuffer: txBuf,
+			Listener:    c.httpLn,
+			GordianGRPC: ggrpc.NewGordianGRPCClient(gRPCClient),
 		})
 	}
 
