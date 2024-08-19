@@ -8,10 +8,10 @@ import (
 	banktypes "cosmossdk.io/x/bank/types"
 )
 
-func NewTxRespError(err error) *TxResultResponse {
+func NewTxRespError(err error) (*TxResultResponse, error) {
 	return &TxResultResponse{
-		TxResultJson: fmt.Sprintf(`{"error": "%s"}`, err.Error()),
-	}
+		Error: err.Error(),
+	}, err
 }
 
 // SubmitTransaction implements GordianGRPCServer.
@@ -19,7 +19,7 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 	b := req.Tx
 	tx, err := g.cfg.TxCodec.DecodeJSON(b)
 	if err != nil {
-		return NewTxRespError(err), err
+		return NewTxRespError(err)
 	}
 
 	res, err := g.cfg.AppManager.ValidateTx(ctx, tx)
@@ -27,12 +27,12 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		// ValidateTx should only return an error at this level,
 		// if it failed to get state from the store.
 		g.log.Warn("Error attempting to validate transaction", "route", "submit_tx", "err", err)
-		return NewTxRespError(err), err
+		return NewTxRespError(err)
 	}
 
 	if res.Error != nil {
 		// This is fine from the server's perspective, no need to log.
-		return NewTxRespError(res.Error), nil
+		return NewTxRespError(res.Error)
 	}
 
 	// If it passed basic validation, then we can attempt to add it to the buffer.
@@ -40,17 +40,20 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		// We could potentially check if it is a TxInvalidError here
 		// and adjust the status code,
 		// but since this is a debug endpoint, we'll ignore the type.
-		return NewTxRespError(err), err
+		return NewTxRespError(err)
 	}
 
 	jsonBz, err := json.Marshal(res)
 	if err != nil {
-		return NewTxRespError(err), err
+		return NewTxRespError(err)
 	}
 
-	return &TxResultResponse{
-		TxResultJson: string(jsonBz),
-	}, nil
+	var resp TxResultResponse
+	if err = json.Unmarshal(jsonBz, &resp); err != nil {
+		return NewTxRespError(err)
+	}
+
+	return &resp, nil
 }
 
 // SimulateTransaction implements GordianGRPCServer.
@@ -58,7 +61,7 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 	b := req.Tx
 	tx, err := g.cfg.TxCodec.DecodeJSON(b)
 	if err != nil {
-		return NewTxRespError(err), err
+		return NewTxRespError(err)
 	}
 
 	res, _, err := g.cfg.AppManager.Simulate(ctx, tx)
@@ -66,21 +69,44 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 		// Simulate should only return an error at this level,
 		// if it failed to get state from the store.
 		g.log.Warn("Error attempting to simulate transaction", "route", "simulate_tx", "err", err)
-		return NewTxRespError(err), err
+		return NewTxRespError(err)
 	}
 
 	if res.Error != nil {
 		// This is fine from the server's perspective, no need to log.
-		return NewTxRespError(res.Error), nil
+		return NewTxRespError(res.Error)
 	}
 
 	jsonBz, err := json.Marshal(res)
 	if err != nil {
-		return NewTxRespError(err), err
+		return NewTxRespError(err)
+	}
+	fmt.Println("jsonBz: ", string(jsonBz))
+
+	var resp TxResultResponse
+	if err = json.Unmarshal(jsonBz, &resp); err != nil {
+		return NewTxRespError(err)
+	}
+	fmt.Println("resp: ", resp)
+
+	return &resp, nil
+}
+
+// PendingTransactions implements GordianGRPCServer.
+func (g *GordianGRPC) PendingTransactions(ctx context.Context, req *PendingTransactionsRequest) (*PendingTransactionsResponse, error) {
+	txs := g.cfg.TxBuf.Buffered(ctx, nil)
+
+	encodedTxs := make([][]byte, len(txs))
+	for i, tx := range txs {
+		b, err := json.Marshal(tx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode transaction: %w", err)
+		}
+		encodedTxs[i] = json.RawMessage(b)
 	}
 
-	return &TxResultResponse{
-		TxResultJson: string(jsonBz),
+	return &PendingTransactionsResponse{
+		Txs: encodedTxs,
 	}, nil
 }
 
@@ -90,7 +116,7 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 	am := g.cfg.AppManager
 
 	if req.Address == "" {
-		return nil, fmt.Errorf("account id is required")
+		return nil, fmt.Errorf("BUG: address field is required")
 	}
 
 	denom := "stake"
@@ -103,12 +129,12 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 		Denom:   denom,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query account balance: %w", err)
 	}
 
 	b, err := cdc.MarshalJSON(msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to encode response: %w", err)
 	}
 
 	var val QueryAccountBalanceResponse
