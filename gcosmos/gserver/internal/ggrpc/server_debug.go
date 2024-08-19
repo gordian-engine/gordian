@@ -43,13 +43,13 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		return NewTxRespError(err)
 	}
 
-	jsonBz, err := json.Marshal(res)
+	j, err := json.Marshal(res)
 	if err != nil {
 		return NewTxRespError(err)
 	}
 
 	var resp TxResultResponse
-	if err = json.Unmarshal(jsonBz, &resp); err != nil {
+	if err = json.Unmarshal(j, &resp); err != nil {
 		return NewTxRespError(err)
 	}
 
@@ -77,13 +77,13 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 		return NewTxRespError(res.Error)
 	}
 
-	jsonBz, err := json.Marshal(res)
+	j, err := json.Marshal(res)
 	if err != nil {
 		return NewTxRespError(err)
 	}
 
 	var resp TxResultResponse
-	if err = json.Unmarshal(jsonBz, &resp); err != nil {
+	if err = json.Unmarshal(j, &resp); err != nil {
 		return NewTxRespError(err)
 	}
 

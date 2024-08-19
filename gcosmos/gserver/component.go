@@ -362,6 +362,14 @@ func (c *Component) Init(app serverv2.AppI[transaction.Tx], v *viper.Viper, log 
 			return fmt.Errorf("failed to listen for HTTP on %q: %w", httpAddr, err)
 		}
 
+		if f := v.GetString(httpAddrFileFlag); f != "" {
+			// TODO: we should probably track this file and delete it on shutdown.
+			addr := ln.Addr().String() + "\n"
+			if err := os.WriteFile(f, []byte(addr), 0600); err != nil {
+				return fmt.Errorf("failed to write HTTP address to file %q: %w", f, err)
+			}
+		}
+
 		c.httpLn = ln
 	}
 
