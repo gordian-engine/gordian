@@ -2,6 +2,7 @@ package ggrpc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	banktypes "cosmossdk.io/x/bank/types"
@@ -9,9 +10,9 @@ import (
 
 func NewTxRespError(err error) *TxResultResponse {
 	return &TxResultResponse{
-		TxHash: "",
-		Code:   919, // TODO: arb for now
-		Error:  err.Error(),
+		// TxHash: "",
+		// Error:  err.Error(),
+		TxResult: fmt.Sprintf(`{"error": "%s"}`, err.Error()),
 	}
 }
 
@@ -33,7 +34,7 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 
 	if res.Error != nil {
 		// This is fine from the server's perspective, no need to log.
-		return NewTxRespError(err), res.Error
+		return NewTxRespError(res.Error), nil
 	}
 
 	// If it passed basic validation, then we can attempt to add it to the buffer.
@@ -41,16 +42,47 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		// We could potentially check if it is a TxInvalidError here
 		// and adjust the status code,
 		// but since this is a debug endpoint, we'll ignore the type.
-		// http.Error(w, "failed to add transaction to buffer: "+err.Error(), http.StatusBadRequest)
-		// return
 		return NewTxRespError(err), err
 	}
 
-	txHash := tx.Hash()
+	jsonBz, err := json.Marshal(res)
+	if err != nil {
+		return NewTxRespError(err), err
+	}
+
 	return &TxResultResponse{
-		TxHash: string(txHash[:]),
-		Error:  "",
-		Code:   0,
+		TxResult: string(jsonBz),
+	}, nil
+}
+
+// SimulateTransaction implements GordianGRPCServer.
+func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimulationTransactionRequest) (*TxResultResponse, error) {
+	b := req.Tx
+	tx, err := g.cfg.TxCodec.DecodeJSON(b)
+	if err != nil {
+		return NewTxRespError(err), err
+	}
+
+	res, _, err := g.cfg.AppManager.Simulate(ctx, tx)
+	if err != nil {
+		// Simulate should only return an error at this level,
+		// if it failed to get state from the store.
+		g.log.Warn("Error attempting to simulate transaction", "route", "simulate_tx", "err", err)
+		return NewTxRespError(err), err
+	}
+
+	if res.Error != nil {
+		// This is fine from the server's perspective, no need to log.
+		return NewTxRespError(res.Error), nil
+	}
+
+	jsonBz, err := json.Marshal(res)
+	if err != nil {
+		return NewTxRespError(err), err
+	}
+
+	return &TxResultResponse{
+		TxResult: string(jsonBz),
 	}, nil
 }
 

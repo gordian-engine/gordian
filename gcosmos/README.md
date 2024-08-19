@@ -47,7 +47,7 @@ go build -o gcosmos .
 echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > example-mnemonic.txt
 
 ./gcosmos keys add val --recover --source example-mnemonic.txt
-./gcosmos genesis add-genesis-account val 1000000stake --keyring-backend=test
+./gcosmos genesis add-genesis-account val 10000000stake --keyring-backend=test
 ./gcosmos genesis gentx val 1000000stake --keyring-backend=test --chain-id=gcosmos
 ./gcosmos genesis collect-gentxs
 
@@ -65,5 +65,16 @@ grpcurl -plaintext localhost:9092 server.GordianGRPC/GetValidators
 
 # grpcurl -plaintext localhost:9092 server.GordianGRPC/SubmitTransaction
 grpcurl -plaintext -d '{"account_id":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 server.GordianGRPC/QueryAccountBalance
+```
 
+# Testing
+```bash
+./gcosmos tx bank send val cosmos10r39fueph9fq7a6lgswu4zdsg8t3gxlqvvvyvn 1stake --chain-id=TODO:TEMPORARY_CHAIN_ID --generate-only > example-tx.json
+
+# TODO: get account number
+./gcosmos tx sign ./example-tx.json --offline --from=val --sequence=1 --account-number=1 --chain-id=TODO:TEMPORARY_CHAIN_ID --keyring-backend=test > example-tx-signed.json
+
+grpcurl -plaintext -d '{"tx":"'$(cat example-tx-signed.json | base64 -w 0)'"}' localhost:9092 server.GordianGRPC/SimulateTransaction
+
+grpcurl -plaintext -d '{"tx":"'$(cat example-tx-signed.json | base64 -w 0)'"}' localhost:9092 server.GordianGRPC/SubmitTransaction
 ```

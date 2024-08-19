@@ -10,6 +10,8 @@ service GordianGRPC {
 
     // Debug routes
     rpc SubmitTransaction(SubmitTransactionRequest) returns (TxResultResponse) {}
+    rpc SimulateTransaction(SubmitSimulationTransactionRequest) returns (TxResultResponse) {}
+    rpc PendingTransaction(PendingTransactionRequest) returns (PendingTransactionResponse) {}
     rpc QueryAccountBalance(QueryAccountBalanceRequest) returns (QueryAccountBalanceResponse) {}
 }
 
@@ -38,6 +40,17 @@ message SubmitTransactionRequest {
     bytes tx = 1;
 }
 
+message SubmitSimulationTransactionRequest {
+    bytes tx = 1;
+}
+
+message PendingTransactionRequest {}
+
+message PendingTransactionResponse {
+    // json encoded
+    repeated string txs = 1;
+}
+
 
 
 // cosmos-sdk/core/app/app.go#TxResult
@@ -46,17 +59,19 @@ message SubmitTransactionRequest {
 // what if we just return the entire bytes from consensus?
 // then we dont have to deal with any SDK encoding.
 message TxResultResponse {
-    string tx_hash = 1; // TODO: I added this myself
+    // TODO: tx hash?
     // repeated string events = 1;
-    bytes resp = 2;
-    string error = 3;
-    uint32 code = 4;
+    // bytes resp = 2;
+    // string error = 3;
+    // uint32 code = 4;
     // bytes data = 5;
     // string log = 6;
     // string info = 7;
     // uint64 gas_wanted = 8;
     // uint64 gas_used = 9;
     // string codespace = 10;
+
+    string tx_result = 1; // json
 }
 
 message QueryAccountBalanceRequest {

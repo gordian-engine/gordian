@@ -22,6 +22,7 @@ const (
 	GordianGRPC_GetBlocksWatermark_FullMethodName  = "/server.GordianGRPC/GetBlocksWatermark"
 	GordianGRPC_GetValidators_FullMethodName       = "/server.GordianGRPC/GetValidators"
 	GordianGRPC_SubmitTransaction_FullMethodName   = "/server.GordianGRPC/SubmitTransaction"
+	GordianGRPC_SimulateTransaction_FullMethodName = "/server.GordianGRPC/SimulateTransaction"
 	GordianGRPC_QueryAccountBalance_FullMethodName = "/server.GordianGRPC/QueryAccountBalance"
 )
 
@@ -33,6 +34,7 @@ type GordianGRPCClient interface {
 	GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error)
 	// Debug routes
 	SubmitTransaction(ctx context.Context, in *SubmitTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
+	SimulateTransaction(ctx context.Context, in *SubmitSimulationTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
 	QueryAccountBalance(ctx context.Context, in *QueryAccountBalanceRequest, opts ...grpc.CallOption) (*QueryAccountBalanceResponse, error)
 }
 
@@ -71,6 +73,15 @@ func (c *gordianGRPCClient) SubmitTransaction(ctx context.Context, in *SubmitTra
 	return out, nil
 }
 
+func (c *gordianGRPCClient) SimulateTransaction(ctx context.Context, in *SubmitSimulationTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error) {
+	out := new(TxResultResponse)
+	err := c.cc.Invoke(ctx, GordianGRPC_SimulateTransaction_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gordianGRPCClient) QueryAccountBalance(ctx context.Context, in *QueryAccountBalanceRequest, opts ...grpc.CallOption) (*QueryAccountBalanceResponse, error) {
 	out := new(QueryAccountBalanceResponse)
 	err := c.cc.Invoke(ctx, GordianGRPC_QueryAccountBalance_FullMethodName, in, out, opts...)
@@ -88,6 +99,7 @@ type GordianGRPCServer interface {
 	GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error)
 	// Debug routes
 	SubmitTransaction(context.Context, *SubmitTransactionRequest) (*TxResultResponse, error)
+	SimulateTransaction(context.Context, *SubmitSimulationTransactionRequest) (*TxResultResponse, error)
 	QueryAccountBalance(context.Context, *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error)
 	mustEmbedUnimplementedGordianGRPCServer()
 }
@@ -104,6 +116,9 @@ func (UnimplementedGordianGRPCServer) GetValidators(context.Context, *GetValidat
 }
 func (UnimplementedGordianGRPCServer) SubmitTransaction(context.Context, *SubmitTransactionRequest) (*TxResultResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitTransaction not implemented")
+}
+func (UnimplementedGordianGRPCServer) SimulateTransaction(context.Context, *SubmitSimulationTransactionRequest) (*TxResultResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SimulateTransaction not implemented")
 }
 func (UnimplementedGordianGRPCServer) QueryAccountBalance(context.Context, *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryAccountBalance not implemented")
@@ -175,6 +190,24 @@ func _GordianGRPC_SubmitTransaction_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GordianGRPC_SimulateTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitSimulationTransactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).SimulateTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_SimulateTransaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).SimulateTransaction(ctx, req.(*SubmitSimulationTransactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GordianGRPC_QueryAccountBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryAccountBalanceRequest)
 	if err := dec(in); err != nil {
@@ -211,6 +244,10 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitTransaction",
 			Handler:    _GordianGRPC_SubmitTransaction_Handler,
+		},
+		{
+			MethodName: "SimulateTransaction",
+			Handler:    _GordianGRPC_SimulateTransaction_Handler,
 		},
 		{
 			MethodName: "QueryAccountBalance",
