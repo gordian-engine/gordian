@@ -3,7 +3,6 @@ package ggrpc
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log/slog"
 	"net"
 
@@ -93,8 +92,6 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("GetBlocksWatermark: %d %d %d %d\n", vh, vr, ch, cr)
 
 	return &CurrentBlockResponse{
 		VotingHeight:     vh,

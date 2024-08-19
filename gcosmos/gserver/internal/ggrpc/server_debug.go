@@ -81,13 +81,11 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 	if err != nil {
 		return NewTxRespError(err)
 	}
-	fmt.Println("jsonBz: ", string(jsonBz))
 
 	var resp TxResultResponse
 	if err = json.Unmarshal(jsonBz, &resp); err != nil {
 		return NewTxRespError(err)
 	}
-	fmt.Println("resp: ", resp)
 
 	return &resp, nil
 }

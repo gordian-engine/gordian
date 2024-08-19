@@ -369,7 +369,7 @@ func (c *Component) Init(app serverv2.AppI[transaction.Tx], v *viper.Viper, log 
 	if grpcAddrFlag := v.GetString(grpcAddrFlag); grpcAddrFlag != "" {
 		ln, err := net.Listen("tcp", grpcAddrFlag)
 		if err != nil {
-			return fmt.Errorf("failed to listen for GRPC on %q: %w", grpcAddrFlag, err)
+			return fmt.Errorf("failed to listen for gRPC on %q: %w", grpcAddrFlag, err)
 		}
 
 		c.grpcLn = ln
