@@ -42,15 +42,15 @@ rm -rf ~/.simappv2/
 go build -o gcosmos .
 
 ./gcosmos init moniker
-echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > mnemonic.txt
+echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > example-mnemonic.txt
 
-./gcosmos keys add val --recover --source mnemonic.txt
+./gcosmos keys add val --recover --source example-mnemonic.txt
 ./gcosmos genesis add-genesis-account val 1000000stake --keyring-backend=test
 ./gcosmos genesis gentx val 1000000stake --keyring-backend=test --chain-id=gcosmos
 ./gcosmos genesis collect-gentxs
 
 # rm -rf ~/.simappv2/data/application.db/
-./gcosmos start --g-http-addr 127.0.0.1:26657
+./gcosmos start --g-http-addr 127.0.0.1:26657 --g-grpc-addr 127.0.0.1:9092
 ```
 
 # Interact
@@ -59,5 +59,6 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 
 grpcurl -plaintext localhost:9092 list
 grpcurl -plaintext localhost:9092 server.GordianGRPC/GetBlocksWatermark
+grpcurl -plaintext localhost:9092 server.GordianGRPC/GetValidators
 
 ```
