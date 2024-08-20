@@ -26,9 +26,9 @@ var _ GordianGRPCServer = (*GordianGRPC)(nil)
 
 type GordianGRPC struct {
 	UnimplementedGordianGRPCServer
+	log *slog.Logger
 
 	cfg GRPCServerConfig
-	log *slog.Logger
 
 	done chan struct{}
 }
@@ -50,11 +50,11 @@ type GRPCServerConfig struct {
 
 func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPC {
 	srv := &GordianGRPC{
-		cfg:  cfg,
 		log:  log,
+		cfg:  cfg,
 		done: make(chan struct{}),
 	}
-	go srv.Start()
+	go srv.serve()
 	go srv.waitForShutdown(ctx)
 
 	return srv
@@ -70,19 +70,21 @@ func (g *GordianGRPC) waitForShutdown(ctx context.Context) {
 		// g.serve returned on its own, nothing left to do here.
 		return
 	case <-ctx.Done():
-		close(g.done)
+		return
 	}
 }
 
-func (g *GordianGRPC) Start() {
-	flag.Parse()
+func (g *GordianGRPC) serve() {
+	defer close(g.done)
+
 	var opts []grpc.ServerOption
-	// TODO: TLS
 	grpcServer := grpc.NewServer(opts...)
 	RegisterGordianGRPCServer(grpcServer, g)
 	reflection.Register(grpcServer)
 
-	grpcServer.Serve(g.cfg.Listener)
+	if err := grpcServer.Serve(g.cfg.Listener); err != nil {
+		g.log.Error("GRPC server shutting down due to error", "err", err)
+	}
 }
 
 // GetBlocksWatermark implements GordianGRPCServer.
