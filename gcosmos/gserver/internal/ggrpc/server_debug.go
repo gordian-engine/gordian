@@ -5,21 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 
+	appmanager "cosmossdk.io/core/app"
+	"cosmossdk.io/core/event"
 	banktypes "cosmossdk.io/x/bank/types"
 )
-
-func NewTxRespError(err error) (*TxResultResponse, error) {
-	return &TxResultResponse{
-		Error: err.Error(),
-	}, err
-}
 
 // SubmitTransaction implements GordianGRPCServer.
 func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransactionRequest) (*TxResultResponse, error) {
 	b := req.Tx
 	tx, err := g.cfg.TxCodec.DecodeJSON(b)
 	if err != nil {
-		return NewTxRespError(err)
+		return &TxResultResponse{
+			Error: fmt.Sprintf("failed to decode transaction json: %v", err),
+		}, nil
 	}
 
 	res, err := g.cfg.AppManager.ValidateTx(ctx, tx)
@@ -27,12 +25,14 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		// ValidateTx should only return an error at this level,
 		// if it failed to get state from the store.
 		g.log.Warn("Error attempting to validate transaction", "route", "submit_tx", "err", err)
-		return NewTxRespError(err)
+		return nil, fmt.Errorf("failed to validate transaction: %w", err)
 	}
 
 	if res.Error != nil {
 		// This is fine from the server's perspective, no need to log.
-		return NewTxRespError(res.Error)
+		return &TxResultResponse{
+			Error: fmt.Sprintf("failed to validate transaction: %v", res.Error),
+		}, nil
 	}
 
 	// If it passed basic validation, then we can attempt to add it to the buffer.
@@ -40,12 +40,7 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		// We could potentially check if it is a TxInvalidError here
 		// and adjust the status code,
 		// but since this is a debug endpoint, we'll ignore the type.
-		return NewTxRespError(err)
-	}
-
-	j, err := json.Marshal(res)
-	if err != nil {
-		return NewTxRespError(err)
+		return nil, fmt.Errorf("failed to add transaction to buffer: %w", err)
 	}
 
 	var resp TxResultResponse
@@ -61,7 +56,9 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 	b := req.Tx
 	tx, err := g.cfg.TxCodec.DecodeJSON(b)
 	if err != nil {
-		return NewTxRespError(err)
+		return &TxResultResponse{
+			Error: fmt.Sprintf("failed to decode transaction json: %v", err),
+		}, nil
 	}
 
 	res, _, err := g.cfg.AppManager.Simulate(ctx, tx)
@@ -69,24 +66,15 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 		// Simulate should only return an error at this level,
 		// if it failed to get state from the store.
 		g.log.Warn("Error attempting to simulate transaction", "route", "simulate_tx", "err", err)
-		return NewTxRespError(err)
+		return nil, fmt.Errorf("failed to simulate transaction: %w", err)
 	}
 
 	if res.Error != nil {
 		// This is fine from the server's perspective, no need to log.
-		return NewTxRespError(res.Error)
+		return &TxResultResponse{
+			Error: fmt.Sprintf("failed to simulate transaction: %v", res.Error),
+		}, nil
 	}
-
-	j, err := json.Marshal(res)
-	if err != nil {
-		return NewTxRespError(err)
-	}
-
-	var resp TxResultResponse
-	if err = json.Unmarshal(j, &resp); err != nil {
-		return NewTxRespError(err)
-	}
-
 	return &resp, nil
 }
 

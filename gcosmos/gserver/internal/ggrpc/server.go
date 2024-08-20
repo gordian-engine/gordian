@@ -2,7 +2,7 @@ package ggrpc
 
 import (
 	"context"
-	"flag"
+	"fmt"
 	"log/slog"
 	"net"
 
@@ -14,12 +14,6 @@ import (
 	"github.com/rollchains/gordian/tm/tmstore"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-)
-
-var (
-// tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-// certFile   = flag.String("cert_file", "", "The TLS cert file")
-// keyFile    = flag.String("key_file", "", "The TLS key file")
 )
 
 var _ GordianGRPCServer = (*GordianGRPC)(nil)
@@ -115,7 +109,7 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 
 	_, _, vals, _, err := fs.LoadFinalizationByHeight(ctx, committingHeight)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load finalization by height: %w", err)
 	}
 
 	jsonValidators := make([]*Validator, 0, len(vals))
