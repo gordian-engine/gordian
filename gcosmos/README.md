@@ -61,6 +61,7 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 
 grpcurl -plaintext localhost:9092 list
 grpcurl -plaintext localhost:9092 list gordian.server.v1.GordianGRPCService
+grpcurl -plaintext localhost:9092 describe gordian.server.v1.GordianGRPCService
 
 grpcurl -plaintext localhost:9092 gordian.server.v1.GordianGRPCService/GetBlocksWatermark
 grpcurl -plaintext localhost:9092 gordian.server.v1.GordianGRPCService/GetValidators

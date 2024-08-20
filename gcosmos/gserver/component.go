@@ -22,7 +22,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
+	"github.com/rollchains/gordian/gcosmos/gserver/ggrpc"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"

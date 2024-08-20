@@ -79,8 +79,10 @@ func (g *GordianGRPCServer) Start() {
 	var opts []grpc.ServerOption
 	// TODO: TLS
 	grpcServer := grpc.NewServer(opts...)
-	RegisterGordianGRPCServiceServer(grpcServer, g)
 	reflection.Register(grpcServer)
+	// RegisterGordianGRPCServiceServer(grpcServer, g)
+	grpcServer.RegisterService(&_GordianGRPCService_serviceDesc, g)
+	// RegisterGordianGRPCServiceServer(grpcServer, g)
 
 	grpcServer.Serve(g.cfg.Listener)
 }
