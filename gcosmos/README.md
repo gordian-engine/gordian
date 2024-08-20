@@ -73,7 +73,7 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 # TODO: get account number
 ./gcosmos tx sign ./example-tx.json --offline --from=val --sequence=1 --account-number=1 --chain-id=TODO:TEMPORARY_CHAIN_ID --keyring-backend=test > example-tx-signed.json
 
-grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 -w 0)'"}' localhost:9092 server.GordianGRPC/SimulateTransaction
+./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 server.GordianGRPC/SimulateTransaction
 
-grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 -w 0)'"}' localhost:9092 server.GordianGRPC/SubmitTransaction
+./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 server.GordianGRPC/SubmitTransaction
 ```
