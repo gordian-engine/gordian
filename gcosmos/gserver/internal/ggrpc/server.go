@@ -86,7 +86,7 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 	ms := g.cfg.MirrorStore
 	vh, vr, ch, cr, err := ms.NetworkHeightRound(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get network height and round: %w", err)
 	}
 
 	return &CurrentBlockResponse{
@@ -104,7 +104,7 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	reg := g.cfg.CryptoRegistry
 	_, _, committingHeight, _, err := ms.NetworkHeightRound(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get network height and round: %w", err)
 	}
 
 	_, _, vals, _, err := fs.LoadFinalizationByHeight(ctx, committingHeight)

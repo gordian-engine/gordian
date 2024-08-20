@@ -121,7 +121,7 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 
 	var val QueryAccountBalanceResponse
 	if err = cdc.UnmarshalJSON(b, &val); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	return &val, nil
