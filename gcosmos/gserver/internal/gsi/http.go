@@ -14,7 +14,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/gorilla/mux"
 	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/rollchains/gordian/tm/tmstore"
 )
@@ -38,7 +37,7 @@ type HTTPServerConfig struct {
 	TxCodec    transaction.Codec[transaction.Tx]
 	Codec      codec.Codec
 
-	TxBuffer *txmanager.SDKTxBuf
+	TxBuffer *SDKTxBuf
 }
 
 func NewHTTPServer(ctx context.Context, log *slog.Logger, cfg HTTPServerConfig) *HTTPServer {

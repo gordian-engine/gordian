@@ -25,7 +25,6 @@ import (
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/gdriver/gtxbuf"
 	"github.com/rollchains/gordian/gwatchdog"
@@ -162,7 +161,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 	am := *(c.app.GetAppManager())
 
-	txm := txmanager.TxManager{AppManager: am}
+	txm := gsi.TxManager{AppManager: am}
 	txBuf := gtxbuf.New(
 		ctx, c.log.With("d_sys", "tx_buffer"),
 		txm.AddTx, txm.TxDeleterFunc,

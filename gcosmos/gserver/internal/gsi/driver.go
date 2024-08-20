@@ -23,7 +23,6 @@ import (
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/rollchains/gordian/gcosmos/gccodec"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/gdriver/gdatapool"
 	"github.com/rollchains/gordian/internal/gchan"
@@ -42,7 +41,7 @@ type DriverConfig struct {
 	InitChainRequests     <-chan tmdriver.InitChainRequest
 	FinalizeBlockRequests <-chan tmdriver.FinalizeBlockRequest
 
-	TxBuffer *txmanager.SDKTxBuf
+	TxBuffer *SDKTxBuf
 
 	DataPool *gdatapool.Pool[[]transaction.Tx]
 }
@@ -50,7 +49,7 @@ type DriverConfig struct {
 type Driver struct {
 	log *slog.Logger
 
-	txBuf *txmanager.SDKTxBuf
+	txBuf *SDKTxBuf
 
 	pool *gdatapool.Pool[[]transaction.Tx]
 

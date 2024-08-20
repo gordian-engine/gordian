@@ -9,7 +9,7 @@ import (
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/tm/tmstore"
 	grpc "google.golang.org/grpc"
@@ -44,7 +44,7 @@ type GRPCServerConfig struct {
 	// debug handler
 	TxCodec    transaction.Codec[transaction.Tx]
 	AppManager appmanager.AppManager[transaction.Tx]
-	TxBuf      *txmanager.SDKTxBuf
+	TxBuf      *gsi.SDKTxBuf
 	Codec      codec.Codec
 }
 

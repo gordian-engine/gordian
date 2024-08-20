@@ -12,7 +12,6 @@ import (
 	banktypes "cosmossdk.io/x/bank/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/gorilla/mux"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 )
 
 type debugHandler struct {
@@ -23,7 +22,7 @@ type debugHandler struct {
 
 	am appmanager.AppManager[transaction.Tx]
 
-	txBuf *txmanager.SDKTxBuf
+	txBuf *SDKTxBuf
 }
 
 func setDebugRoutes(log *slog.Logger, cfg HTTPServerConfig, r *mux.Router) {
