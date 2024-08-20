@@ -98,7 +98,7 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 	am := g.cfg.AppManager
 
 	if req.Address == "" {
-		return nil, fmt.Errorf("BUG: address field is required")
+		return nil, fmt.Errorf("address field is required")
 	}
 
 	denom := "stake"
