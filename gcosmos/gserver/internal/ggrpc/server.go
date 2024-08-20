@@ -22,6 +22,8 @@ type GordianGRPC struct {
 	UnimplementedGordianGRPCServer
 	log *slog.Logger
 
+	grpcServer *grpc.Server
+
 	cfg GRPCServerConfig
 
 	done chan struct{}
@@ -64,7 +66,9 @@ func (g *GordianGRPC) waitForShutdown(ctx context.Context) {
 		// g.serve returned on its own, nothing left to do here.
 		return
 	case <-ctx.Done():
-		return
+		if g.grpcServer != nil {
+			g.grpcServer.Stop()
+		}
 	}
 }
 
@@ -72,11 +76,11 @@ func (g *GordianGRPC) serve() {
 	defer close(g.done)
 
 	var opts []grpc.ServerOption
-	grpcServer := grpc.NewServer(opts...)
-	RegisterGordianGRPCServer(grpcServer, g)
-	reflection.Register(grpcServer)
+	g.grpcServer = grpc.NewServer(opts...)
+	RegisterGordianGRPCServer(g.grpcServer, g)
+	reflection.Register(g.grpcServer)
 
-	if err := grpcServer.Serve(g.cfg.Listener); err != nil {
+	if err := g.grpcServer.Serve(g.cfg.Listener); err != nil {
 		g.log.Error("GRPC server shutting down due to error", "err", err)
 	}
 }
