@@ -119,11 +119,11 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	}
 
 	jsonValidators := make([]*Validator, 0, len(vals))
-	for _, v := range vals {
-		jsonValidators = append(jsonValidators, &Validator{
+	for i, v := range vals {
+		jsonValidators[i] = &Validator{
 			PubKey: reg.Marshal(v.PubKey),
 			Power:  v.Power,
-		})
+		}
 	}
 
 	return &GetValidatorsResponse{
