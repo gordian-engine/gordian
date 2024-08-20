@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# make protoc-gen
 # ./scripts/protocgen.sh
 
 set -eox pipefail
@@ -14,11 +15,3 @@ done
 
 cp -r ./github.com/rollchains/gordian/gcosmos/* .
 rm -rf github.com
-
-# TODO: How do we do this within buf / proto directly?
-# ideally this will fix the:
-# `Error invoking method "gordian.server.v1.GordianGRPCService/GetBlocksWatermark": target server does not expose service "gordian.server.v1.GordianGRPCService"``
-# issue?
-# This does not happen with protoc.
-find . -type f -name '*.pb.go' ! -path "*_cosmosvendor*" -exec sed -i -e 's|"github.com/gogo/protobuf/grpc"|"github.com/cosmos/gogoproto/grpc"|g' {} \;
-find . -type f -name '*.pb.go' ! -path "*_cosmosvendor*" -exec sed -i -e 's|"github.com/gogo/protobuf/proto"|"github.com/cosmos/gogoproto/proto"|g' {} \;

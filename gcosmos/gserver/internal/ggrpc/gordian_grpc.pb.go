@@ -1113,6 +1113,7 @@ func _GordianGRPCService_QueryAccountBalance_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+var GordianGRPCService_serviceDesc = _GordianGRPCService_serviceDesc
 var _GordianGRPCService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "gordian.server.v1.GordianGRPCService",
 	HandlerType: (*GordianGRPCServiceServer)(nil),
