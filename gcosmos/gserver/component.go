@@ -463,7 +463,7 @@ func (c *Component) StartCmdFlags() *pflag.FlagSet {
 	flags := pflag.NewFlagSet("gserver", pflag.ExitOnError)
 
 	flags.String(httpAddrFlag, "", "TCP address of Gordian's introspective HTTP server; if blank, server will not be started")
-	flags.String(grpcAddrFlag, "", "GRPC address of Gordian's introspective GRPC server; if blank, server will not be started")
+	flags.String(grpcAddrFlag, "", "TCP address of Gordian's introspective GRPC server; if blank, server will not be started")
 	flags.String(httpAddrFileFlag, "", "Write the actual Gordian HTTP listen address to the given file (useful for tests when configured to listen on :0)")
 
 	flags.String(seedAddrsFlag, "", "Newline-separated multiaddrs to connect to; if omitted, relies on incoming connections to discover peers")

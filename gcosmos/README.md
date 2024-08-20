@@ -43,7 +43,7 @@ go build -o gcosmos .
 
 ./gcosmos init moniker
 
-# cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl
+# example-mnemonic address: cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl
 echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > example-mnemonic.txt
 
 ./gcosmos keys add val --recover --source example-mnemonic.txt
@@ -57,13 +57,13 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 
 # Interact
 ```bash
-# go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+# GOBIN="$PWD" go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1
 
-grpcurl -plaintext localhost:9092 list
-grpcurl -plaintext localhost:9092 server.GordianGRPC/GetBlocksWatermark
-grpcurl -plaintext localhost:9092 server.GordianGRPC/GetValidators
+./grpcurl -plaintext localhost:9092 list
+./grpcurl -plaintext localhost:9092 server.GordianGRPC/GetBlocksWatermark
+./grpcurl -plaintext localhost:9092 server.GordianGRPC/GetValidators
 
-grpcurl -plaintext -d '{"address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 server.GordianGRPC/QueryAccountBalance
+./grpcurl -plaintext -d '{"address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 server.GordianGRPC/QueryAccountBalance
 ```
 
 # Transaction Testing
