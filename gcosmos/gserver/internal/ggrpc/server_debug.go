@@ -43,12 +43,7 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		return nil, fmt.Errorf("failed to add transaction to buffer: %w", err)
 	}
 
-	var resp TxResultResponse
-	if err = json.Unmarshal(j, &resp); err != nil {
-		return NewTxRespError(err)
-	}
-
-	return &resp, nil
+	return getGordianResponseFromSDKResult(res), nil
 }
 
 // SimulateTransaction implements GordianGRPCServer.
@@ -75,7 +70,8 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 			Error: fmt.Sprintf("failed to simulate transaction: %v", res.Error),
 		}, nil
 	}
-	return &resp, nil
+
+	return getGordianResponseFromSDKResult(res), nil
 }
 
 // PendingTransactions implements GordianGRPCServer.
@@ -129,4 +125,43 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 	}
 
 	return &val, nil
+}
+
+// getGordianResponseFromSDKResult converts an app manager TxResult to the gRPC proto result.
+func getGordianResponseFromSDKResult(res appmanager.TxResult) *TxResultResponse {
+	resp := &TxResultResponse{
+		Code:      res.Code,
+		Events:    convertEvent(res.Events),
+		Data:      res.Data,
+		Log:       res.Log,
+		Info:      res.Info,
+		GasWanted: res.GasWanted,
+		GasUsed:   res.GasUsed,
+		Codespace: res.Codespace,
+	}
+	if res.Error != nil {
+		resp.Error = res.Error.Error()
+	}
+	return resp
+}
+
+// convertEvent converts from the cosmos-sdk core event type to the gRPC proto event.
+func convertEvent(e []event.Event) []*Event {
+	events := make([]*Event, len(e))
+	for i, ev := range e {
+
+		attr := make([]*Attribute, len(ev.Attributes))
+		for j, a := range ev.Attributes {
+			attr[j] = &Attribute{
+				Key:   a.Key,
+				Value: a.Value,
+			}
+		}
+
+		events[i] = &Event{
+			Type:       ev.Type,
+			Attributes: attr,
+		}
+	}
+	return events
 }

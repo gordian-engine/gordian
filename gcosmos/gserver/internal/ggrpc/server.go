@@ -112,7 +112,7 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 		return nil, fmt.Errorf("failed to load finalization by height: %w", err)
 	}
 
-	jsonValidators := make([]*Validator, 0, len(vals))
+	jsonValidators := make([]*Validator, len(vals))
 	for i, v := range vals {
 		jsonValidators[i] = &Validator{
 			PubKey: reg.Marshal(v.PubKey),
