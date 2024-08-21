@@ -51,12 +51,16 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 ./gcosmos genesis gentx val 1000000stake --keyring-backend=test --chain-id=gcosmos
 ./gcosmos genesis collect-gentxs
 
+# Run the following to reset the application state without having to reset the base data directory.
+# (This is required until Gordian can start from a >0 height)
 # rm -rf ~/.simappv2/data/application.db/
+
 ./gcosmos start --g-http-addr 127.0.0.1:26657 --g-grpc-addr 127.0.0.1:9092
 ```
 
 # Interact
 ```bash
+# Install the grpcurl binary in your relative directory to interact with the GRPC server.
 # GOBIN="$PWD" go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1
 
 ./grpcurl -plaintext localhost:9092 list

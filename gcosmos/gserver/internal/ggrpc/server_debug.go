@@ -149,7 +149,6 @@ func getGordianResponseFromSDKResult(res appmanager.TxResult) *TxResultResponse 
 func convertEvent(e []event.Event) []*Event {
 	events := make([]*Event, len(e))
 	for i, ev := range e {
-
 		attr := make([]*Attribute, len(ev.Attributes))
 		for j, a := range ev.Attributes {
 			attr[j] = &Attribute{
