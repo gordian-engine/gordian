@@ -49,7 +49,7 @@ func NewGordianGRPCServer(ctx context.Context, log *slog.Logger,
 	cdc codec.Codec,
 ) *GordianGRPC {
 	if ln == nil {
-		panic("BUG: grpc listener is nil")
+		panic("BUG: listener for the grpc server is nil")
 	}
 
 	srv := &GordianGRPC{
