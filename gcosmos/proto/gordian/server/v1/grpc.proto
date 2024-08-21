@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc";
 
-package server;
+package gordian.server.v1;
 
 service GordianGRPC {
     // GetBlocksWatermark returns the current block information.

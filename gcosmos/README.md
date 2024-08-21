@@ -64,10 +64,10 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 # GOBIN="$PWD" go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1
 
 ./grpcurl -plaintext localhost:9092 list
-./grpcurl -plaintext localhost:9092 server.GordianGRPC/GetBlocksWatermark
-./grpcurl -plaintext localhost:9092 server.GordianGRPC/GetValidators
+./grpcurl -plaintext localhost:9092 gordian.server.v1.GordianGRPC/GetBlocksWatermark
+./grpcurl -plaintext localhost:9092 gordian.server.v1.GordianGRPC/GetValidators
 
-./grpcurl -plaintext -d '{"address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 server.GordianGRPC/QueryAccountBalance
+./grpcurl -plaintext -d '{"address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryAccountBalance
 ```
 
 # Transaction Testing
@@ -77,7 +77,7 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 # TODO: get account number
 ./gcosmos tx sign ./example-tx.json --offline --from=val --sequence=1 --account-number=1 --chain-id=TODO:TEMPORARY_CHAIN_ID --keyring-backend=test > example-tx-signed.json
 
-./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 server.GordianGRPC/SimulateTransaction
+./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SimulateTransaction
 
-./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 server.GordianGRPC/SubmitTransaction
+./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SubmitTransaction
 ```

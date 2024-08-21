@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             v4.25.1
-// source: proto/server/grpc.proto
+// source: proto/gordian/server/v1/grpc.proto
 
 package ggrpc
 
@@ -19,12 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	GordianGRPC_GetBlocksWatermark_FullMethodName  = "/server.GordianGRPC/GetBlocksWatermark"
-	GordianGRPC_GetValidators_FullMethodName       = "/server.GordianGRPC/GetValidators"
-	GordianGRPC_SubmitTransaction_FullMethodName   = "/server.GordianGRPC/SubmitTransaction"
-	GordianGRPC_SimulateTransaction_FullMethodName = "/server.GordianGRPC/SimulateTransaction"
-	GordianGRPC_PendingTransactions_FullMethodName = "/server.GordianGRPC/PendingTransactions"
-	GordianGRPC_QueryAccountBalance_FullMethodName = "/server.GordianGRPC/QueryAccountBalance"
+	GordianGRPC_GetBlocksWatermark_FullMethodName  = "/gordian.server.v1.GordianGRPC/GetBlocksWatermark"
+	GordianGRPC_GetValidators_FullMethodName       = "/gordian.server.v1.GordianGRPC/GetValidators"
+	GordianGRPC_SubmitTransaction_FullMethodName   = "/gordian.server.v1.GordianGRPC/SubmitTransaction"
+	GordianGRPC_SimulateTransaction_FullMethodName = "/gordian.server.v1.GordianGRPC/SimulateTransaction"
+	GordianGRPC_PendingTransactions_FullMethodName = "/gordian.server.v1.GordianGRPC/PendingTransactions"
+	GordianGRPC_QueryAccountBalance_FullMethodName = "/gordian.server.v1.GordianGRPC/QueryAccountBalance"
 )
 
 // GordianGRPCClient is the client API for GordianGRPC service.
@@ -273,7 +273,7 @@ func _GordianGRPC_QueryAccountBalance_Handler(srv interface{}, ctx context.Conte
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "server.GordianGRPC",
+	ServiceName: "gordian.server.v1.GordianGRPC",
 	HandlerType: (*GordianGRPCServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -302,5 +302,5 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/server/grpc.proto",
+	Metadata: "proto/gordian/server/v1/grpc.proto",
 }
