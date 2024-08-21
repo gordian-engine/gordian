@@ -254,20 +254,10 @@ func (c *Component) Start(ctx context.Context) error {
 	if c.grpcLn != nil {
 		// TODO; share this with the http server as a wrapper.
 		// https://github.com/rollchains/gordian/pull/14
-		c.grpcServer = ggrpc.NewGordianGRPCServer(ctx, c.log.With("sys", "grpc"), ggrpc.GRPCServerConfig{
-			Listener: c.grpcLn,
-
-			FinalizationStore: c.fs,
-			MirrorStore:       c.ms,
-
-			CryptoRegistry: reg,
-
-			// debug:
-			TxCodec:    c.txc,
-			AppManager: am,
-			TxBuf:      txBuf,
-			Codec:      c.codec,
-		})
+		c.grpcServer = ggrpc.NewGordianGRPCServer(
+			ctx, c.log.With("sys", "grpc"),
+			c.grpcLn, c.fs, c.ms, reg, c.txc, am, txBuf, c.codec,
+		)
 	}
 
 	if c.httpLn != nil {

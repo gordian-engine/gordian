@@ -22,36 +22,52 @@ type GordianGRPC struct {
 	UnimplementedGordianGRPCServer
 	log *slog.Logger
 
-	grpcServer *grpc.Server
+	fs tmstore.FinalizationStore
+	ms tmstore.MirrorStore
 
-	cfg GRPCServerConfig
+	reg *gcrypto.Registry
+
+	// debug handler
+	txc   transaction.Codec[transaction.Tx]
+	am    appmanager.AppManager[transaction.Tx]
+	txBuf *gsi.SDKTxBuf
+	cdc   codec.Codec
 
 	done chan struct{}
 }
 
-type GRPCServerConfig struct {
-	Listener net.Listener
+func NewGordianGRPCServer(ctx context.Context, log *slog.Logger,
+	ln net.Listener,
 
-	FinalizationStore tmstore.FinalizationStore
-	MirrorStore       tmstore.MirrorStore
+	fs tmstore.FinalizationStore,
+	ms tmstore.MirrorStore,
+	reg *gcrypto.Registry,
 
-	CryptoRegistry *gcrypto.Registry
-
-	// debug handler
-	TxCodec    transaction.Codec[transaction.Tx]
-	AppManager appmanager.AppManager[transaction.Tx]
-	TxBuf      *gsi.SDKTxBuf
-	Codec      codec.Codec
-}
-
-func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPC {
+	txc transaction.Codec[transaction.Tx],
+	am appmanager.AppManager[transaction.Tx],
+	txb *gsi.SDKTxBuf,
+	cdc codec.Codec,
+) *GordianGRPC {
 	srv := &GordianGRPC{
-		log:  log,
-		cfg:  cfg,
+		log: log,
+
+		fs:    fs,
+		ms:    ms,
+		reg:   reg,
+		txc:   txc,
+		am:    am,
+		txBuf: txb,
+		cdc:   cdc,
+
 		done: make(chan struct{}),
 	}
-	go srv.serve()
-	go srv.waitForShutdown(ctx)
+
+	var opts []grpc.ServerOption
+	// TODO: configure grpc options (like TLS)
+	gc := grpc.NewServer(opts...)
+
+	go srv.serve(ln, gc)
+	go srv.waitForShutdown(ctx, gc)
 
 	return srv
 }
@@ -60,34 +76,37 @@ func (g *GordianGRPC) Wait() {
 	<-g.done
 }
 
-func (g *GordianGRPC) waitForShutdown(ctx context.Context) {
+func (g *GordianGRPC) waitForShutdown(ctx context.Context, gs *grpc.Server) {
 	select {
 	case <-g.done:
 		// g.serve returned on its own, nothing left to do here.
 		return
 	case <-ctx.Done():
-		if g.grpcServer != nil {
-			g.grpcServer.Stop()
+		if gs != nil {
+			gs.Stop()
 		}
 	}
 }
 
-func (g *GordianGRPC) serve() {
+func (g *GordianGRPC) serve(ln net.Listener, gs *grpc.Server) {
+	if gs == nil {
+		panic("BUG: grpc server is nil")
+	}
 	defer close(g.done)
 
-	var opts []grpc.ServerOption
-	g.grpcServer = grpc.NewServer(opts...)
-	RegisterGordianGRPCServer(g.grpcServer, g)
-	reflection.Register(g.grpcServer)
+	RegisterGordianGRPCServer(gs, g)
+	reflection.Register(gs)
 
-	if err := g.grpcServer.Serve(g.cfg.Listener); err != nil {
-		g.log.Error("GRPC server shutting down due to error", "err", err)
+	if err := gs.Serve(ln); err != nil {
+		if err != grpc.ErrServerStopped {
+			g.log.Error("GRPC server stopped with error", "err", err)
+		}
 	}
 }
 
 // GetBlocksWatermark implements GordianGRPCServer.
 func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockRequest) (*CurrentBlockResponse, error) {
-	ms := g.cfg.MirrorStore
+	ms := g.ms
 	vh, vr, ch, cr, err := ms.NetworkHeightRound(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network height and round: %w", err)
@@ -103,9 +122,9 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 
 // GetValidators implements GordianGRPCServer.
 func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsRequest) (*GetValidatorsResponse, error) {
-	ms := g.cfg.MirrorStore
-	fs := g.cfg.FinalizationStore
-	reg := g.cfg.CryptoRegistry
+	ms := g.ms
+	fs := g.fs
+	reg := g.reg
 	_, _, committingHeight, _, err := ms.NetworkHeightRound(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network height and round: %w", err)
