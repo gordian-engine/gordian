@@ -30,7 +30,7 @@ message CurrentBlockResponse {
 }
 
 message Validator {
-    bytes pub_key = 1;
+    bytes encoded_pub_key = 1;
     uint64 power = 2;
 }
 message GetValidatorsRequest {}
