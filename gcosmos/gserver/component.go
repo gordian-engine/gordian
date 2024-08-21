@@ -256,7 +256,14 @@ func (c *Component) Start(ctx context.Context) error {
 		// https://github.com/rollchains/gordian/pull/14
 		c.grpcServer = ggrpc.NewGordianGRPCServer(
 			ctx, c.log.With("sys", "grpc"),
-			c.grpcLn, c.fs, c.ms, reg, c.txc, am, txBuf, c.codec,
+			c.grpcLn,
+			c.fs,
+			c.ms,
+			reg,
+			c.txc,
+			am,
+			txBuf,
+			c.codec,
 		)
 	}
 
