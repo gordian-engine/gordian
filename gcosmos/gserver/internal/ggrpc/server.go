@@ -36,42 +36,46 @@ type GordianGRPC struct {
 	done chan struct{}
 }
 
-func NewGordianGRPCServer(ctx context.Context, log *slog.Logger,
-	ln net.Listener,
+type GRPCServerConfig struct {
+	Listener net.Listener
 
-	fs tmstore.FinalizationStore,
-	ms tmstore.MirrorStore,
-	reg *gcrypto.Registry,
+	FinalizationStore tmstore.FinalizationStore
+	MirrorStore       tmstore.MirrorStore
 
-	txc transaction.Codec[transaction.Tx],
-	am appmanager.AppManager[transaction.Tx],
-	txb *gsi.SDKTxBuf,
-	cdc codec.Codec,
-) *GordianGRPC {
-	if ln == nil {
+	CryptoRegistry *gcrypto.Registry
+
+	TxCodec    transaction.Codec[transaction.Tx]
+	AppManager appmanager.AppManager[transaction.Tx]
+	Codec      codec.Codec
+
+	TxBuffer *gsi.SDKTxBuf
+}
+
+func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPC {
+	if cfg.Listener == nil {
 		panic("BUG: listener for the grpc server is nil")
 	}
 
 	srv := &GordianGRPC{
 		log: log,
 
-		fs:    fs,
-		ms:    ms,
-		reg:   reg,
-		txc:   txc,
-		am:    am,
-		txBuf: txb,
-		cdc:   cdc,
+		fs:    cfg.FinalizationStore,
+		ms:    cfg.MirrorStore,
+		reg:   cfg.CryptoRegistry,
+		txc:   cfg.TxCodec,
+		am:    cfg.AppManager,
+		txBuf: cfg.TxBuffer,
+		cdc:   cfg.Codec,
 
 		done: make(chan struct{}),
 	}
 
 	var opts []grpc.ServerOption
 	// TODO: configure grpc options (like TLS)
-	gc := grpc.NewServer(opts...)
+	gs := grpc.NewServer(opts...)
 
-	go srv.serve(ln, gc)
-	go srv.waitForShutdown(ctx, gc)
+	go srv.serve(cfg.Listener, gs)
+	go srv.waitForShutdown(ctx, gs)
 
 	return srv
 }
