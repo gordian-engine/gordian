@@ -94,9 +94,6 @@ func (g *GordianGRPC) PendingTransactions(ctx context.Context, req *PendingTrans
 
 // QueryAccountBalance implements GordianGRPCServer.
 func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error) {
-	cdc := g.cdc
-	am := g.am
-
 	if req.Address == "" {
 		return nil, fmt.Errorf("address field is required")
 	}
@@ -106,7 +103,7 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 		denom = req.Denom
 	}
 
-	msg, err := am.Query(ctx, 0, &banktypes.QueryBalanceRequest{
+	msg, err := g.am.Query(ctx, 0, &banktypes.QueryBalanceRequest{
 		Address: req.Address,
 		Denom:   denom,
 	})
@@ -114,13 +111,13 @@ func (g *GordianGRPC) QueryAccountBalance(ctx context.Context, req *QueryAccount
 		return nil, fmt.Errorf("failed to query account balance: %w", err)
 	}
 
-	b, err := cdc.MarshalJSON(msg)
+	b, err := g.cdc.MarshalJSON(msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode response: %w", err)
 	}
 
 	var val QueryAccountBalanceResponse
-	if err = cdc.UnmarshalJSON(b, &val); err != nil {
+	if err = g.cdc.UnmarshalJSON(b, &val); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 

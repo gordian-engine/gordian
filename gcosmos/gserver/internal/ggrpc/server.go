@@ -93,9 +93,6 @@ func (g *GordianGRPC) waitForShutdown(ctx context.Context, gs *grpc.Server) {
 }
 
 func (g *GordianGRPC) serve(ln net.Listener, gs *grpc.Server) {
-	if gs == nil {
-		panic("BUG: grpc server is nil")
-	}
 	defer close(g.done)
 
 	RegisterGordianGRPCServer(gs, g)
@@ -110,8 +107,7 @@ func (g *GordianGRPC) serve(ln net.Listener, gs *grpc.Server) {
 
 // GetBlocksWatermark implements GordianGRPCServer.
 func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockRequest) (*CurrentBlockResponse, error) {
-	ms := g.ms
-	vh, vr, ch, cr, err := ms.NetworkHeightRound(ctx)
+	vh, vr, ch, cr, err := g.ms.NetworkHeightRound(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network height and round: %w", err)
 	}
@@ -126,15 +122,12 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 
 // GetValidators implements GordianGRPCServer.
 func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsRequest) (*GetValidatorsResponse, error) {
-	ms := g.ms
-	fs := g.fs
-	reg := g.reg
-	_, _, committingHeight, _, err := ms.NetworkHeightRound(ctx)
+	_, _, committingHeight, _, err := g.ms.NetworkHeightRound(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network height and round: %w", err)
 	}
 
-	_, _, vals, _, err := fs.LoadFinalizationByHeight(ctx, committingHeight)
+	_, _, vals, _, err := g.fs.LoadFinalizationByHeight(ctx, committingHeight)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load finalization by height: %w", err)
 	}
@@ -142,7 +135,7 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	jsonValidators := make([]*Validator, len(vals))
 	for i, v := range vals {
 		jsonValidators[i] = &Validator{
-			EncodedPubKey: reg.Marshal(v.PubKey),
+			EncodedPubKey: g.reg.Marshal(v.PubKey),
 			Power:         v.Power,
 		}
 	}
