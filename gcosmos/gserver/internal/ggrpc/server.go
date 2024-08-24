@@ -33,7 +33,7 @@ type GordianGRPC struct {
 	txBuf *gsi.SDKTxBuf
 	cdc   codec.Codec
 
-	txIndex map[string]*TxResultResponse // TODO: sync.Map?
+	txIndex map[string]*TxResultResponse
 
 	done chan struct{}
 }
