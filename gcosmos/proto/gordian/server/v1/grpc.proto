@@ -18,7 +18,10 @@ service GordianGRPC {
     rpc PendingTransactions(PendingTransactionsRequest) returns (PendingTransactionsResponse) {}
     // (DEBUG) QueryAccountBalance returns the balance of an account.
     rpc QueryAccountBalance(QueryAccountBalanceRequest) returns (QueryAccountBalanceResponse) {}
+
+    rpc QueryTransaction(QueryTransactionRequest) returns (TxResultResponse) {}
 }
+
 
 message CurrentBlockRequest {}
 message CurrentBlockResponse {
@@ -64,7 +67,6 @@ message Event {
     repeated Attribute attributes = 2;
 }
 message TxResultResponse {
-    // TODO: tx hash?
     repeated Event events = 1 [json_name="events"];
     // bytes resp = 2; //  []transaction.Msg
     string error = 3 [json_name="error"];
@@ -75,6 +77,7 @@ message TxResultResponse {
     uint64 gas_wanted = 8 [json_name="gas_wanted"];
     uint64 gas_used = 9 [json_name="gas_used"];
     string codespace = 10 [json_name="codespace"];
+    string tx_hash = 11 [json_name="tx_hash"];
 }
 
 
@@ -88,4 +91,8 @@ message QueryAccountBalanceRequest {
 }
 message QueryAccountBalanceResponse {
     BalanceResponse balance = 1;
+}
+
+message QueryTransactionRequest {
+    string tx_hash = 1;
 }

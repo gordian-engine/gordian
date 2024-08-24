@@ -2,13 +2,27 @@ package ggrpc
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	appmanager "cosmossdk.io/core/app"
 	"cosmossdk.io/core/event"
 	banktypes "cosmossdk.io/x/bank/types"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
+
+// QueryTransaction implements GordianGRPCServer.
+func (g *GordianGRPC) QueryTransaction(ctx context.Context, req *QueryTransactionRequest) (*TxResultResponse, error) {
+	resp, ok := g.txIndex[req.TxHash]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "transaction not found")
+	}
+
+	return resp, nil
+}
 
 // SubmitTransaction implements GordianGRPCServer.
 func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransactionRequest) (*TxResultResponse, error) {
@@ -43,7 +57,14 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		return nil, fmt.Errorf("failed to add transaction to buffer: %w", err)
 	}
 
-	return getGordianResponseFromSDKResult(res), nil
+	response := getGordianResponseFromSDKResult(res)
+
+	txHash := tx.Hash()
+	response.TxHash = strings.ToUpper(hex.EncodeToString(txHash[:]))
+
+	g.txIndex[response.TxHash] = response
+
+	return response, nil
 }
 
 // SimulateTransaction implements GordianGRPCServer.
@@ -71,7 +92,12 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 		}, nil
 	}
 
-	return getGordianResponseFromSDKResult(res), nil
+	resp := getGordianResponseFromSDKResult(res)
+
+	txHash := tx.Hash()
+	resp.TxHash = strings.ToUpper(hex.EncodeToString(txHash[:]))
+
+	return resp, nil
 }
 
 // PendingTransactions implements GordianGRPCServer.

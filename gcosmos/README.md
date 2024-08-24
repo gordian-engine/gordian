@@ -80,4 +80,8 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 ./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SimulateTransaction
 
 ./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SubmitTransaction
+
+TX_HASH=`shasum -a 256 example-tx-signed.json | awk '{print toupper($1)}'` && echo $TX_HASH
+
+./grpcurl -plaintext -emit-defaults -d '{"tx_hash":"D8FF0A405957A3D090A485CA3C997A25E2964F2E7840DDBCBFE805EC97192651"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryTransaction
 ```
