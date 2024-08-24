@@ -49,6 +49,15 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		}, nil
 	}
 
+	// TODO: ValidateTx only does stateful validation, not execution. This here lets us get the Events in the TxResult.
+	res, _, err = g.am.Simulate(ctx, tx)
+	if err != nil {
+		// Simulate should only return an error at this level,
+		// if it failed to get state from the store.
+		g.log.Warn("Error attempting to simulate transaction", "route", "simulate_tx", "err", err)
+		return nil, fmt.Errorf("failed to simulate transaction: %w", err)
+	}
+
 	// If it passed basic validation, then we can attempt to add it to the buffer.
 	if err := g.txBuf.AddTx(ctx, tx); err != nil {
 		// We could potentially check if it is a TxInvalidError here
