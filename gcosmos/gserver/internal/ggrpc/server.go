@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	sync "sync"
 
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
@@ -33,7 +34,8 @@ type GordianGRPC struct {
 	txBuf *gsi.SDKTxBuf
 	cdc   codec.Codec
 
-	txIndex map[string]*TxResultResponse
+	txIdx     map[string]*TxResultResponse
+	txIdxLock sync.Mutex
 
 	done chan struct{}
 }
@@ -71,7 +73,7 @@ func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerC
 
 		done: make(chan struct{}),
 	}
-	srv.txIndex = make(map[string]*TxResultResponse)
+	srv.txIdx = make(map[string]*TxResultResponse)
 
 	var opts []grpc.ServerOption
 	// TODO: configure grpc options (like TLS)

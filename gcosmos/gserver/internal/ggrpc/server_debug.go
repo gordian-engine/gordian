@@ -16,7 +16,9 @@ import (
 
 // QueryTransaction implements GordianGRPCServer.
 func (g *GordianGRPC) QueryTransaction(ctx context.Context, req *QueryTransactionRequest) (*TxResultResponse, error) {
-	resp, ok := g.txIndex[req.TxHash]
+	g.txIdxLock.Lock()
+	defer g.txIdxLock.Unlock()
+	resp, ok := g.txIdx[req.TxHash]
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "transaction not found")
 	}
@@ -71,7 +73,9 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 	txHash := tx.Hash()
 	response.TxHash = strings.ToUpper(hex.EncodeToString(txHash[:]))
 
-	g.txIndex[response.TxHash] = response
+	g.txIdxLock.Lock()
+	defer g.txIdxLock.Unlock()
+	g.txIdx[response.TxHash] = response
 
 	return response, nil
 }
