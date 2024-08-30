@@ -161,7 +161,8 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	}
 
 	return &GetValidatorsResponse{
-		Validators: jsonValidators,
+		FinalizationHeight: pointy.Uint64(committingHeight),
+		Validators:         jsonValidators,
 	}, nil
 }
 

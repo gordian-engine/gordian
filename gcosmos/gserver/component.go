@@ -405,8 +405,6 @@ func (c *Component) Start(ctx context.Context) error {
 			// TODO: this has to start.
 			GordianClient: c.grpcServer,
 
-			CryptoRegistry: reg,
-
 			Libp2pHost: c.h,
 			Libp2pconn: c.conn,
 

@@ -14,7 +14,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
-	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
 )
 
@@ -31,7 +30,7 @@ type HTTPServerConfig struct {
 	// GordianClient ggrpc.GordianGRPCClient
 	GordianClient *ggrpc.GordianGRPC
 
-	CryptoRegistry *gcrypto.Registry
+	// CryptoRegistry *gcrypto.Registry
 
 	Libp2pHost *tmlibp2p.Host
 	Libp2pconn *tmlibp2p.Connection

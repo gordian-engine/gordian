@@ -17,6 +17,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func setupGrpcServer(t *testing.T, ctx context.Context, gsc ggrpc.GRPCServerConfig) *ggrpc.GordianGRPC {
+	gln, err := (new(net.ListenConfig)).Listen(ctx, "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	gsc.Listener = gln
+
+	return ggrpc.NewGordianGRPCServer(ctx, gtest.NewLogger(t), gsc)
+}
+
 func TestHTTPServer_Blocks_Watermark(t *testing.T) {
 	t.Parallel()
 
@@ -27,12 +36,8 @@ func TestHTTPServer_Blocks_Watermark(t *testing.T) {
 	require.NoError(t, err)
 	addr := "http://" + ln.Addr().String() + "/blocks/watermark"
 
-	gln, err := (new(net.ListenConfig)).Listen(ctx, "tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-
 	ms := tmmemstore.NewMirrorStore()
-	gordianGrpc := ggrpc.NewGordianGRPCServer(ctx, gtest.NewLogger(t), ggrpc.GRPCServerConfig{
-		Listener:    gln,
+	gordianGrpc := setupGrpcServer(t, ctx, ggrpc.GRPCServerConfig{
 		MirrorStore: ms,
 	})
 
@@ -115,14 +120,16 @@ func TestHTTPServer_Validators(t *testing.T) {
 	reg := new(gcrypto.Registry)
 	gcrypto.RegisterEd25519(reg)
 
+	gordianGrpc := setupGrpcServer(t, ctx, ggrpc.GRPCServerConfig{
+		FinalizationStore: fs,
+		MirrorStore:       ms,
+		CryptoRegistry:    reg,
+	})
+
 	h := gsi.NewHTTPServer(ctx, gtest.NewLogger(t), gsi.HTTPServerConfig{
 		Listener: ln,
 
-		// FinalizationStore: fs,
-		// MirrorStore:       ms,
-		GordianClient: nil,
-
-		CryptoRegistry: reg,
+		GordianClient: gordianGrpc,
 	})
 	defer h.Wait()
 	defer cancel()
@@ -147,23 +154,16 @@ func TestHTTPServer_Validators(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	var output struct {
-		FinalizationHeight uint64
-		Validators         []struct {
-			PubKey []byte
-			Power  uint64
-		}
-	}
-
+	var output ggrpc.GetValidatorsResponse
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&output))
 
 	// Finalization height matches.
-	require.Equal(t, uint64(2), output.FinalizationHeight)
+	require.Equal(t, uint64(2), *output.FinalizationHeight)
 
 	// Validators match too.
 	outVals := make([]tmconsensus.Validator, len(output.Validators))
 	for i, v := range output.Validators {
-		k, err := reg.Unmarshal(v.PubKey)
+		k, err := reg.Unmarshal(v.EncodedPubKey)
 		require.NoErrorf(t, err, "failure marshaling output validator at index %d", i)
 		outVals[i] = tmconsensus.Validator{
 			Power:  v.Power,
