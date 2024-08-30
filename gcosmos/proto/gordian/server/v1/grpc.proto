@@ -20,16 +20,25 @@ service GordianGRPC {
     rpc QueryAccountBalance(QueryAccountBalanceRequest) returns (QueryAccountBalanceResponse) {}
 
     rpc QueryTransaction(QueryTransactionRequest) returns (TxResultResponse) {}
+
+    rpc GetBlock(GetBlockRequest) returns (GetBlockResponse) {}
+}
+
+message GetBlockRequest {
+    uint64 height = 1;
+}
+message GetBlockResponse {
+    uint64 time = 1; // nanoseconds
 }
 
 
 message CurrentBlockRequest {}
 message CurrentBlockResponse {
-    uint64 voting_height = 1;
-    uint32 voting_round = 2;
+    optional uint64 voting_height = 1;
+    optional uint32 voting_round = 2;
 
-    uint64 committing_height = 3;
-    uint32 committing_round = 4;
+    optional uint64 committing_height = 3;
+    optional uint32 committing_round = 4;
 }
 
 message Validator {

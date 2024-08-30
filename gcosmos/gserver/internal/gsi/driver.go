@@ -24,6 +24,7 @@ import (
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/rollchains/gordian/gcosmos/gccodec"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/gdriver/gdatapool"
 	"github.com/rollchains/gordian/internal/gchan"
@@ -42,7 +43,7 @@ type DriverConfig struct {
 	InitChainRequests     <-chan tmdriver.InitChainRequest
 	FinalizeBlockRequests <-chan tmdriver.FinalizeBlockRequest
 
-	TxBuffer *SDKTxBuf
+	TxBuffer *txmanager.SDKTxBuf
 
 	DataPool *gdatapool.Pool[[]transaction.Tx]
 }
@@ -50,7 +51,7 @@ type DriverConfig struct {
 type Driver struct {
 	log *slog.Logger
 
-	txBuf *SDKTxBuf
+	txBuf *txmanager.SDKTxBuf
 
 	pool *gdatapool.Pool[[]transaction.Tx]
 
@@ -305,7 +306,7 @@ func (d *Driver) handleFinalizations(
 			return
 		}
 
-		a, err := BlockAnnotationFromBytes(fbReq.Block.Annotations.Driver)
+		a, err := txmanager.BlockAnnotationFromBytes(fbReq.Block.Annotations.Driver)
 		if err != nil {
 			d.log.Warn(
 				"Failed to extract driver annotation from finalize block request",

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/internal/gtest"
@@ -26,13 +27,20 @@ func TestHTTPServer_Blocks_Watermark(t *testing.T) {
 	require.NoError(t, err)
 	addr := "http://" + ln.Addr().String() + "/blocks/watermark"
 
+	gln, err := (new(net.ListenConfig)).Listen(ctx, "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
 	ms := tmmemstore.NewMirrorStore()
+	gordianGrpc := ggrpc.NewGordianGRPCServer(ctx, gtest.NewLogger(t), ggrpc.GRPCServerConfig{
+		Listener:    gln,
+		MirrorStore: ms,
+	})
 
 	h := gsi.NewHTTPServer(ctx, gtest.NewLogger(t), gsi.HTTPServerConfig{
-		Listener:    ln,
-		MirrorStore: ms,
-		Libp2pHost:  nil,
-		Libp2pconn:  nil,
+		Listener:      ln,
+		GordianClient: gordianGrpc,
+		Libp2pHost:    nil,
+		Libp2pconn:    nil,
 	})
 	defer h.Wait()
 	defer cancel()
@@ -58,11 +66,11 @@ func TestHTTPServer_Blocks_Watermark(t *testing.T) {
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&m))
 
 		exp := map[string]uint{
-			"VotingHeight": 2,
-			"VotingRound":  0,
+			"voting_height": 2,
+			"voting_round":  0,
 
-			"CommittingHeight": 1,
-			"CommittingRound":  1,
+			"committing_height": 1,
+			"committing_round":  1,
 		}
 
 		require.Equal(t, exp, m)
@@ -81,11 +89,11 @@ func TestHTTPServer_Blocks_Watermark(t *testing.T) {
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&m))
 
 		exp := map[string]uint{
-			"VotingHeight": 3,
-			"VotingRound":  4,
+			"voting_height": 3,
+			"voting_round":  4,
 
-			"CommittingHeight": 2,
-			"CommittingRound":  0,
+			"committing_height": 2,
+			"committing_round":  0,
 		}
 
 		require.Equal(t, exp, m)
@@ -110,8 +118,9 @@ func TestHTTPServer_Validators(t *testing.T) {
 	h := gsi.NewHTTPServer(ctx, gtest.NewLogger(t), gsi.HTTPServerConfig{
 		Listener: ln,
 
-		FinalizationStore: fs,
-		MirrorStore:       ms,
+		// FinalizationStore: fs,
+		// MirrorStore:       ms,
+		GordianClient: nil,
 
 		CryptoRegistry: reg,
 	})

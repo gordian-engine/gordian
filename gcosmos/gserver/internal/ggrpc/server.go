@@ -10,28 +10,36 @@ import (
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/tm/tmstore"
+	"go.openly.dev/pointy"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 var _ GordianGRPCServer = (*GordianGRPC)(nil)
 
+// TODO: remove me
+// mustEmbedUnimplementedGordianGRPCServer implements GordianGRPCServer.
+func (g *GordianGRPC) mustEmbedUnimplementedGordianGRPCServer() {
+	panic("unimplemented")
+}
+
 type GordianGRPC struct {
-	UnimplementedGordianGRPCServer
+	// UnimplementedGordianGRPCServer
 	log *slog.Logger
 
 	fs tmstore.FinalizationStore
 	ms tmstore.MirrorStore
+	bs tmstore.BlockStore
 
 	reg *gcrypto.Registry
 
 	// debug handler
 	txc   transaction.Codec[transaction.Tx]
 	am    appmanager.AppManager[transaction.Tx]
-	txBuf *gsi.SDKTxBuf
+	txBuf *txmanager.SDKTxBuf
 	cdc   codec.Codec
 
 	txIdx     map[string]*TxResultResponse
@@ -45,6 +53,7 @@ type GRPCServerConfig struct {
 
 	FinalizationStore tmstore.FinalizationStore
 	MirrorStore       tmstore.MirrorStore
+	BlockStore        tmstore.BlockStore
 
 	CryptoRegistry *gcrypto.Registry
 
@@ -52,7 +61,7 @@ type GRPCServerConfig struct {
 	AppManager appmanager.AppManager[transaction.Tx]
 	Codec      codec.Codec
 
-	TxBuffer *gsi.SDKTxBuf
+	TxBuffer *txmanager.SDKTxBuf
 }
 
 func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerConfig) *GordianGRPC {
@@ -63,8 +72,10 @@ func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerC
 	srv := &GordianGRPC{
 		log: log,
 
-		fs:    cfg.FinalizationStore,
-		ms:    cfg.MirrorStore,
+		fs: cfg.FinalizationStore,
+		ms: cfg.MirrorStore,
+		bs: cfg.BlockStore,
+
 		reg:   cfg.CryptoRegistry,
 		txc:   cfg.TxCodec,
 		am:    cfg.AppManager,
@@ -122,10 +133,10 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 	}
 
 	return &CurrentBlockResponse{
-		VotingHeight:     vh,
-		VotingRound:      vr,
-		CommittingHeight: ch,
-		CommittingRound:  cr,
+		VotingHeight:     pointy.Uint64(vh),
+		VotingRound:      pointy.Uint32(vr),
+		CommittingHeight: pointy.Uint64(ch),
+		CommittingRound:  pointy.Uint32(cr),
 	}, nil
 }
 
@@ -151,5 +162,27 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 
 	return &GetValidatorsResponse{
 		Validators: jsonValidators,
+	}, nil
+}
+
+// GetBlock implements GordianGRPCServer.
+func (g *GordianGRPC) GetBlock(ctx context.Context, req *GetBlockRequest) (*GetBlockResponse, error) {
+	b, err := g.bs.LoadBlock(ctx, req.Height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load block: %w", err)
+	}
+
+	a, err := txmanager.BlockAnnotationFromBytes(b.Block.Annotations.Driver)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse block annotation: %w", err)
+	}
+
+	blockTime, err := a.BlockTimeAsTime()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse block time: %w", err)
+	}
+
+	return &GetBlockResponse{
+		Time: uint64(blockTime.Nanosecond()),
 	}, nil
 }

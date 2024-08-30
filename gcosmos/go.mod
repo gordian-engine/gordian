@@ -40,6 +40,7 @@ require (
 	github.com/samber/slog-common v0.16.0 // indirect
 	github.com/samber/slog-zerolog/v2 v2.3.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	go.openly.dev/pointy v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.23.0 // indirect

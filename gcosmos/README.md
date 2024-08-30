@@ -66,6 +66,7 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 ./grpcurl -plaintext localhost:9092 list
 ./grpcurl -plaintext localhost:9092 gordian.server.v1.GordianGRPC/GetBlocksWatermark
 ./grpcurl -plaintext localhost:9092 gordian.server.v1.GordianGRPC/GetValidators
+./grpcurl -plaintext -d '{"height":1}' localhost:9092 gordian.server.v1.GordianGRPC/GetBlock
 
 ./grpcurl -plaintext -d '{"address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryAccountBalance
 ```

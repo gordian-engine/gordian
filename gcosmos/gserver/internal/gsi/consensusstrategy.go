@@ -11,6 +11,7 @@ import (
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gdriver/gdatapool"
 	"github.com/rollchains/gordian/internal/gchan"
 	"github.com/rollchains/gordian/internal/glog"
@@ -24,7 +25,7 @@ type ConsensusStrategy struct {
 
 	am appmanager.AppManager[transaction.Tx]
 
-	txBuf *SDKTxBuf
+	txBuf *txmanager.SDKTxBuf
 
 	signer tmconsensus.Signer
 
@@ -43,7 +44,7 @@ func NewConsensusStrategy(
 	d *Driver,
 	am appmanager.AppManager[transaction.Tx],
 	signer tmconsensus.Signer,
-	txBuf *SDKTxBuf,
+	txBuf *txmanager.SDKTxBuf,
 	blockDataProvider gsbd.Provider,
 	pool *gdatapool.Pool[[]transaction.Tx],
 ) *ConsensusStrategy {
@@ -69,27 +70,6 @@ func (s *ConsensusStrategy) Wait() {
 	// so we don't expose it directly.
 	// The pool is the only background work created here.
 	s.pool.Wait()
-}
-
-type BlockAnnotation struct {
-	BlockTime string `json:"block_time"`
-}
-
-func NewBlockAnnotation(blockTime time.Time) ([]byte, error) {
-	ba := BlockAnnotation{
-		BlockTime: blockTime.Format(time.RFC3339Nano),
-	}
-	return json.Marshal(ba)
-}
-
-func BlockAnnotationFromBytes(b []byte) (BlockAnnotation, error) {
-	var ba BlockAnnotation
-	err := json.Unmarshal(b, &ba)
-	return ba, err
-}
-
-func (ba BlockAnnotation) BlockTimeAsTime() (time.Time, error) {
-	return time.Parse(time.RFC3339, ba.BlockTime)
 }
 
 func (c *ConsensusStrategy) EnterRound(
@@ -118,7 +98,7 @@ func (c *ConsensusStrategy) EnterRound(
 		))
 	}
 
-	ba, err := NewBlockAnnotation(time.Now())
+	ba, err := txmanager.NewBlockAnnotation(time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to create block annotation: %w", err)
 	}
@@ -278,7 +258,7 @@ PB_LOOP:
 			}
 		}
 
-		ba, err := BlockAnnotationFromBytes(pb.Block.Annotations.Driver)
+		ba, err := txmanager.BlockAnnotationFromBytes(pb.Block.Annotations.Driver)
 		if err != nil {
 			c.log.Debug(
 				"Ignoring proposed block due to error extracting block annotation",

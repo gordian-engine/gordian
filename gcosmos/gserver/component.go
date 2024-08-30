@@ -23,6 +23,7 @@ import (
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/gdriver/gtxbuf"
 	"github.com/rollchains/gordian/gwatchdog"
@@ -78,6 +79,7 @@ type Component struct {
 
 	ms         tmstore.MirrorStore
 	fs         tmstore.FinalizationStore
+	bs         tmstore.BlockStore
 	httpServer *gsi.HTTPServer
 	grpcServer *ggrpc.GordianGRPC
 }
@@ -191,6 +193,7 @@ func (c *Component) Init(app serverv2.AppI[transaction.Tx], v *viper.Viper, log 
 
 	c.ms = ms
 	c.fs = fs
+	c.bs = bs
 
 	genesis := &tmconsensus.ExternalGenesis{
 		ChainID:         "TODO:TEMPORARY_CHAIN_ID", // todo parse this out of sdk genesis file
@@ -283,7 +286,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 	am := *(c.app.GetAppManager())
 
-	txm := gsi.TxManager{AppManager: am}
+	txm := txmanager.TxManager{AppManager: am}
 	txBuf := gtxbuf.New(
 		ctx, c.log.With("d_sys", "tx_buffer"),
 		txm.AddTx, txm.TxDeleterFunc,
@@ -383,6 +386,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 			MirrorStore:       c.ms,
 			FinalizationStore: c.fs,
+			BlockStore:        c.bs,
 
 			CryptoRegistry: reg,
 
@@ -398,8 +402,8 @@ func (c *Component) Start(ctx context.Context) error {
 		c.httpServer = gsi.NewHTTPServer(ctx, c.log.With("sys", "http"), gsi.HTTPServerConfig{
 			Listener: c.httpLn,
 
-			MirrorStore:       c.ms,
-			FinalizationStore: c.fs,
+			// TODO: this has to start.
+			GordianClient: c.grpcServer,
 
 			CryptoRegistry: reg,
 

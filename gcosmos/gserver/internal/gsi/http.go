@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,9 +12,10 @@ import (
 	"cosmossdk.io/server/v2/appmanager"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/gorilla/mux"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
-	"github.com/rollchains/gordian/tm/tmstore"
 )
 
 type HTTPServer struct {
@@ -25,8 +25,11 @@ type HTTPServer struct {
 type HTTPServerConfig struct {
 	Listener net.Listener
 
-	FinalizationStore tmstore.FinalizationStore
-	MirrorStore       tmstore.MirrorStore
+	// FinalizationStore tmstore.FinalizationStore
+	// MirrorStore       tmstore.MirrorStore
+
+	// GordianClient ggrpc.GordianGRPCClient
+	GordianClient *ggrpc.GordianGRPC
 
 	CryptoRegistry *gcrypto.Registry
 
@@ -37,7 +40,7 @@ type HTTPServerConfig struct {
 	TxCodec    transaction.Codec[transaction.Tx]
 	Codec      codec.Codec
 
-	TxBuffer *SDKTxBuf
+	TxBuffer *txmanager.SDKTxBuf
 }
 
 func NewHTTPServer(ctx context.Context, log *slog.Logger, cfg HTTPServerConfig) *HTTPServer {
@@ -47,6 +50,10 @@ func NewHTTPServer(ctx context.Context, log *slog.Logger, cfg HTTPServerConfig) 
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
+	}
+
+	if cfg.GordianClient == nil {
+		panic("BUG: NewHTTPServer GordianClient is nil")
 	}
 
 	h := &HTTPServer{
@@ -99,29 +106,40 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 }
 
 func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
-	ms := cfg.MirrorStore
+	// ms := cfg.MirrorStore
 	return func(w http.ResponseWriter, req *http.Request) {
-		vh, vr, ch, cr, err := ms.NetworkHeightRound(req.Context())
+		// vh, vr, ch, cr, err := ms.NetworkHeightRound(req.Context())
+		// if err != nil {
+		// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+		// 	return
+		// }
+
+		// // TODO: this should probably be an exported type somewhere.
+		// var currentBlock struct {
+		// 	VotingHeight uint64
+		// 	VotingRound  uint32
+
+		// 	CommittingHeight uint64
+		// 	CommittingRound  uint32
+		// }
+
+		// currentBlock.VotingHeight = vh
+		// currentBlock.VotingRound = vr
+		// currentBlock.CommittingHeight = ch
+		// currentBlock.CommittingRound = cr
+
+		// if err := json.NewEncoder(w).Encode(currentBlock); err != nil {
+		// 	log.Warn("Failed to marshal current block", "err", err)
+		// 	return
+		// }
+
+		resp, err := cfg.GordianClient.GetBlocksWatermark(req.Context(), &ggrpc.CurrentBlockRequest{})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// TODO: this should probably be an exported type somewhere.
-		var currentBlock struct {
-			VotingHeight uint64
-			VotingRound  uint32
-
-			CommittingHeight uint64
-			CommittingRound  uint32
-		}
-
-		currentBlock.VotingHeight = vh
-		currentBlock.VotingRound = vr
-		currentBlock.CommittingHeight = ch
-		currentBlock.CommittingRound = cr
-
-		if err := json.NewEncoder(w).Encode(currentBlock); err != nil {
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Warn("Failed to marshal current block", "err", err)
 			return
 		}
@@ -129,45 +147,58 @@ func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func(w http.R
 }
 
 func handleValidators(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
-	ms := cfg.MirrorStore
-	fs := cfg.FinalizationStore
-	reg := cfg.CryptoRegistry
+	// ms := cfg.MirrorStore
+	// fs := cfg.FinalizationStore
+	// reg := cfg.CryptoRegistry
+	// return func(w http.ResponseWriter, req *http.Request) {
+	// 	_, _, committingHeight, _, err := ms.NetworkHeightRound(req.Context())
+	// 	if err != nil {
+	// 		http.Error(
+	// 			w,
+	// 			fmt.Sprintf("failed to get committing height: %v", err),
+	// 			http.StatusInternalServerError,
+	// 		)
+	// 		return
+	// 	}
+
+	// 	_, _, vals, _, err := fs.LoadFinalizationByHeight(req.Context(), committingHeight)
+	// 	if err != nil {
+	// 		http.Error(
+	// 			w,
+	// 			fmt.Sprintf("failed to load finalization: %v", err),
+	// 			http.StatusInternalServerError,
+	// 		)
+	// 		return
+	// 	}
+
+	// 	// Now we have the validators at the committing height.
+	// 	type jsonValidator struct {
+	// 		PubKey []byte
+	// 		Power  uint64
+	// 	}
+	// 	var resp struct {
+	// 		FinalizationHeight uint64
+	// 		Validators         []jsonValidator
+	// 	}
+
+	// 	resp.FinalizationHeight = committingHeight
+	// 	resp.Validators = make([]jsonValidator, len(vals))
+	// 	for i, v := range vals {
+	// 		resp.Validators[i].Power = v.Power
+	// 		resp.Validators[i].PubKey = reg.Marshal(v.PubKey)
+	// 	}
+
+	// 	if err := json.NewEncoder(w).Encode(resp); err != nil {
+	// 		log.Warn("Failed to marshal validators response", "err", err)
+	// 		return
+	// 	}
+	// }
+
 	return func(w http.ResponseWriter, req *http.Request) {
-		_, _, committingHeight, _, err := ms.NetworkHeightRound(req.Context())
+		resp, err := cfg.GordianClient.GetValidators(req.Context(), &ggrpc.GetValidatorsRequest{})
 		if err != nil {
-			http.Error(
-				w,
-				fmt.Sprintf("failed to get committing height: %v", err),
-				http.StatusInternalServerError,
-			)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		}
-
-		_, _, vals, _, err := fs.LoadFinalizationByHeight(req.Context(), committingHeight)
-		if err != nil {
-			http.Error(
-				w,
-				fmt.Sprintf("failed to load finalization: %v", err),
-				http.StatusInternalServerError,
-			)
-			return
-		}
-
-		// Now we have the validators at the committing height.
-		type jsonValidator struct {
-			PubKey []byte
-			Power  uint64
-		}
-		var resp struct {
-			FinalizationHeight uint64
-			Validators         []jsonValidator
-		}
-
-		resp.FinalizationHeight = committingHeight
-		resp.Validators = make([]jsonValidator, len(vals))
-		for i, v := range vals {
-			resp.Validators[i].Power = v.Power
-			resp.Validators[i].PubKey = reg.Marshal(v.PubKey)
 		}
 
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
