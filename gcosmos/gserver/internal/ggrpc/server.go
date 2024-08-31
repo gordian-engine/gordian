@@ -13,7 +13,6 @@ import (
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/tm/tmstore"
-	"go.openly.dev/pointy"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -133,10 +132,10 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 	}
 
 	return &CurrentBlockResponse{
-		VotingHeight:     pointy.Uint64(vh),
-		VotingRound:      pointy.Uint32(vr),
-		CommittingHeight: pointy.Uint64(ch),
-		CommittingRound:  pointy.Uint32(cr),
+		VotingHeight:     Pointy(vh),
+		VotingRound:      Pointy(vr),
+		CommittingHeight: Pointy(ch),
+		CommittingRound:  Pointy(cr),
 	}, nil
 }
 
@@ -161,7 +160,7 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	}
 
 	return &GetValidatorsResponse{
-		FinalizationHeight: pointy.Uint64(committingHeight),
+		FinalizationHeight: Pointy(committingHeight),
 		Validators:         jsonValidators,
 	}, nil
 }
@@ -186,4 +185,8 @@ func (g *GordianGRPC) GetBlock(ctx context.Context, req *GetBlockRequest) (*GetB
 	return &GetBlockResponse{
 		Time: uint64(blockTime.Nanosecond()),
 	}, nil
+}
+
+func Pointy[T any](x T) *T {
+	return &x
 }

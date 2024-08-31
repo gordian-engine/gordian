@@ -105,33 +105,7 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 }
 
 func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
-	// ms := cfg.MirrorStore
 	return func(w http.ResponseWriter, req *http.Request) {
-		// vh, vr, ch, cr, err := ms.NetworkHeightRound(req.Context())
-		// if err != nil {
-		// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-		// 	return
-		// }
-
-		// // TODO: this should probably be an exported type somewhere.
-		// var currentBlock struct {
-		// 	VotingHeight uint64
-		// 	VotingRound  uint32
-
-		// 	CommittingHeight uint64
-		// 	CommittingRound  uint32
-		// }
-
-		// currentBlock.VotingHeight = vh
-		// currentBlock.VotingRound = vr
-		// currentBlock.CommittingHeight = ch
-		// currentBlock.CommittingRound = cr
-
-		// if err := json.NewEncoder(w).Encode(currentBlock); err != nil {
-		// 	log.Warn("Failed to marshal current block", "err", err)
-		// 	return
-		// }
-
 		resp, err := cfg.GordianClient.GetBlocksWatermark(req.Context(), &ggrpc.CurrentBlockRequest{})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -146,53 +120,6 @@ func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func(w http.R
 }
 
 func handleValidators(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
-	// ms := cfg.MirrorStore
-	// fs := cfg.FinalizationStore
-	// reg := cfg.CryptoRegistry
-	// return func(w http.ResponseWriter, req *http.Request) {
-	// 	_, _, committingHeight, _, err := ms.NetworkHeightRound(req.Context())
-	// 	if err != nil {
-	// 		http.Error(
-	// 			w,
-	// 			fmt.Sprintf("failed to get committing height: %v", err),
-	// 			http.StatusInternalServerError,
-	// 		)
-	// 		return
-	// 	}
-
-	// 	_, _, vals, _, err := fs.LoadFinalizationByHeight(req.Context(), committingHeight)
-	// 	if err != nil {
-	// 		http.Error(
-	// 			w,
-	// 			fmt.Sprintf("failed to load finalization: %v", err),
-	// 			http.StatusInternalServerError,
-	// 		)
-	// 		return
-	// 	}
-
-	// 	// Now we have the validators at the committing height.
-	// 	type jsonValidator struct {
-	// 		PubKey []byte
-	// 		Power  uint64
-	// 	}
-	// 	var resp struct {
-	// 		FinalizationHeight uint64
-	// 		Validators         []jsonValidator
-	// 	}
-
-	// 	resp.FinalizationHeight = committingHeight
-	// 	resp.Validators = make([]jsonValidator, len(vals))
-	// 	for i, v := range vals {
-	// 		resp.Validators[i].Power = v.Power
-	// 		resp.Validators[i].PubKey = reg.Marshal(v.PubKey)
-	// 	}
-
-	// 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-	// 		log.Warn("Failed to marshal validators response", "err", err)
-	// 		return
-	// 	}
-	// }
-
 	return func(w http.ResponseWriter, req *http.Request) {
 		resp, err := cfg.GordianClient.GetValidators(req.Context(), &ggrpc.GetValidatorsRequest{})
 		if err != nil {
