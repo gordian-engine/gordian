@@ -8,6 +8,7 @@ package ggrpc
 
 import (
 	context "context"
+	app "cosmossdk.io/core/app"
 	types "github.com/cometbft/cometbft/rpc/core/types"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -21,7 +22,6 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	GordianGRPC_GetBlocksWatermark_FullMethodName      = "/gordian.server.v1.GordianGRPC/GetBlocksWatermark"
-	GordianGRPC_SubmitTransaction_FullMethodName       = "/gordian.server.v1.GordianGRPC/SubmitTransaction"
 	GordianGRPC_SimulateTransaction_FullMethodName     = "/gordian.server.v1.GordianGRPC/SimulateTransaction"
 	GordianGRPC_PendingTransactions_FullMethodName     = "/gordian.server.v1.GordianGRPC/PendingTransactions"
 	GordianGRPC_QueryAccountBalance_FullMethodName     = "/gordian.server.v1.GordianGRPC/QueryAccountBalance"
@@ -32,7 +32,7 @@ const (
 	GordianGRPC_GetValidators_FullMethodName           = "/gordian.server.v1.GordianGRPC/GetValidators"
 	GordianGRPC_GetTxSearch_FullMethodName             = "/gordian.server.v1.GordianGRPC/GetTxSearch"
 	GordianGRPC_GetTx_FullMethodName                   = "/gordian.server.v1.GordianGRPC/GetTx"
-	GordianGRPC_DoBroadcastTxSync_FullMethodName       = "/gordian.server.v1.GordianGRPC/DoBroadcastTxSync"
+	GordianGRPC_SubmitTransactionSync_FullMethodName   = "/gordian.server.v1.GordianGRPC/SubmitTransactionSync"
 	GordianGRPC_DoBroadcastTxAsync_FullMethodName      = "/gordian.server.v1.GordianGRPC/DoBroadcastTxAsync"
 	GordianGRPC_GetBlockSearch_FullMethodName          = "/gordian.server.v1.GordianGRPC/GetBlockSearch"
 	GordianGRPC_GetCommit_FullMethodName               = "/gordian.server.v1.GordianGRPC/GetCommit"
@@ -47,14 +47,14 @@ type GordianGRPCClient interface {
 	// GetBlocksWatermark returns the current block information.
 	GetBlocksWatermark(ctx context.Context, in *CurrentBlockRequest, opts ...grpc.CallOption) (*CurrentBlockResponse, error)
 	// (DEBUG) SubmitTransaction submits a transaction to the network.
-	SubmitTransaction(ctx context.Context, in *SubmitTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
+	// rpc SubmitTransaction(SubmitTransactionRequest) returns (TxResultResponse) {} // Now SubmitTransactionSync
 	// (DEBUG) SimulateTransaction submits and simulates a transaction.
 	SimulateTransaction(ctx context.Context, in *SubmitSimulationTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
 	// (DEBUG) PendingTransactions returns the pending transactions in JSON form.
 	PendingTransactions(ctx context.Context, in *PendingTransactionsRequest, opts ...grpc.CallOption) (*PendingTransactionsResponse, error)
 	// (DEBUG) QueryAccountBalance returns the balance of an account.
 	QueryAccountBalance(ctx context.Context, in *QueryAccountBalanceRequest, opts ...grpc.CallOption) (*QueryAccountBalanceResponse, error)
-	QueryTransaction(ctx context.Context, in *QueryTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
+	QueryTransaction(ctx context.Context, in *QueryTransactionRequest, opts ...grpc.CallOption) (*app.TxResult, error)
 	// IBC stuff
 	GetBlock(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (*GetBlockResponse, error)
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
@@ -63,7 +63,7 @@ type GordianGRPCClient interface {
 	GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error)
 	GetTxSearch(ctx context.Context, in *GetTxSearchRequest, opts ...grpc.CallOption) (*types.ResultTx, error)
 	GetTx(ctx context.Context, in *GetTxRequest, opts ...grpc.CallOption) (*types.ResultTx, error)
-	DoBroadcastTxSync(ctx context.Context, in *DoBroadcastTxSyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error)
+	SubmitTransactionSync(ctx context.Context, in *DoBroadcastTxSyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error)
 	DoBroadcastTxAsync(ctx context.Context, in *DoBroadcastTxAsyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error)
 	GetBlockSearch(ctx context.Context, in *GetBlockSearchRequest, opts ...grpc.CallOption) (*types.ResultBlockSearch, error)
 	GetCommit(ctx context.Context, in *GetCommitRequest, opts ...grpc.CallOption) (*types.ResultCommit, error)
@@ -82,15 +82,6 @@ func NewGordianGRPCClient(cc grpc.ClientConnInterface) GordianGRPCClient {
 func (c *gordianGRPCClient) GetBlocksWatermark(ctx context.Context, in *CurrentBlockRequest, opts ...grpc.CallOption) (*CurrentBlockResponse, error) {
 	out := new(CurrentBlockResponse)
 	err := c.cc.Invoke(ctx, GordianGRPC_GetBlocksWatermark_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gordianGRPCClient) SubmitTransaction(ctx context.Context, in *SubmitTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error) {
-	out := new(TxResultResponse)
-	err := c.cc.Invoke(ctx, GordianGRPC_SubmitTransaction_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +115,8 @@ func (c *gordianGRPCClient) QueryAccountBalance(ctx context.Context, in *QueryAc
 	return out, nil
 }
 
-func (c *gordianGRPCClient) QueryTransaction(ctx context.Context, in *QueryTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error) {
-	out := new(TxResultResponse)
+func (c *gordianGRPCClient) QueryTransaction(ctx context.Context, in *QueryTransactionRequest, opts ...grpc.CallOption) (*app.TxResult, error) {
+	out := new(app.TxResult)
 	err := c.cc.Invoke(ctx, GordianGRPC_QueryTransaction_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -187,9 +178,9 @@ func (c *gordianGRPCClient) GetTx(ctx context.Context, in *GetTxRequest, opts ..
 	return out, nil
 }
 
-func (c *gordianGRPCClient) DoBroadcastTxSync(ctx context.Context, in *DoBroadcastTxSyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error) {
+func (c *gordianGRPCClient) SubmitTransactionSync(ctx context.Context, in *DoBroadcastTxSyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error) {
 	out := new(types.ResultBroadcastTx)
-	err := c.cc.Invoke(ctx, GordianGRPC_DoBroadcastTxSync_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, GordianGRPC_SubmitTransactionSync_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,14 +239,14 @@ type GordianGRPCServer interface {
 	// GetBlocksWatermark returns the current block information.
 	GetBlocksWatermark(context.Context, *CurrentBlockRequest) (*CurrentBlockResponse, error)
 	// (DEBUG) SubmitTransaction submits a transaction to the network.
-	SubmitTransaction(context.Context, *SubmitTransactionRequest) (*TxResultResponse, error)
+	// rpc SubmitTransaction(SubmitTransactionRequest) returns (TxResultResponse) {} // Now SubmitTransactionSync
 	// (DEBUG) SimulateTransaction submits and simulates a transaction.
 	SimulateTransaction(context.Context, *SubmitSimulationTransactionRequest) (*TxResultResponse, error)
 	// (DEBUG) PendingTransactions returns the pending transactions in JSON form.
 	PendingTransactions(context.Context, *PendingTransactionsRequest) (*PendingTransactionsResponse, error)
 	// (DEBUG) QueryAccountBalance returns the balance of an account.
 	QueryAccountBalance(context.Context, *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error)
-	QueryTransaction(context.Context, *QueryTransactionRequest) (*TxResultResponse, error)
+	QueryTransaction(context.Context, *QueryTransactionRequest) (*app.TxResult, error)
 	// IBC stuff
 	GetBlock(context.Context, *GetBlockRequest) (*GetBlockResponse, error)
 	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
@@ -264,7 +255,7 @@ type GordianGRPCServer interface {
 	GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error)
 	GetTxSearch(context.Context, *GetTxSearchRequest) (*types.ResultTx, error)
 	GetTx(context.Context, *GetTxRequest) (*types.ResultTx, error)
-	DoBroadcastTxSync(context.Context, *DoBroadcastTxSyncRequest) (*types.ResultBroadcastTx, error)
+	SubmitTransactionSync(context.Context, *DoBroadcastTxSyncRequest) (*types.ResultBroadcastTx, error)
 	DoBroadcastTxAsync(context.Context, *DoBroadcastTxAsyncRequest) (*types.ResultBroadcastTx, error)
 	GetBlockSearch(context.Context, *GetBlockSearchRequest) (*types.ResultBlockSearch, error)
 	GetCommit(context.Context, *GetCommitRequest) (*types.ResultCommit, error)
@@ -280,9 +271,6 @@ type UnimplementedGordianGRPCServer struct {
 func (UnimplementedGordianGRPCServer) GetBlocksWatermark(context.Context, *CurrentBlockRequest) (*CurrentBlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlocksWatermark not implemented")
 }
-func (UnimplementedGordianGRPCServer) SubmitTransaction(context.Context, *SubmitTransactionRequest) (*TxResultResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SubmitTransaction not implemented")
-}
 func (UnimplementedGordianGRPCServer) SimulateTransaction(context.Context, *SubmitSimulationTransactionRequest) (*TxResultResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SimulateTransaction not implemented")
 }
@@ -292,7 +280,7 @@ func (UnimplementedGordianGRPCServer) PendingTransactions(context.Context, *Pend
 func (UnimplementedGordianGRPCServer) QueryAccountBalance(context.Context, *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryAccountBalance not implemented")
 }
-func (UnimplementedGordianGRPCServer) QueryTransaction(context.Context, *QueryTransactionRequest) (*TxResultResponse, error) {
+func (UnimplementedGordianGRPCServer) QueryTransaction(context.Context, *QueryTransactionRequest) (*app.TxResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryTransaction not implemented")
 }
 func (UnimplementedGordianGRPCServer) GetBlock(context.Context, *GetBlockRequest) (*GetBlockResponse, error) {
@@ -313,8 +301,8 @@ func (UnimplementedGordianGRPCServer) GetTxSearch(context.Context, *GetTxSearchR
 func (UnimplementedGordianGRPCServer) GetTx(context.Context, *GetTxRequest) (*types.ResultTx, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTx not implemented")
 }
-func (UnimplementedGordianGRPCServer) DoBroadcastTxSync(context.Context, *DoBroadcastTxSyncRequest) (*types.ResultBroadcastTx, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DoBroadcastTxSync not implemented")
+func (UnimplementedGordianGRPCServer) SubmitTransactionSync(context.Context, *DoBroadcastTxSyncRequest) (*types.ResultBroadcastTx, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitTransactionSync not implemented")
 }
 func (UnimplementedGordianGRPCServer) DoBroadcastTxAsync(context.Context, *DoBroadcastTxAsyncRequest) (*types.ResultBroadcastTx, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DoBroadcastTxAsync not implemented")
@@ -358,24 +346,6 @@ func _GordianGRPC_GetBlocksWatermark_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GordianGRPCServer).GetBlocksWatermark(ctx, req.(*CurrentBlockRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GordianGRPC_SubmitTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SubmitTransactionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GordianGRPCServer).SubmitTransaction(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: GordianGRPC_SubmitTransaction_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GordianGRPCServer).SubmitTransaction(ctx, req.(*SubmitTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -560,20 +530,20 @@ func _GordianGRPC_GetTx_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _GordianGRPC_DoBroadcastTxSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _GordianGRPC_SubmitTransactionSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DoBroadcastTxSyncRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GordianGRPCServer).DoBroadcastTxSync(ctx, in)
+		return srv.(GordianGRPCServer).SubmitTransactionSync(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GordianGRPC_DoBroadcastTxSync_FullMethodName,
+		FullMethod: GordianGRPC_SubmitTransactionSync_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GordianGRPCServer).DoBroadcastTxSync(ctx, req.(*DoBroadcastTxSyncRequest))
+		return srv.(GordianGRPCServer).SubmitTransactionSync(ctx, req.(*DoBroadcastTxSyncRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -680,10 +650,6 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _GordianGRPC_GetBlocksWatermark_Handler,
 		},
 		{
-			MethodName: "SubmitTransaction",
-			Handler:    _GordianGRPC_SubmitTransaction_Handler,
-		},
-		{
 			MethodName: "SimulateTransaction",
 			Handler:    _GordianGRPC_SimulateTransaction_Handler,
 		},
@@ -724,8 +690,8 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _GordianGRPC_GetTx_Handler,
 		},
 		{
-			MethodName: "DoBroadcastTxSync",
-			Handler:    _GordianGRPC_DoBroadcastTxSync_Handler,
+			MethodName: "SubmitTransactionSync",
+			Handler:    _GordianGRPC_SubmitTransactionSync_Handler,
 		},
 		{
 			MethodName: "DoBroadcastTxAsync",

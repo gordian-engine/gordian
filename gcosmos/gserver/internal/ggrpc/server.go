@@ -7,6 +7,7 @@ import (
 	"net"
 	sync "sync"
 
+	coreapp "cosmossdk.io/core/app"
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
 	abcitypes "github.com/cometbft/cometbft/abci/types"
@@ -43,7 +44,7 @@ type GordianGRPC struct {
 	txBuf *txmanager.SDKTxBuf
 	cdc   codec.Codec
 
-	txIdx     map[string]*TxResultResponse
+	txIdx     map[string]*coreapp.TxResult
 	txIdxLock sync.Mutex
 
 	done chan struct{}
@@ -85,7 +86,7 @@ func NewGordianGRPCServer(ctx context.Context, log *slog.Logger, cfg GRPCServerC
 
 		done: make(chan struct{}),
 	}
-	srv.txIdx = make(map[string]*TxResultResponse)
+	srv.txIdx = make(map[string]*coreapp.TxResult)
 
 	var opts []grpc.ServerOption
 	// TODO: configure grpc options (like TLS)
@@ -226,7 +227,9 @@ func (g *GordianGRPC) GetABCIQuery(context.Context, *GetABCIQueryRequest) (*GetA
 
 // GetTxSearch implements GordianGRPCServer.
 func (g *GordianGRPC) GetTxSearch(context.Context, *GetTxSearchRequest) (*coretypes.ResultTx, error) {
-	panic("unimplemented")
+	// TODO: this is slow anyways in the relayer, for now just reutnring nil
+	// panic("unimplemented")
+	return nil, nil
 }
 
 // DoBroadcastTxAsync implements GordianGRPCServer.
@@ -234,9 +237,61 @@ func (g *GordianGRPC) DoBroadcastTxAsync(context.Context, *DoBroadcastTxAsyncReq
 	panic("unimplemented")
 }
 
-// DoBroadcastTxSync implements GordianGRPCServer.
-func (g *GordianGRPC) DoBroadcastTxSync(context.Context, *DoBroadcastTxSyncRequest) (*coretypes.ResultBroadcastTx, error) {
-	panic("unimplemented")
+// SubmitTransactionSync implements GordianGRPCServer.
+func (g *GordianGRPC) SubmitTransactionSync(ctx context.Context, req *DoBroadcastTxSyncRequest) (*coretypes.ResultBroadcastTx, error) {
+	tx, err := g.txc.DecodeJSON(req.Tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode transaction: %w", err)
+	}
+
+	// TODO: add configurable timeout
+
+	res, err := g.am.ValidateTx(ctx, tx)
+	if err != nil {
+		// ValidateTx should only return an error at this level,
+		// if it failed to get state from the store.
+		return nil, fmt.Errorf("error attempting to validate transaction: %w", err)
+	}
+
+	if res.Error != nil {
+		// This is fine from the server's perspective, no need to log.
+		return &coretypes.ResultBroadcastTx{
+			Code: res.Code,
+			Log:  res.Error.Error(),
+		}, nil
+	}
+
+	// TODO: this gives us Tx events
+	res, _, simErr := g.am.Simulate(ctx, tx)
+	if simErr != nil {
+		return nil, fmt.Errorf("failed to simulate transaction: %w", err)
+	}
+
+	// If it passed basic validation, then we can attempt to add it to the buffer.
+	if err := g.txBuf.AddTx(ctx, tx); err != nil {
+		// We could potentially check if it is a TxInvalidError here
+		// and adjust the status code,
+		// but since this is a debug endpoint, we'll ignore the type.
+		return &coretypes.ResultBroadcastTx{
+			Code: res.Code,
+			Log:  err.Error(),
+		}, nil
+	}
+
+	h := tx.Hash()
+	hStr := fmt.Sprintf("%X", h)
+
+	g.txIdxLock.Lock()
+	g.txIdx[hStr] = &res
+	g.txIdxLock.Unlock()
+
+	return &coretypes.ResultBroadcastTx{
+		Code:      res.Code,
+		Data:      res.Data,
+		Log:       res.Log,
+		Codespace: res.Codespace,
+		Hash:      []byte(hStr),
+	}, nil
 }
 
 // GetABCIQueryWithOptions implements GordianGRPCServer.
@@ -255,7 +310,24 @@ func (g *GordianGRPC) GetCommit(context.Context, *GetCommitRequest) (*coretypes.
 }
 
 // GetTx implements GordianGRPCServer.
-func (g *GordianGRPC) GetTx(context.Context, *GetTxRequest) (*coretypes.ResultTx, error) {
+func (g *GordianGRPC) GetTx(ctx context.Context, req *GetTxRequest) (*coretypes.ResultTx, error) {
+	// TODO: query from the app state something like this, though this seems very wrong.
+
+	// GetGPRCMethodsToMessageMap ?
+
+	// key := []byte("hello")
+	// query := &abcitypes.QueryRequest{
+	// 	Path: "/store/main/key",
+	// 	Data: key,
+	// }
+
+	// g.am.QueryWithState()
+
+	// resp, err := g.am.Query(ctx, 0, query)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to query tx: %w", err)
+	// }
+
 	panic("unimplemented")
 }
 

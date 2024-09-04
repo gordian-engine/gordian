@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "proto/gordian/abci/types.proto";
+import "proto/gordian/core/app/types.proto";
 import "proto/gordian/rpc/core/types.proto";
 
 option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc";
@@ -12,7 +13,7 @@ service GordianGRPC {
     rpc GetBlocksWatermark(CurrentBlockRequest) returns (CurrentBlockResponse) {}
 
     // (DEBUG) SubmitTransaction submits a transaction to the network.
-    rpc SubmitTransaction(SubmitTransactionRequest) returns (TxResultResponse) {}
+    // rpc SubmitTransaction(SubmitTransactionRequest) returns (TxResultResponse) {} // Now SubmitTransactionSync
     // (DEBUG) SimulateTransaction submits and simulates a transaction.
     rpc SimulateTransaction(SubmitSimulationTransactionRequest) returns (TxResultResponse) {}
     // (DEBUG) PendingTransactions returns the pending transactions in JSON form.
@@ -20,7 +21,7 @@ service GordianGRPC {
     // (DEBUG) QueryAccountBalance returns the balance of an account.
     rpc QueryAccountBalance(QueryAccountBalanceRequest) returns (QueryAccountBalanceResponse) {}
 
-    rpc QueryTransaction(QueryTransactionRequest) returns (TxResultResponse) {}
+    rpc QueryTransaction(QueryTransactionRequest) returns (gordian.core.app.TxResult) {}
 
     // IBC stuff
     rpc GetBlock(GetBlockRequest) returns (GetBlockResponse) {}
@@ -32,7 +33,7 @@ service GordianGRPC {
     rpc GetTxSearch(GetTxSearchRequest) returns (gordian.rpc.core.ResultTx) {}
     rpc GetTx(GetTxRequest) returns (gordian.rpc.core.ResultTx) {}
 
-    rpc DoBroadcastTxSync(DoBroadcastTxSyncRequest) returns (gordian.rpc.core.ResultBroadcastTx) {}
+    rpc SubmitTransactionSync(DoBroadcastTxSyncRequest) returns (gordian.rpc.core.ResultBroadcastTx) {}
     rpc DoBroadcastTxAsync(DoBroadcastTxAsyncRequest) returns (gordian.rpc.core.ResultBroadcastTx) {}
     rpc GetBlockSearch(GetBlockSearchRequest) returns (gordian.rpc.core.ResultBlockSearch) {}
     rpc GetCommit(GetCommitRequest) returns (gordian.rpc.core.ResultCommit) {}
