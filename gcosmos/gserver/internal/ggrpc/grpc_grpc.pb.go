@@ -8,6 +8,7 @@ package ggrpc
 
 import (
 	context "context"
+	types "github.com/cometbft/cometbft/rpc/core/types"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -19,14 +20,24 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	GordianGRPC_GetBlocksWatermark_FullMethodName  = "/gordian.server.v1.GordianGRPC/GetBlocksWatermark"
-	GordianGRPC_GetValidators_FullMethodName       = "/gordian.server.v1.GordianGRPC/GetValidators"
-	GordianGRPC_SubmitTransaction_FullMethodName   = "/gordian.server.v1.GordianGRPC/SubmitTransaction"
-	GordianGRPC_SimulateTransaction_FullMethodName = "/gordian.server.v1.GordianGRPC/SimulateTransaction"
-	GordianGRPC_PendingTransactions_FullMethodName = "/gordian.server.v1.GordianGRPC/PendingTransactions"
-	GordianGRPC_QueryAccountBalance_FullMethodName = "/gordian.server.v1.GordianGRPC/QueryAccountBalance"
-	GordianGRPC_QueryTransaction_FullMethodName    = "/gordian.server.v1.GordianGRPC/QueryTransaction"
-	GordianGRPC_GetBlock_FullMethodName            = "/gordian.server.v1.GordianGRPC/GetBlock"
+	GordianGRPC_GetBlocksWatermark_FullMethodName      = "/gordian.server.v1.GordianGRPC/GetBlocksWatermark"
+	GordianGRPC_SubmitTransaction_FullMethodName       = "/gordian.server.v1.GordianGRPC/SubmitTransaction"
+	GordianGRPC_SimulateTransaction_FullMethodName     = "/gordian.server.v1.GordianGRPC/SimulateTransaction"
+	GordianGRPC_PendingTransactions_FullMethodName     = "/gordian.server.v1.GordianGRPC/PendingTransactions"
+	GordianGRPC_QueryAccountBalance_FullMethodName     = "/gordian.server.v1.GordianGRPC/QueryAccountBalance"
+	GordianGRPC_QueryTransaction_FullMethodName        = "/gordian.server.v1.GordianGRPC/QueryTransaction"
+	GordianGRPC_GetBlock_FullMethodName                = "/gordian.server.v1.GordianGRPC/GetBlock"
+	GordianGRPC_GetStatus_FullMethodName               = "/gordian.server.v1.GordianGRPC/GetStatus"
+	GordianGRPC_GetBlockResults_FullMethodName         = "/gordian.server.v1.GordianGRPC/GetBlockResults"
+	GordianGRPC_GetValidators_FullMethodName           = "/gordian.server.v1.GordianGRPC/GetValidators"
+	GordianGRPC_GetTxSearch_FullMethodName             = "/gordian.server.v1.GordianGRPC/GetTxSearch"
+	GordianGRPC_GetTx_FullMethodName                   = "/gordian.server.v1.GordianGRPC/GetTx"
+	GordianGRPC_DoBroadcastTxSync_FullMethodName       = "/gordian.server.v1.GordianGRPC/DoBroadcastTxSync"
+	GordianGRPC_DoBroadcastTxAsync_FullMethodName      = "/gordian.server.v1.GordianGRPC/DoBroadcastTxAsync"
+	GordianGRPC_GetBlockSearch_FullMethodName          = "/gordian.server.v1.GordianGRPC/GetBlockSearch"
+	GordianGRPC_GetCommit_FullMethodName               = "/gordian.server.v1.GordianGRPC/GetCommit"
+	GordianGRPC_GetABCIQuery_FullMethodName            = "/gordian.server.v1.GordianGRPC/GetABCIQuery"
+	GordianGRPC_GetABCIQueryWithOptions_FullMethodName = "/gordian.server.v1.GordianGRPC/GetABCIQueryWithOptions"
 )
 
 // GordianGRPCClient is the client API for GordianGRPC service.
@@ -35,8 +46,6 @@ const (
 type GordianGRPCClient interface {
 	// GetBlocksWatermark returns the current block information.
 	GetBlocksWatermark(ctx context.Context, in *CurrentBlockRequest, opts ...grpc.CallOption) (*CurrentBlockResponse, error)
-	// GetValidators returns the validator set.
-	GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error)
 	// (DEBUG) SubmitTransaction submits a transaction to the network.
 	SubmitTransaction(ctx context.Context, in *SubmitTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
 	// (DEBUG) SimulateTransaction submits and simulates a transaction.
@@ -46,7 +55,20 @@ type GordianGRPCClient interface {
 	// (DEBUG) QueryAccountBalance returns the balance of an account.
 	QueryAccountBalance(ctx context.Context, in *QueryAccountBalanceRequest, opts ...grpc.CallOption) (*QueryAccountBalanceResponse, error)
 	QueryTransaction(ctx context.Context, in *QueryTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
+	// IBC stuff
 	GetBlock(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (*GetBlockResponse, error)
+	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
+	GetBlockResults(ctx context.Context, in *GetBlockResultsRequest, opts ...grpc.CallOption) (*BlockResults, error)
+	// GetValidators returns the validator set.
+	GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error)
+	GetTxSearch(ctx context.Context, in *GetTxSearchRequest, opts ...grpc.CallOption) (*types.ResultTx, error)
+	GetTx(ctx context.Context, in *GetTxRequest, opts ...grpc.CallOption) (*types.ResultTx, error)
+	DoBroadcastTxSync(ctx context.Context, in *DoBroadcastTxSyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error)
+	DoBroadcastTxAsync(ctx context.Context, in *DoBroadcastTxAsyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error)
+	GetBlockSearch(ctx context.Context, in *GetBlockSearchRequest, opts ...grpc.CallOption) (*types.ResultBlockSearch, error)
+	GetCommit(ctx context.Context, in *GetCommitRequest, opts ...grpc.CallOption) (*types.ResultCommit, error)
+	GetABCIQuery(ctx context.Context, in *GetABCIQueryRequest, opts ...grpc.CallOption) (*GetABCIQueryResponse, error)
+	GetABCIQueryWithOptions(ctx context.Context, in *GetABCIQueryWithOptsRequest, opts ...grpc.CallOption) (*types.ResultABCIQuery, error)
 }
 
 type gordianGRPCClient struct {
@@ -60,15 +82,6 @@ func NewGordianGRPCClient(cc grpc.ClientConnInterface) GordianGRPCClient {
 func (c *gordianGRPCClient) GetBlocksWatermark(ctx context.Context, in *CurrentBlockRequest, opts ...grpc.CallOption) (*CurrentBlockResponse, error) {
 	out := new(CurrentBlockResponse)
 	err := c.cc.Invoke(ctx, GordianGRPC_GetBlocksWatermark_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gordianGRPCClient) GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error) {
-	out := new(GetValidatorsResponse)
-	err := c.cc.Invoke(ctx, GordianGRPC_GetValidators_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,14 +142,111 @@ func (c *gordianGRPCClient) GetBlock(ctx context.Context, in *GetBlockRequest, o
 	return out, nil
 }
 
+func (c *gordianGRPCClient) GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error) {
+	out := new(GetStatusResponse)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetBlockResults(ctx context.Context, in *GetBlockResultsRequest, opts ...grpc.CallOption) (*BlockResults, error) {
+	out := new(BlockResults)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetBlockResults_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetValidators(ctx context.Context, in *GetValidatorsRequest, opts ...grpc.CallOption) (*GetValidatorsResponse, error) {
+	out := new(GetValidatorsResponse)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetValidators_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetTxSearch(ctx context.Context, in *GetTxSearchRequest, opts ...grpc.CallOption) (*types.ResultTx, error) {
+	out := new(types.ResultTx)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetTxSearch_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetTx(ctx context.Context, in *GetTxRequest, opts ...grpc.CallOption) (*types.ResultTx, error) {
+	out := new(types.ResultTx)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetTx_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) DoBroadcastTxSync(ctx context.Context, in *DoBroadcastTxSyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error) {
+	out := new(types.ResultBroadcastTx)
+	err := c.cc.Invoke(ctx, GordianGRPC_DoBroadcastTxSync_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) DoBroadcastTxAsync(ctx context.Context, in *DoBroadcastTxAsyncRequest, opts ...grpc.CallOption) (*types.ResultBroadcastTx, error) {
+	out := new(types.ResultBroadcastTx)
+	err := c.cc.Invoke(ctx, GordianGRPC_DoBroadcastTxAsync_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetBlockSearch(ctx context.Context, in *GetBlockSearchRequest, opts ...grpc.CallOption) (*types.ResultBlockSearch, error) {
+	out := new(types.ResultBlockSearch)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetBlockSearch_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetCommit(ctx context.Context, in *GetCommitRequest, opts ...grpc.CallOption) (*types.ResultCommit, error) {
+	out := new(types.ResultCommit)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetCommit_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetABCIQuery(ctx context.Context, in *GetABCIQueryRequest, opts ...grpc.CallOption) (*GetABCIQueryResponse, error) {
+	out := new(GetABCIQueryResponse)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetABCIQuery_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gordianGRPCClient) GetABCIQueryWithOptions(ctx context.Context, in *GetABCIQueryWithOptsRequest, opts ...grpc.CallOption) (*types.ResultABCIQuery, error) {
+	out := new(types.ResultABCIQuery)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetABCIQueryWithOptions_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GordianGRPCServer is the server API for GordianGRPC service.
 // All implementations must embed UnimplementedGordianGRPCServer
 // for forward compatibility
 type GordianGRPCServer interface {
 	// GetBlocksWatermark returns the current block information.
 	GetBlocksWatermark(context.Context, *CurrentBlockRequest) (*CurrentBlockResponse, error)
-	// GetValidators returns the validator set.
-	GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error)
 	// (DEBUG) SubmitTransaction submits a transaction to the network.
 	SubmitTransaction(context.Context, *SubmitTransactionRequest) (*TxResultResponse, error)
 	// (DEBUG) SimulateTransaction submits and simulates a transaction.
@@ -146,7 +256,20 @@ type GordianGRPCServer interface {
 	// (DEBUG) QueryAccountBalance returns the balance of an account.
 	QueryAccountBalance(context.Context, *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error)
 	QueryTransaction(context.Context, *QueryTransactionRequest) (*TxResultResponse, error)
+	// IBC stuff
 	GetBlock(context.Context, *GetBlockRequest) (*GetBlockResponse, error)
+	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
+	GetBlockResults(context.Context, *GetBlockResultsRequest) (*BlockResults, error)
+	// GetValidators returns the validator set.
+	GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error)
+	GetTxSearch(context.Context, *GetTxSearchRequest) (*types.ResultTx, error)
+	GetTx(context.Context, *GetTxRequest) (*types.ResultTx, error)
+	DoBroadcastTxSync(context.Context, *DoBroadcastTxSyncRequest) (*types.ResultBroadcastTx, error)
+	DoBroadcastTxAsync(context.Context, *DoBroadcastTxAsyncRequest) (*types.ResultBroadcastTx, error)
+	GetBlockSearch(context.Context, *GetBlockSearchRequest) (*types.ResultBlockSearch, error)
+	GetCommit(context.Context, *GetCommitRequest) (*types.ResultCommit, error)
+	GetABCIQuery(context.Context, *GetABCIQueryRequest) (*GetABCIQueryResponse, error)
+	GetABCIQueryWithOptions(context.Context, *GetABCIQueryWithOptsRequest) (*types.ResultABCIQuery, error)
 	mustEmbedUnimplementedGordianGRPCServer()
 }
 
@@ -156,9 +279,6 @@ type UnimplementedGordianGRPCServer struct {
 
 func (UnimplementedGordianGRPCServer) GetBlocksWatermark(context.Context, *CurrentBlockRequest) (*CurrentBlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlocksWatermark not implemented")
-}
-func (UnimplementedGordianGRPCServer) GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetValidators not implemented")
 }
 func (UnimplementedGordianGRPCServer) SubmitTransaction(context.Context, *SubmitTransactionRequest) (*TxResultResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitTransaction not implemented")
@@ -177,6 +297,39 @@ func (UnimplementedGordianGRPCServer) QueryTransaction(context.Context, *QueryTr
 }
 func (UnimplementedGordianGRPCServer) GetBlock(context.Context, *GetBlockRequest) (*GetBlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlock not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetBlockResults(context.Context, *GetBlockResultsRequest) (*BlockResults, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBlockResults not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetValidators(context.Context, *GetValidatorsRequest) (*GetValidatorsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetValidators not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetTxSearch(context.Context, *GetTxSearchRequest) (*types.ResultTx, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTxSearch not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetTx(context.Context, *GetTxRequest) (*types.ResultTx, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTx not implemented")
+}
+func (UnimplementedGordianGRPCServer) DoBroadcastTxSync(context.Context, *DoBroadcastTxSyncRequest) (*types.ResultBroadcastTx, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DoBroadcastTxSync not implemented")
+}
+func (UnimplementedGordianGRPCServer) DoBroadcastTxAsync(context.Context, *DoBroadcastTxAsyncRequest) (*types.ResultBroadcastTx, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DoBroadcastTxAsync not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetBlockSearch(context.Context, *GetBlockSearchRequest) (*types.ResultBlockSearch, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBlockSearch not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetCommit(context.Context, *GetCommitRequest) (*types.ResultCommit, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCommit not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetABCIQuery(context.Context, *GetABCIQueryRequest) (*GetABCIQueryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetABCIQuery not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetABCIQueryWithOptions(context.Context, *GetABCIQueryWithOptsRequest) (*types.ResultABCIQuery, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetABCIQueryWithOptions not implemented")
 }
 func (UnimplementedGordianGRPCServer) mustEmbedUnimplementedGordianGRPCServer() {}
 
@@ -205,24 +358,6 @@ func _GordianGRPC_GetBlocksWatermark_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GordianGRPCServer).GetBlocksWatermark(ctx, req.(*CurrentBlockRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GordianGRPC_GetValidators_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetValidatorsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GordianGRPCServer).GetValidators(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: GordianGRPC_GetValidators_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GordianGRPCServer).GetValidators(ctx, req.(*GetValidatorsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -335,6 +470,204 @@ func _GordianGRPC_GetBlock_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GordianGRPC_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetStatus(ctx, req.(*GetStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetBlockResults_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBlockResultsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetBlockResults(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetBlockResults_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetBlockResults(ctx, req.(*GetBlockResultsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetValidators_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetValidatorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetValidators(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetValidators_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetValidators(ctx, req.(*GetValidatorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetTxSearch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTxSearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetTxSearch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetTxSearch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetTxSearch(ctx, req.(*GetTxSearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetTx_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetTx(ctx, req.(*GetTxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_DoBroadcastTxSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DoBroadcastTxSyncRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).DoBroadcastTxSync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_DoBroadcastTxSync_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).DoBroadcastTxSync(ctx, req.(*DoBroadcastTxSyncRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_DoBroadcastTxAsync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DoBroadcastTxAsyncRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).DoBroadcastTxAsync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_DoBroadcastTxAsync_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).DoBroadcastTxAsync(ctx, req.(*DoBroadcastTxAsyncRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetBlockSearch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBlockSearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetBlockSearch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetBlockSearch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetBlockSearch(ctx, req.(*GetBlockSearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetCommit(ctx, req.(*GetCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetABCIQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetABCIQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetABCIQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetABCIQuery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetABCIQuery(ctx, req.(*GetABCIQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GordianGRPC_GetABCIQueryWithOptions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetABCIQueryWithOptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetABCIQueryWithOptions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetABCIQueryWithOptions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetABCIQueryWithOptions(ctx, req.(*GetABCIQueryWithOptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GordianGRPC_ServiceDesc is the grpc.ServiceDesc for GordianGRPC service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -345,10 +678,6 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBlocksWatermark",
 			Handler:    _GordianGRPC_GetBlocksWatermark_Handler,
-		},
-		{
-			MethodName: "GetValidators",
-			Handler:    _GordianGRPC_GetValidators_Handler,
 		},
 		{
 			MethodName: "SubmitTransaction",
@@ -373,6 +702,50 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBlock",
 			Handler:    _GordianGRPC_GetBlock_Handler,
+		},
+		{
+			MethodName: "GetStatus",
+			Handler:    _GordianGRPC_GetStatus_Handler,
+		},
+		{
+			MethodName: "GetBlockResults",
+			Handler:    _GordianGRPC_GetBlockResults_Handler,
+		},
+		{
+			MethodName: "GetValidators",
+			Handler:    _GordianGRPC_GetValidators_Handler,
+		},
+		{
+			MethodName: "GetTxSearch",
+			Handler:    _GordianGRPC_GetTxSearch_Handler,
+		},
+		{
+			MethodName: "GetTx",
+			Handler:    _GordianGRPC_GetTx_Handler,
+		},
+		{
+			MethodName: "DoBroadcastTxSync",
+			Handler:    _GordianGRPC_DoBroadcastTxSync_Handler,
+		},
+		{
+			MethodName: "DoBroadcastTxAsync",
+			Handler:    _GordianGRPC_DoBroadcastTxAsync_Handler,
+		},
+		{
+			MethodName: "GetBlockSearch",
+			Handler:    _GordianGRPC_GetBlockSearch_Handler,
+		},
+		{
+			MethodName: "GetCommit",
+			Handler:    _GordianGRPC_GetCommit_Handler,
+		},
+		{
+			MethodName: "GetABCIQuery",
+			Handler:    _GordianGRPC_GetABCIQuery_Handler,
+		},
+		{
+			MethodName: "GetABCIQueryWithOptions",
+			Handler:    _GordianGRPC_GetABCIQueryWithOptions_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

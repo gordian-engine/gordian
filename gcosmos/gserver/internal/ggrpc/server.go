@@ -9,6 +9,8 @@ import (
 
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
+	abcitypes "github.com/cometbft/cometbft/abci/types"
+	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
@@ -166,6 +168,7 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 }
 
 // GetBlock implements GordianGRPCServer.
+// TODO: rename to GetHeader (return more info in the future, for now just time is required)
 func (g *GordianGRPC) GetBlock(ctx context.Context, req *GetBlockRequest) (*GetBlockResponse, error) {
 	b, err := g.bs.LoadBlock(ctx, req.Height)
 	if err != nil {
@@ -185,6 +188,75 @@ func (g *GordianGRPC) GetBlock(ctx context.Context, req *GetBlockRequest) (*GetB
 	return &GetBlockResponse{
 		Time: uint64(blockTime.Nanosecond()),
 	}, nil
+}
+
+// GetStatus implements GordianGRPCServer.
+func (g *GordianGRPC) GetStatus(ctx context.Context, req *GetStatusRequest) (*GetStatusResponse, error) {
+	_, _, ch, _, err := g.ms.NetworkHeightRound(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get network height and round: %w", err)
+	}
+
+	b, err := g.bs.LoadBlock(context.Background(), ch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load block: %w", err)
+	}
+
+	// TODO: check if we are catching up (mirror?)
+	return &GetStatusResponse{
+		CatchingUp:        false,
+		LatestBlockHeight: b.Block.Height,
+	}, nil
+}
+
+// GetBlockResults implements GordianGRPCServer.
+func (g *GordianGRPC) GetBlockResults(ctx context.Context, req *GetBlockResultsRequest) (*BlockResults, error) {
+	// TODO: how to read this from the app store?
+	return &BlockResults{
+		Height:              req.Height,
+		TxsResults:          []*abcitypes.ExecTxResult{},
+		FinalizeBlockEvents: []*abcitypes.Event{},
+	}, fmt.Errorf("not implemented")
+}
+
+// GetABCIQuery implements GordianGRPCServer.
+func (g *GordianGRPC) GetABCIQuery(context.Context, *GetABCIQueryRequest) (*GetABCIQueryResponse, error) {
+	panic("unimplemented")
+}
+
+// GetTxSearch implements GordianGRPCServer.
+func (g *GordianGRPC) GetTxSearch(context.Context, *GetTxSearchRequest) (*coretypes.ResultTx, error) {
+	panic("unimplemented")
+}
+
+// DoBroadcastTxAsync implements GordianGRPCServer.
+func (g *GordianGRPC) DoBroadcastTxAsync(context.Context, *DoBroadcastTxAsyncRequest) (*coretypes.ResultBroadcastTx, error) {
+	panic("unimplemented")
+}
+
+// DoBroadcastTxSync implements GordianGRPCServer.
+func (g *GordianGRPC) DoBroadcastTxSync(context.Context, *DoBroadcastTxSyncRequest) (*coretypes.ResultBroadcastTx, error) {
+	panic("unimplemented")
+}
+
+// GetABCIQueryWithOptions implements GordianGRPCServer.
+func (g *GordianGRPC) GetABCIQueryWithOptions(context.Context, *GetABCIQueryWithOptsRequest) (*coretypes.ResultABCIQuery, error) {
+	panic("unimplemented")
+}
+
+// GetBlockSearch implements GordianGRPCServer.
+func (g *GordianGRPC) GetBlockSearch(context.Context, *GetBlockSearchRequest) (*coretypes.ResultBlockSearch, error) {
+	panic("unimplemented")
+}
+
+// GetCommit implements GordianGRPCServer.
+func (g *GordianGRPC) GetCommit(context.Context, *GetCommitRequest) (*coretypes.ResultCommit, error) {
+	panic("unimplemented")
+}
+
+// GetTx implements GordianGRPCServer.
+func (g *GordianGRPC) GetTx(context.Context, *GetTxRequest) (*coretypes.ResultTx, error) {
+	panic("unimplemented")
 }
 
 func Pointy[T any](x T) *T {

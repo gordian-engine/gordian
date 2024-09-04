@@ -1,5 +1,8 @@
 syntax = "proto3";
 
+import "proto/gordian/abci/types.proto";
+import "proto/gordian/rpc/core/types.proto";
+
 option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc";
 
 package gordian.server.v1;
@@ -7,8 +10,6 @@ package gordian.server.v1;
 service GordianGRPC {
     // GetBlocksWatermark returns the current block information.
     rpc GetBlocksWatermark(CurrentBlockRequest) returns (CurrentBlockResponse) {}
-    // GetValidators returns the validator set.
-    rpc GetValidators(GetValidatorsRequest) returns (GetValidatorsResponse) {}
 
     // (DEBUG) SubmitTransaction submits a transaction to the network.
     rpc SubmitTransaction(SubmitTransactionRequest) returns (TxResultResponse) {}
@@ -21,7 +22,35 @@ service GordianGRPC {
 
     rpc QueryTransaction(QueryTransactionRequest) returns (TxResultResponse) {}
 
+    // IBC stuff
     rpc GetBlock(GetBlockRequest) returns (GetBlockResponse) {}
+    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+    rpc GetBlockResults(GetBlockResultsRequest) returns (BlockResults) {}
+    // GetValidators returns the validator set.
+    rpc GetValidators(GetValidatorsRequest) returns (GetValidatorsResponse) {}
+
+    rpc GetTxSearch(GetTxSearchRequest) returns (gordian.rpc.core.ResultTx) {}
+    rpc GetTx(GetTxRequest) returns (gordian.rpc.core.ResultTx) {}
+
+    rpc DoBroadcastTxSync(DoBroadcastTxSyncRequest) returns (gordian.rpc.core.ResultBroadcastTx) {}
+    rpc DoBroadcastTxAsync(DoBroadcastTxAsyncRequest) returns (gordian.rpc.core.ResultBroadcastTx) {}
+    rpc GetBlockSearch(GetBlockSearchRequest) returns (gordian.rpc.core.ResultBlockSearch) {}
+    rpc GetCommit(GetCommitRequest) returns (gordian.rpc.core.ResultCommit) {}
+    rpc GetABCIQuery(GetABCIQueryRequest) returns (GetABCIQueryResponse) {}
+    rpc GetABCIQueryWithOptions(GetABCIQueryWithOptsRequest) returns (gordian.rpc.core.ResultABCIQuery) {}
+
+}
+
+message GetCommitRequest {
+    uint64 height = 1;
+}
+
+
+message GetBlockSearchRequest {
+    string query = 1;
+    uint64 page = 2;
+    uint64 per_page = 3;
+    string order_by = 4;
 }
 
 message GetBlockRequest {
@@ -30,6 +59,66 @@ message GetBlockRequest {
 message GetBlockResponse {
     uint64 time = 1; // nanoseconds
 }
+
+message GetStatusRequest {}
+message GetStatusResponse {
+    bool catching_up = 1;
+    uint64 latest_block_height = 2;
+}
+
+// GetBlockResults
+message GetBlockResultsRequest {
+    uint64 height = 1;
+}
+
+// ExecTxResult
+message BlockResults {
+    uint64 height = 1;
+    repeated gordian.abci.ExecTxResult txs_results = 2;
+    repeated gordian.abci.Event finalize_block_events = 3;
+    string app_hash = 4;
+}
+
+message GetABCIQueryRequest {
+    // latest height
+    string path = 1;
+    bytes data = 2;
+}
+message GetABCIQueryResponse {
+    uint32 code = 1;
+    bytes value = 2;
+}
+
+message GetABCIQueryWithOptsRequest {
+    string path = 1;
+    bytes data = 2;
+
+    uint64 height = 3;
+    bool prove = 4;
+}
+
+message GetTxSearchRequest {
+    string query = 1;
+    uint64 page = 2;
+    uint64 per_page = 3;
+    bool prove = 4;
+    string order_by = 5;
+}
+
+message DoBroadcastTxSyncRequest {
+    bytes tx = 1;
+}
+
+message DoBroadcastTxAsyncRequest {
+    bytes tx = 1;
+}
+
+message GetTxRequest {
+    bytes hash = 1;
+    bool prove = 2;
+}
+
+// -----------------
 
 
 message CurrentBlockRequest {}
@@ -68,16 +157,8 @@ message PendingTransactionsResponse {
 
 // cosmos-sdk/core/app/app.go#TxResult
 // TODO: import this directly from the SDK? or use our own?
-message Attribute {
-    string key = 1;
-    string value = 2;
-}
-message Event {
-    string type = 1;
-    repeated Attribute attributes = 2;
-}
 message TxResultResponse {
-    repeated Event events = 1 [json_name="events"];
+    repeated gordian.abci.Event events = 1 [json_name="events"];
     // bytes resp = 2; //  []transaction.Msg
     string error = 3 [json_name="error"];
     uint32 code = 4 [json_name="code"];

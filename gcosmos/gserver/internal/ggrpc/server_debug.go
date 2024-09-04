@@ -10,6 +10,7 @@ import (
 	appmanager "cosmossdk.io/core/app"
 	"cosmossdk.io/core/event"
 	banktypes "cosmossdk.io/x/bank/types"
+	abcitypes "github.com/cometbft/cometbft/abci/types"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 )
@@ -182,20 +183,20 @@ func getGordianResponseFromSDKResult(res appmanager.TxResult) *TxResultResponse 
 }
 
 // convertEvent converts from the cosmos-sdk core event type to the gRPC proto event.
-func convertEvent(e []event.Event) []*Event {
-	events := make([]*Event, len(e))
+func convertEvent(e []event.Event) []*abcitypes.Event {
+	events := make([]*abcitypes.Event, len(e))
 	for i, ev := range e {
-		attr := make([]*Attribute, len(ev.Attributes))
+		attrs := make([]abcitypes.EventAttribute, len(ev.Attributes))
 		for j, a := range ev.Attributes {
-			attr[j] = &Attribute{
+			attrs[j] = abcitypes.EventAttribute{
 				Key:   a.Key,
 				Value: a.Value,
 			}
 		}
 
-		events[i] = &Event{
+		events[i] = &abcitypes.Event{
 			Type:       ev.Type,
-			Attributes: attr,
+			Attributes: attrs,
 		}
 	}
 	return events
