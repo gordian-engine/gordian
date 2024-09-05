@@ -1,9 +1,5 @@
 syntax = "proto3";
 
-import "proto/gordian/abci/types.proto";
-import "proto/gordian/core/app/types.proto";
-import "proto/gordian/rpc/core/types.proto";
-
 option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc";
 
 package gordian.server.v1;
@@ -15,32 +11,36 @@ service GordianGRPC {
     // (DEBUG) SubmitTransaction submits a transaction to the network.
     // rpc SubmitTransaction(SubmitTransactionRequest) returns (TxResultResponse) {} // Now SubmitTransactionSync
     // (DEBUG) SimulateTransaction submits and simulates a transaction.
-    rpc SimulateTransaction(SubmitSimulationTransactionRequest) returns (TxResultResponse) {}
+    rpc SimulateTransaction(SubmitSimulationTransactionRequest) returns (TxResultResponse) {} // TODO: use proper resp
+    // rpc SimulateTransaction(SubmitSimulationTransactionRequest) returns (TxResult) {} // TODO: use proper resp
     // (DEBUG) PendingTransactions returns the pending transactions in JSON form.
     rpc PendingTransactions(PendingTransactionsRequest) returns (PendingTransactionsResponse) {}
     // (DEBUG) QueryAccountBalance returns the balance of an account.
     rpc QueryAccountBalance(QueryAccountBalanceRequest) returns (QueryAccountBalanceResponse) {}
 
-    rpc QueryTransaction(QueryTransactionRequest) returns (gordian.core.app.TxResult) {}
+    rpc QueryTransaction(QueryTransactionRequest) returns (TxResultResponse) {}
 
     // IBC stuff
     rpc GetBlock(GetBlockRequest) returns (GetBlockResponse) {}
     rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
     rpc GetBlockResults(GetBlockResultsRequest) returns (BlockResults) {}
-    // GetValidators returns the validator set.
     rpc GetValidators(GetValidatorsRequest) returns (GetValidatorsResponse) {}
 
-    rpc GetTxSearch(GetTxSearchRequest) returns (gordian.rpc.core.ResultTx) {}
-    rpc GetTx(GetTxRequest) returns (gordian.rpc.core.ResultTx) {}
 
-    rpc SubmitTransactionSync(DoBroadcastTxSyncRequest) returns (gordian.rpc.core.ResultBroadcastTx) {}
-    rpc DoBroadcastTxAsync(DoBroadcastTxAsyncRequest) returns (gordian.rpc.core.ResultBroadcastTx) {}
-    rpc GetBlockSearch(GetBlockSearchRequest) returns (gordian.rpc.core.ResultBlockSearch) {}
-    rpc GetCommit(GetCommitRequest) returns (gordian.rpc.core.ResultCommit) {}
+    rpc SubmitTransactionSync(DoBroadcastTxSyncRequest) returns (TxResultResponse) {}
     rpc GetABCIQuery(GetABCIQueryRequest) returns (GetABCIQueryResponse) {}
-    rpc GetABCIQueryWithOptions(GetABCIQueryWithOptsRequest) returns (gordian.rpc.core.ResultABCIQuery) {}
+    rpc GetTxSearch(GetTxSearchRequest) returns (TxResultResponseList) {}
+
+    // TODO:
+    // rpc DoBroadcastTxAsync(DoBroadcastTxAsyncRequest) returns (TxResultResponse) {}
+    // rpc GetABCIQueryWithOptions(GetABCIQueryWithOptsRequest) returns (gordian.rpc.core.ResultABCIQuery) {} // resp is similat to TxResultResponse
+    // rpc GetCommit(GetCommitRequest) returns (gordian.rpc.core.ResultCommit) {}
+    // rpc GetBlockSearch(GetBlockSearchRequest) returns (gordian.rpc.core.ResultBlockSearch) {} // TODO:
 
 }
+
+// make TxResult type cosmossdk.io/core/app.TxResult
+
 
 message GetCommitRequest {
     uint64 height = 1;
@@ -75,8 +75,8 @@ message GetBlockResultsRequest {
 // ExecTxResult
 message BlockResults {
     uint64 height = 1;
-    repeated gordian.abci.ExecTxResult txs_results = 2;
-    repeated gordian.abci.Event finalize_block_events = 3;
+    repeated TxResultResponse txs_results = 2;
+    repeated Event finalize_block_events = 3;
     string app_hash = 4;
 }
 
@@ -106,6 +106,11 @@ message GetTxSearchRequest {
     string order_by = 5;
 }
 
+message TxResultResponseList {
+    // add pagination
+    repeated TxResultResponse txs_results = 1;
+}
+
 message DoBroadcastTxSyncRequest {
     bytes tx = 1;
 }
@@ -115,7 +120,7 @@ message DoBroadcastTxAsyncRequest {
 }
 
 message GetTxRequest {
-    bytes hash = 1;
+    string tx_hash = 1;
     bool prove = 2;
 }
 
@@ -159,7 +164,7 @@ message PendingTransactionsResponse {
 // cosmos-sdk/core/app/app.go#TxResult
 // TODO: import this directly from the SDK? or use our own?
 message TxResultResponse {
-    repeated gordian.abci.Event events = 1 [json_name="events"];
+    repeated Event events = 1 [json_name="events"];
     // bytes resp = 2; //  []transaction.Msg
     string error = 3 [json_name="error"];
     uint32 code = 4 [json_name="code"];
@@ -171,6 +176,17 @@ message TxResultResponse {
     string codespace = 10 [json_name="codespace"];
     string tx_hash = 11 [json_name="tx_hash"];
 }
+
+message Event {
+    string type = 1;
+    repeated EventAttribute attributes = 2;
+}
+
+message EventAttribute {
+    string key = 1;
+    string value = 2;
+}
+
 
 
 message BalanceResponse {
