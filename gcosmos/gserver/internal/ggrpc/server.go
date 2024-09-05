@@ -142,12 +142,16 @@ func (g *GordianGRPC) GetBlocksWatermark(ctx context.Context, req *CurrentBlockR
 
 // GetValidators implements GordianGRPCServer.
 func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsRequest) (*GetValidatorsResponse, error) {
-	_, _, committingHeight, _, err := g.ms.NetworkHeightRound(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get network height and round: %w", err)
+	height := req.Height
+	if height == 0 {
+		_, _, committingHeight, _, err := g.ms.NetworkHeightRound(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get network height and round: %w", err)
+		}
+		height = committingHeight
 	}
 
-	_, _, vals, _, err := g.fs.LoadFinalizationByHeight(ctx, committingHeight)
+	_, _, vals, _, err := g.fs.LoadFinalizationByHeight(ctx, height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load finalization by height: %w", err)
 	}
@@ -161,7 +165,7 @@ func (g *GordianGRPC) GetValidators(ctx context.Context, req *GetValidatorsReque
 	}
 
 	return &GetValidatorsResponse{
-		FinalizationHeight: Pointy(committingHeight),
+		FinalizationHeight: Pointy(height),
 		Validators:         jsonValidators,
 	}, nil
 }
@@ -179,13 +183,14 @@ func (g *GordianGRPC) GetBlock(ctx context.Context, req *GetBlockRequest) (*GetB
 		return nil, fmt.Errorf("failed to parse block annotation: %w", err)
 	}
 
+	// TODO: height 1 always returns a very wrong time at genesis. (1980s)
 	blockTime, err := a.BlockTimeAsTime()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse block time: %w", err)
 	}
 
 	return &GetBlockResponse{
-		Time: uint64(blockTime.Nanosecond()),
+		Time: uint64(blockTime.Unix()),
 	}, nil
 }
 
@@ -196,7 +201,7 @@ func (g *GordianGRPC) GetStatus(ctx context.Context, req *GetStatusRequest) (*Ge
 		return nil, fmt.Errorf("failed to get network height and round: %w", err)
 	}
 
-	b, err := g.bs.LoadBlock(context.Background(), ch)
+	b, err := g.bs.LoadBlock(context.Background(), ch-1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load block: %w", err)
 	}
@@ -250,7 +255,9 @@ func (g *GordianGRPC) SubmitTransactionSync(ctx context.Context, req *DoBroadcas
 	if err != nil {
 		// ValidateTx should only return an error at this level,
 		// if it failed to get state from the store.
-		return nil, fmt.Errorf("error attempting to validate transaction: %w", err)
+		return &TxResultResponse{
+			Error: "failed to validate transaction" + err.Error(),
+		}, fmt.Errorf("error attempting to validate transaction: %w", err)
 	}
 
 	if res.Error != nil {

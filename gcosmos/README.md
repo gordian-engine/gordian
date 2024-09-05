@@ -85,3 +85,10 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 # tx_hash is returned on SubmitTransaction. You can just retrieve a transaction hash if you SimulateTransaction.
 ./grpcurl -plaintext -emit-defaults -d '{"tx_hash":"D8FF0A405957A3D090A485CA3C997A25E2964F2E7840DDBCBFE805EC97192651"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryTransaction
 ```
+
+# HTTP Testing
+```bash
+curl --header "Content-Type: application/json" --request POST \
+  --data '{"body":{"messages":[{"@type":"/cosmos.bank.v1beta1.MsgSend","from_address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","to_address":"cosmos10r39fueph9fq7a6lgswu4zdsg8t3gxlqvvvyvn","amount":[{"denom":"stake","amount":"1"}]}],"memo":"","timeout_height":"0","unordered":false,"timeout_timestamp":"0001-01-01T00:00:00Z","extension_options":[],"non_critical_extension_options":[]},"auth_info":{"signer_infos":[{"public_key":{"@type":"/cosmos.crypto.secp256k1.PubKey","key":"ArpmqEz3g5rxcqE+f8n15wCMuLyhWF+PO6+zA57aPB/d"},"mode_info":{"single":{"mode":"SIGN_MODE_DIRECT"}},"sequence":"1"}],"fee":{"amount":[],"gas_limit":"200000","payer":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","granter":""},"tip":null},"signatures":["CeyHZH8itZikoY8mWtfCzM46qZfOLkncHRe8CxludOUpgvxklTcy4+EetVN++OzBgxxXUMG/B5DIuJAFQ4G6cg=="]}' \
+  http://127.0.0.1:26657/debug/simulate_tx
+```

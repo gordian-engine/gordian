@@ -36,6 +36,11 @@ func (e Ed25519PubKey) Equal(other PubKey) bool {
 	return ed25519.PublicKey(e).Equal(ed25519.PublicKey(o))
 }
 
+// Address implements PubKey.
+func (e Ed25519PubKey) Address() []byte {
+	return e.PubKeyBytes()
+}
+
 type Ed25519Signer struct {
 	priv ed25519.PrivateKey
 	pub  Ed25519PubKey

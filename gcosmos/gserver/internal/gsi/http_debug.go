@@ -12,6 +12,7 @@ import (
 	banktypes "cosmossdk.io/x/bank/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/gorilla/mux"
+	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 )
 
@@ -20,6 +21,7 @@ type debugHandler struct {
 
 	txCodec transaction.Codec[transaction.Tx]
 	codec   codec.Codec
+	gclient *ggrpc.GordianGRPC
 
 	am appmanager.AppManager[transaction.Tx]
 
@@ -32,6 +34,7 @@ func setDebugRoutes(log *slog.Logger, cfg HTTPServerConfig, r *mux.Router) {
 		txCodec: cfg.TxCodec,
 		codec:   cfg.Codec,
 		am:      cfg.AppManager,
+		gclient: cfg.GordianClient,
 
 		txBuf: cfg.TxBuffer,
 	}
@@ -54,40 +57,18 @@ func (h debugHandler) HandleSubmitTx(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tx, err := h.txCodec.DecodeJSON(b)
-	if err != nil {
-		h.log.Warn("Failed to decode transaction", "route", "submit_tx", "err", err)
-		http.Error(w, "failed to decode transaction", http.StatusBadRequest)
-		return
-	}
-
 	// TODO: should this have a configurable timeout?
 	// Probably fine to skip since this is a "debug" endpoint for now,
 	// but if this gets promoted to a non-debug route,
 	// it should have a timeout.
 	ctx := req.Context()
 
-	res, err := h.am.ValidateTx(ctx, tx)
+	res, err := h.gclient.SubmitTransactionSync(ctx, &ggrpc.DoBroadcastTxSyncRequest{
+		Tx: b,
+	})
 	if err != nil {
-		// ValidateTx should only return an error at this level,
-		// if it failed to get state from the store.
-		h.log.Warn("Error attempting to validate transaction", "route", "submit_tx", "err", err)
-		http.Error(w, "internal error while attempting to validate transaction", http.StatusInternalServerError)
-		return
-	}
-
-	if res.Error != nil {
-		// This is fine from the server's perspective, no need to log.
-		http.Error(w, "transaction validation failed: "+res.Error.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// If it passed basic validation, then we can attempt to add it to the buffer.
-	if err := h.txBuf.AddTx(ctx, tx); err != nil {
-		// We could potentially check if it is a TxInvalidError here
-		// and adjust the status code,
-		// but since this is a debug endpoint, we'll ignore the type.
-		http.Error(w, "failed to add transaction to buffer: "+err.Error(), http.StatusBadRequest)
+		h.log.Warn("Error attempting to submit transaction", "route", "submit_tx", "err", err)
+		http.Error(w, "internal error while attempting to submit transaction", http.StatusInternalServerError)
 		return
 	}
 
@@ -106,31 +87,18 @@ func (h debugHandler) HandleSimulateTx(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	tx, err := h.txCodec.DecodeJSON(b)
-	if err != nil {
-		h.log.Warn("Failed to decode transaction", "route", "simulate_tx", "err", err)
-		http.Error(w, "failed to decode transaction", http.StatusBadRequest)
-		return
-	}
-
 	// TODO: should this have a configurable timeout?
 	// Probably fine to skip since this is a "debug" endpoint for now,
 	// but if this gets promoted to a non-debug route,
 	// it should have a timeout.
 	ctx := req.Context()
 
-	res, _, err := h.am.Simulate(ctx, tx)
+	res, err := h.gclient.SimulateTransaction(ctx, &ggrpc.SubmitSimulationTransactionRequest{
+		Tx: b,
+	})
 	if err != nil {
-		// Simulate should only return an error at this level,
-		// if it failed to get state from the store.
 		h.log.Warn("Error attempting to simulate transaction", "route", "simulate_tx", "err", err)
 		http.Error(w, "internal error while attempting to simulate transaction", http.StatusInternalServerError)
-		return
-	}
-
-	if res.Error != nil {
-		// This is fine from the server's perspective, no need to log.
-		http.Error(w, "transaction simulation failed: "+res.Error.Error(), http.StatusBadRequest)
 		return
 	}
 

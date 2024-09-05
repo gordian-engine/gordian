@@ -98,7 +98,7 @@ func (c *ConsensusStrategy) EnterRound(
 		))
 	}
 
-	ba, err := txmanager.NewBlockAnnotation(time.Now())
+	ba, err := txmanager.NewBlockAnnotation(time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to create block annotation: %w", err)
 	}

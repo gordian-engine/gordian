@@ -140,7 +140,9 @@ message Validator {
     bytes encoded_pub_key = 1;
     uint64 power = 2;
 }
-message GetValidatorsRequest {}
+message GetValidatorsRequest {
+    uint64 height = 1;
+}
 message GetValidatorsResponse {
     optional uint64 finalization_height = 1;
     repeated Validator validators = 2;

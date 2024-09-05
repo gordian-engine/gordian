@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	banktypes "cosmossdk.io/x/bank/types"
-	codes "google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
 )
 
 // QueryTransaction implements GordianGRPCServer.
@@ -17,7 +15,11 @@ func (g *GordianGRPC) QueryTransaction(ctx context.Context, req *QueryTransactio
 	resp, ok := g.txIdx[req.TxHash]
 	g.txIdxLock.Unlock()
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "transaction not found")
+		// better UX
+		return &TxResultResponse{
+			Error: fmt.Sprintf("transaction not found: %s", req.TxHash),
+		}, nil
+		// return nil, status.Errorf(codes.NotFound, "transaction not found")
 	}
 
 	// TODO: query from the app state? why does consensus need to care?

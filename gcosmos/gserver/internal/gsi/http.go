@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
@@ -96,10 +97,13 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 
 	r.HandleFunc("/blocks/watermark", handleBlocksWatermark(log, cfg)).Methods("GET")
 	r.HandleFunc("/validators", handleValidators(log, cfg)).Methods("GET")
+	r.HandleFunc("/block/{id}", handleBlock(log, cfg)).Methods("GET")
+	r.HandleFunc("/status", handleStatus(log, cfg)).Methods("GET")
+	r.HandleFunc("/tx/{hash}", hashTxQuery(log, cfg)).Methods("GET")
 
 	setDebugRoutes(log, cfg, r)
 
-	setCompatRoutes(log, cfg, r)
+	// setCompatRoutes(log, cfg, r)
 
 	return r
 }
@@ -121,7 +125,20 @@ func handleBlocksWatermark(log *slog.Logger, cfg HTTPServerConfig) func(w http.R
 
 func handleValidators(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		resp, err := cfg.GordianClient.GetValidators(req.Context(), &ggrpc.GetValidatorsRequest{})
+		heightStr := req.URL.Query().Get("height")
+		height := uint64(0)
+		if heightStr != "" {
+			var err error
+			height, err = strconv.ParseUint(heightStr, 10, 64)
+			if err != nil {
+				http.Error(w, "invalid height", http.StatusBadRequest)
+				return
+			}
+		}
+
+		resp, err := cfg.GordianClient.GetValidators(req.Context(), &ggrpc.GetValidatorsRequest{
+			Height: height,
+		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -129,6 +146,67 @@ func handleValidators(log *slog.Logger, cfg HTTPServerConfig) func(w http.Respon
 
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Warn("Failed to marshal validators response", "err", err)
+			return
+		}
+	}
+}
+
+func handleBlock(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		vars := mux.Vars(req)
+		id := vars["id"]
+
+		height, err := strconv.ParseUint(id, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid block height", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := cfg.GordianClient.GetBlock(req.Context(), &ggrpc.GetBlockRequest{Height: height})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Warn("Failed to marshal block response", "err", err)
+			return
+		}
+	}
+}
+
+func handleStatus(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		resp, err := cfg.GordianClient.GetStatus(req.Context(), &ggrpc.GetStatusRequest{})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Warn("Failed to marshal status response", "err", err)
+			return
+		}
+	}
+}
+
+func hashTxQuery(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		vars := mux.Vars(req)
+		hash := vars["hash"]
+
+		if len(hash) > 2 && hash[0] == '0' && hash[1] == 'x' {
+			hash = hash[2:]
+		}
+
+		resp, err := cfg.GordianClient.QueryTransaction(req.Context(), &ggrpc.QueryTransactionRequest{TxHash: hash})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Warn("Failed to marshal tx response", "err", err)
 			return
 		}
 	}
