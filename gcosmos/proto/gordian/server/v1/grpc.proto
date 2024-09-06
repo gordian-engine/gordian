@@ -30,21 +30,52 @@ service GordianGRPC {
     rpc SubmitTransactionSync(DoBroadcastTxSyncRequest) returns (TxResultResponse) {}
     rpc GetABCIQuery(GetABCIQueryRequest) returns (GetABCIQueryResponse) {}
     rpc GetTxSearch(GetTxSearchRequest) returns (TxResultResponseList) {}
+    rpc GetCommit(GetCommitRequest) returns (GetCommitResponse) {}
 
     // TODO:
     // rpc DoBroadcastTxAsync(DoBroadcastTxAsyncRequest) returns (TxResultResponse) {}
     // rpc GetABCIQueryWithOptions(GetABCIQueryWithOptsRequest) returns (gordian.rpc.core.ResultABCIQuery) {} // resp is similat to TxResultResponse
-    // rpc GetCommit(GetCommitRequest) returns (gordian.rpc.core.ResultCommit) {}
     // rpc GetBlockSearch(GetBlockSearchRequest) returns (gordian.rpc.core.ResultBlockSearch) {} // TODO:
 
 }
 
-// make TxResult type cosmossdk.io/core/app.TxResult
-
-
 message GetCommitRequest {
     uint64 height = 1;
 }
+
+// tmconsensus.CommittedBlock
+message GetCommitResponse {
+    bytes block_hash = 1;
+    bytes block_hash_previous = 2;
+    uint64 height   = 3;
+
+    CommitProof previous_commit_proof = 4;
+    ValidatorSet validator_set = 5;
+    ValidatorSet validator_set_next = 6;
+
+    bytes data_id = 7;
+    bytes app_state_prev_hash = 8;
+    // annotations
+}
+
+message CommitProof {
+    uint32 round = 1;
+    string pub_key_hash = 2;
+    repeated TmConsensusSigProofs signatures = 3;
+
+}
+message TmConsensusSigProofs {
+    // in an ideal world this is a map
+    string block_hash = 1;
+    repeated SparseSignature signatures = 2;
+}
+
+message SparseSignature {
+    bytes key_id = 2;
+    bytes sig = 3;
+}
+
+
 
 
 message GetBlockSearchRequest {
@@ -134,6 +165,13 @@ message CurrentBlockResponse {
 
     optional uint64 committing_height = 3;
     optional uint32 committing_round = 4;
+}
+
+// tmconsensus/validator.go
+message ValidatorSet {
+    repeated Validator validators = 1;
+    bytes pub_key_hash = 2;
+    bytes vote_power_hash = 3;
 }
 
 message Validator {

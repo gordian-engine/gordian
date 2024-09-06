@@ -100,6 +100,7 @@ func newMux(log *slog.Logger, cfg HTTPServerConfig) http.Handler {
 	r.HandleFunc("/block/{id}", handleBlock(log, cfg)).Methods("GET")
 	r.HandleFunc("/status", handleStatus(log, cfg)).Methods("GET")
 	r.HandleFunc("/tx/{hash}", hashTxQuery(log, cfg)).Methods("GET")
+	r.HandleFunc("/commit", handleCommit(log, cfg)).Methods("GET")
 
 	setDebugRoutes(log, cfg, r)
 
@@ -137,6 +138,34 @@ func handleValidators(log *slog.Logger, cfg HTTPServerConfig) func(w http.Respon
 		}
 
 		resp, err := cfg.GordianClient.GetValidators(req.Context(), &ggrpc.GetValidatorsRequest{
+			Height: height,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Warn("Failed to marshal validators response", "err", err)
+			return
+		}
+	}
+}
+
+func handleCommit(log *slog.Logger, cfg HTTPServerConfig) func(w http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		heightStr := req.URL.Query().Get("height")
+		height := uint64(0)
+		if heightStr != "" {
+			var err error
+			height, err = strconv.ParseUint(heightStr, 10, 64)
+			if err != nil {
+				http.Error(w, "invalid height", http.StatusBadRequest)
+				return
+			}
+		}
+
+		resp, err := cfg.GordianClient.GetCommit(req.Context(), &ggrpc.GetCommitRequest{
 			Height: height,
 		})
 		if err != nil {

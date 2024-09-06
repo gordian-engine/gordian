@@ -31,6 +31,7 @@ const (
 	GordianGRPC_SubmitTransactionSync_FullMethodName = "/gordian.server.v1.GordianGRPC/SubmitTransactionSync"
 	GordianGRPC_GetABCIQuery_FullMethodName          = "/gordian.server.v1.GordianGRPC/GetABCIQuery"
 	GordianGRPC_GetTxSearch_FullMethodName           = "/gordian.server.v1.GordianGRPC/GetTxSearch"
+	GordianGRPC_GetCommit_FullMethodName             = "/gordian.server.v1.GordianGRPC/GetCommit"
 )
 
 // GordianGRPCClient is the client API for GordianGRPC service.
@@ -57,6 +58,7 @@ type GordianGRPCClient interface {
 	SubmitTransactionSync(ctx context.Context, in *DoBroadcastTxSyncRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
 	GetABCIQuery(ctx context.Context, in *GetABCIQueryRequest, opts ...grpc.CallOption) (*GetABCIQueryResponse, error)
 	GetTxSearch(ctx context.Context, in *GetTxSearchRequest, opts ...grpc.CallOption) (*TxResultResponseList, error)
+	GetCommit(ctx context.Context, in *GetCommitRequest, opts ...grpc.CallOption) (*GetCommitResponse, error)
 }
 
 type gordianGRPCClient struct {
@@ -175,6 +177,15 @@ func (c *gordianGRPCClient) GetTxSearch(ctx context.Context, in *GetTxSearchRequ
 	return out, nil
 }
 
+func (c *gordianGRPCClient) GetCommit(ctx context.Context, in *GetCommitRequest, opts ...grpc.CallOption) (*GetCommitResponse, error) {
+	out := new(GetCommitResponse)
+	err := c.cc.Invoke(ctx, GordianGRPC_GetCommit_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GordianGRPCServer is the server API for GordianGRPC service.
 // All implementations must embed UnimplementedGordianGRPCServer
 // for forward compatibility
@@ -199,6 +210,7 @@ type GordianGRPCServer interface {
 	SubmitTransactionSync(context.Context, *DoBroadcastTxSyncRequest) (*TxResultResponse, error)
 	GetABCIQuery(context.Context, *GetABCIQueryRequest) (*GetABCIQueryResponse, error)
 	GetTxSearch(context.Context, *GetTxSearchRequest) (*TxResultResponseList, error)
+	GetCommit(context.Context, *GetCommitRequest) (*GetCommitResponse, error)
 	mustEmbedUnimplementedGordianGRPCServer()
 }
 
@@ -241,6 +253,9 @@ func (UnimplementedGordianGRPCServer) GetABCIQuery(context.Context, *GetABCIQuer
 }
 func (UnimplementedGordianGRPCServer) GetTxSearch(context.Context, *GetTxSearchRequest) (*TxResultResponseList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTxSearch not implemented")
+}
+func (UnimplementedGordianGRPCServer) GetCommit(context.Context, *GetCommitRequest) (*GetCommitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCommit not implemented")
 }
 func (UnimplementedGordianGRPCServer) mustEmbedUnimplementedGordianGRPCServer() {}
 
@@ -471,6 +486,24 @@ func _GordianGRPC_GetTxSearch_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GordianGRPC_GetCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).GetCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_GetCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).GetCommit(ctx, req.(*GetCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GordianGRPC_ServiceDesc is the grpc.ServiceDesc for GordianGRPC service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -525,6 +558,10 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTxSearch",
 			Handler:    _GordianGRPC_GetTxSearch_Handler,
+		},
+		{
+			MethodName: "GetCommit",
+			Handler:    _GordianGRPC_GetCommit_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

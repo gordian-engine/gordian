@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/txmanager"
 	"github.com/rollchains/gordian/gcrypto"
+	"github.com/rollchains/gordian/tm/tmconsensus"
 	"github.com/rollchains/gordian/tm/tmstore"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -321,6 +322,72 @@ func (g *GordianGRPC) GetBlockSearch(context.Context, *GetBlockSearchRequest) (*
 }
 
 // GetCommit implements GordianGRPCServer.
-func (g *GordianGRPC) GetCommit(context.Context, *GetCommitRequest) (*coretypes.ResultCommit, error) {
-	panic("unimplemented")
+func (g *GordianGRPC) GetCommit(ctx context.Context, req *GetCommitRequest) (*GetCommitResponse, error) {
+	height := req.Height
+	if height == 0 {
+		_, _, committingHeight, _, err := g.ms.NetworkHeightRound(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get network height and round: %w", err)
+		}
+		height = committingHeight - 1
+	}
+
+	cb, err := g.bs.LoadBlock(ctx, height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load block: %w", err)
+	}
+
+	return &GetCommitResponse{
+		BlockHash:         cb.Block.Hash,
+		BlockHashPrevious: cb.Block.PrevBlockHash,
+		Height:            cb.Block.Height,
+		PreviousCommitProof: &CommitProof{
+			Round:      cb.Block.PrevCommitProof.Round,
+			PubKeyHash: cb.Block.PrevCommitProof.PubKeyHash,
+			Signatures: convertTmConsensusSparseSignature(cb.Block.PrevCommitProof.Proofs),
+		},
+		AppStatePrevHash: cb.Block.PrevAppStateHash,
+		DataId:           cb.Block.DataID,
+		ValidatorSet:     convertValidatorSet(cb.Block.ValidatorSet),
+		ValidatorSetNext: convertValidatorSet(cb.Block.NextValidatorSet),
+	}, nil
+
+}
+
+func convertValidatorSet(vs tmconsensus.ValidatorSet) *ValidatorSet {
+	newVs := &ValidatorSet{
+		PubKeyHash:    vs.PubKeyHash,
+		VotePowerHash: vs.VotePowerHash,
+		Validators:    make([]*Validator, 0),
+	}
+
+	for _, v := range vs.Validators {
+		newVs.Validators = append(newVs.Validators, &Validator{
+			EncodedPubKey: v.PubKey.PubKeyBytes(),
+			Power:         v.Power,
+		})
+	}
+
+	return newVs
+}
+
+func convertTmConsensusSparseSignature(s map[string][]gcrypto.SparseSignature) []*TmConsensusSigProofs {
+	tmc := make([]*TmConsensusSigProofs, 0)
+	for bh, p := range s {
+
+		sigs := make([]*SparseSignature, len(p))
+		for i, sig := range p {
+			sigs[i] = &SparseSignature{
+				KeyId: sig.KeyID,
+				Sig:   sig.Sig,
+			}
+		}
+
+		tmc = append(tmc, &TmConsensusSigProofs{
+			BlockHash:  bh,
+			Signatures: sigs,
+		})
+	}
+
+	return tmc
 }
