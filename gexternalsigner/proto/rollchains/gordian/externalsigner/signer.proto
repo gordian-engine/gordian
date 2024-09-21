@@ -1,0 +1,53 @@
+syntax = "proto3";
+package rollchains.gordian.externalsigner;
+
+option go_package = "github.com/rollchains/gordian/gexternalsigner";
+
+service ExternalSigner {
+	rpc PubKey (PubKeyRequest) returns (PubKeyResponse) {}
+	rpc Propose(ProposeRequest) returns (SignResponse) {}
+	rpc Prevote(VoteRequest) returns (SignResponse) {}
+	rpc Precommit(VoteRequest) returns (SignResponse) {}
+}
+
+message PubKeyRequest {
+	string chain_id = 1;
+}
+
+message PubKeyResponse {
+	bytes pub_key = 1;
+}
+
+message ProposeRequest {
+	string chain_id = 1;
+	Header header = 2;
+	uint32 round = 3;
+	Annotations annotations = 4;
+}
+
+message Header {
+	uint64 height = 1;
+	bytes prev_block_hash = 2;
+	bytes prev_app_state_hash = 3;
+	bytes data_id = 4;
+}
+
+message Annotations {
+	bytes user = 1;
+	bytes driver = 2;
+}
+
+message VoteRequest {
+	string chain_id = 1;
+	uint64 height = 2;
+	uint32 round = 3;
+	string block_hash = 4;
+}
+
+message SignResponse {
+	bytes sign_content = 1;
+	bytes signature = 2;
+}
+
+
+
