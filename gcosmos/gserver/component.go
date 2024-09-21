@@ -31,6 +31,7 @@ import (
 	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
 	"github.com/rollchains/gordian/gcrypto"
 	"github.com/rollchains/gordian/gdriver/gtxbuf"
+	"github.com/rollchains/gordian/gexternalsigner"
 	"github.com/rollchains/gordian/gwatchdog"
 	"github.com/rollchains/gordian/tm/tmcodec/tmjson"
 	"github.com/rollchains/gordian/tm/tmconsensus"
@@ -192,9 +193,16 @@ func (c *Component) Init(app serverv2.AppI[transaction.Tx], cfg map[string]any, 
 	}
 
 	// TODO: we should allow a way to explicitly NOT provide a signer.
-	c.signer = tmconsensus.PassthroughSigner{
-		Signer:          gcrypto.NewEd25519Signer(ed25519.PrivateKey(privKey.Bytes())),
-		SignatureScheme: tmconsensustest.SimpleSignatureScheme{},
+	if extSignerAddr, ok := cfg[extSignerAddrFlag].(string); ok && extSignerAddr != "" {
+		c.signer, err = gexternalsigner.NewExternalSigner(extSignerAddr)
+		if err != nil {
+			panic(fmt.Errorf("failed to create external signer: %s: %w", extSignerAddr, err))
+		}
+	} else {
+		c.signer = tmconsensus.PassthroughSigner{
+			Signer:          gcrypto.NewEd25519Signer(ed25519.PrivateKey(privKey.Bytes())),
+			SignatureScheme: tmconsensustest.SimpleSignatureScheme{},
+		}
 	}
 
 	var as *tmmemstore.ActionStore
@@ -588,9 +596,10 @@ func (c *Component) Stop(_ context.Context) error {
 }
 
 const (
-	httpAddrFlag     = "g-http-addr"
-	grpcAddrFlag     = "g-grpc-addr"
-	httpAddrFileFlag = "g-http-addr-file"
+	httpAddrFlag      = "g-http-addr"
+	grpcAddrFlag      = "g-grpc-addr"
+	httpAddrFileFlag  = "g-http-addr-file"
+	extSignerAddrFlag = "g-signer-addr"
 
 	seedAddrsFlag = "g-seed-addrs"
 )
@@ -607,6 +616,7 @@ func (c *Component) StartCmdFlags() *pflag.FlagSet {
 	flags.String(httpAddrFlag, "", "TCP address of Gordian's introspective HTTP server; if blank, server will not be started")
 	flags.String(grpcAddrFlag, "", "TCP address of Gordian's introspective GRPC server; if blank, server will not be started")
 	flags.String(httpAddrFileFlag, "", "Write the actual Gordian HTTP listen address to the given file (useful for tests when configured to listen on :0)")
+	flags.String(extSignerAddrFlag, "", "Address of the external signer GRPC server")
 
 	flags.String(seedAddrsFlag, "", "Newline-separated multiaddrs to connect to; if omitted, relies on incoming connections to discover peers")
 
