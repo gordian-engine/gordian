@@ -1,0 +1,142 @@
+diff --git a/client/broadcast.go b/client/broadcast.go
+index d1b773ffa2..9abd1e4ba6 100644
+--- a/client/broadcast.go
++++ b/client/broadcast.go
+@@ -2,14 +2,18 @@ package client
+ 
+ import (
+ 	"context"
++	"crypto/sha256"
+ 	"fmt"
+ 	"strings"
+ 
+ 	"github.com/cometbft/cometbft/mempool"
+ 	cmttypes "github.com/cometbft/cometbft/types"
++	"google.golang.org/grpc"
+ 	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/credentials/insecure"
+ 	"google.golang.org/grpc/status"
+ 
++	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
+ 	"github.com/cosmos/cosmos-sdk/client/flags"
+ 	sdk "github.com/cosmos/cosmos-sdk/types"
+ 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+@@ -25,6 +29,9 @@ func (ctx Context) BroadcastTx(txBytes []byte) (res *sdk.TxResponse, err error)
+ 	case flags.BroadcastSync:
+ 		res, err = ctx.BroadcastTxSync(txBytes)
+ 
++	case flags.BroadcastGrpc:
++		res, err = ctx.BroadcastTxSyncGrpc(txBytes, "127.0.0.1:9092", "/gordian.server.v1.GordianGRPC/SubmitTransactionSync")
++
+ 	case flags.BroadcastAsync:
+ 		res, err = ctx.BroadcastTxAsync(txBytes)
+ 
+@@ -94,6 +101,31 @@ func (ctx Context) BroadcastTxSync(txBytes []byte) (*sdk.TxResponse, error) {
+ 	return sdk.NewResponseFormatBroadcastTx(res), err
+ }
+ 
++func (ctx Context) BroadcastTxSyncGrpc(txBytes []byte, consensusAddr, method string) (*sdk.TxResponse, error) {
++	c, err := grpc.NewClient(consensusAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDisableHealthCheck())
++	if err != nil {
++		return nil, err
++	}
++	defer c.Close()
++
++	txReq := &txv1beta1.BroadcastTxRequest{
++		TxBytes: txBytes,
++	}
++
++	// TODO: we need a proto message that gordian can also unmarshal into without wireType issues
++	// Maybe a TxResponseMinimal message that only returns a TxHash, Code, and Error text?
++	reply := &sdk.MsgData{}
++	if err := c.Invoke(ctx.CmdContext, method, txReq, reply); err != nil {
++		fmt.Printf("idk but: BroadcastTxSyncGrpc failed to invoke grpc method: %v\n", err)
++		// return nil, fmt.Errorf("BroadcastTxSyncGrpc failed to invoke grpc method: %w", err)
++	}
++
++	return &sdk.TxResponse{
++		Data:   "idk this is just a test for the BroadcastTxSyncGrpc. the txHash is probably not correct.",
++		TxHash: fmt.Sprintf("%X", sha256.Sum256(txBytes)),
++	}, err
++}
++
+ // BroadcastTxAsync broadcasts transaction bytes to a CometBFT node
+ // asynchronously (i.e. returns immediately).
+ func (ctx Context) BroadcastTxAsync(txBytes []byte) (*sdk.TxResponse, error) {
+diff --git a/client/flags/flags.go b/client/flags/flags.go
+index d44ed31679..706b9d0369 100644
+--- a/client/flags/flags.go
++++ b/client/flags/flags.go
+@@ -28,6 +28,8 @@ const (
+ 	// immediately.
+ 	BroadcastAsync = "async"
+ 
++	BroadcastGrpc = "grpc"
++
+ 	// SignModeDirect is the value of the --sign-mode flag for SIGN_MODE_DIRECT
+ 	SignModeDirect = "direct"
+ 	// SignModeLegacyAminoJSON is the value of the --sign-mode flag for SIGN_MODE_LEGACY_AMINO_JSON
+@@ -128,9 +130,11 @@ func AddTxFlagsToCmd(cmd *cobra.Command) {
+ 	f.String(FlagFees, "", "Fees to pay along with transaction; eg: 10uatom")
+ 	f.String(FlagGasPrices, "", "Determine the transaction fee by multiplying max gas units by gas prices (e.g. 0.1uatom), rounding up to nearest denom unit")
+ 	f.String(FlagNode, "tcp://localhost:26657", "<host>:<port> to CometBFT rpc interface for this chain")
++	cmd.Flags().String(FlagGRPC, "", "the gRPC endpoint to use for this chain")
++	cmd.Flags().Bool(FlagGRPCInsecure, false, "allow gRPC over insecure channels, if not the server must use TLS")
+ 	f.Bool(FlagUseLedger, false, "Use a connected Ledger device")
+ 	f.Float64(FlagGasAdjustment, DefaultGasAdjustment, "adjustment factor to be multiplied against the estimate returned by the tx simulation; if the gas limit is set manually this flag is ignored ")
+-	f.StringP(FlagBroadcastMode, "b", BroadcastSync, "Transaction broadcasting mode (sync|async)")
++	f.StringP(FlagBroadcastMode, "b", BroadcastSync, "Transaction broadcasting mode (sync|async|grpc)")
+ 	f.Bool(FlagDryRun, false, "ignore the --gas flag and perform a simulation of a transaction, but don't broadcast it (when enabled, the local Keybase is not accessible)")
+ 	f.Bool(FlagGenerateOnly, false, "Build an unsigned transaction and write it to STDOUT (when enabled, the local Keybase only accessed when providing a key name)")
+ 	f.Bool(FlagOffline, false, "Offline mode (does not allow any online functionality)")
+diff --git a/client/tx/tx.go b/client/tx/tx.go
+index 4365429d27..7149ef15c5 100644
+--- a/client/tx/tx.go
++++ b/client/tx/tx.go
+@@ -135,7 +135,7 @@ func BroadcastTx(clientCtx client.Context, txf Factory, msgs ...sdk.Msg) error {
+ 		return err
+ 	}
+ 
+-	// broadcast to a CometBFT node
++	// broadcast to a consensus node
+ 	res, err := clientCtx.BroadcastTx(txBytes)
+ 	if err != nil {
+ 		return err
+diff --git a/x/auth/tx/decoder.go b/x/auth/tx/decoder.go
+index 74b2062169..43a15b8f69 100644
+--- a/x/auth/tx/decoder.go
++++ b/x/auth/tx/decoder.go
+@@ -20,7 +20,11 @@ func DefaultJSONTxDecoder(addrCodec address.Codec, cdc codec.Codec, decoder *dec
+ 		var jsonTx tx.Tx
+ 		err := cdc.UnmarshalJSON(txBytes, &jsonTx)
+ 		if err != nil {
+-			return nil, errorsmod.Wrap(sdkerrors.ErrTxDecode, err.Error())
++			// TODO: remove this hack fix which decodes the raw bytes back to the JSON object and continues.
++			// Gordian: raw bytes are already decoded (vs sending in the json itself)
++			if err2 := jsonTx.Unmarshal(txBytes); err2 != nil {
++				return nil, errorsmod.Wrap(sdkerrors.ErrTxDecode, err.Error())
++			}
+ 		}
+ 
+ 		// need to convert jsonTx into raw tx.
+diff --git a/x/auth/types/account_retriever.go b/x/auth/types/account_retriever.go
+index 020252aa93..f37b97f79d 100644
+--- a/x/auth/types/account_retriever.go
++++ b/x/auth/types/account_retriever.go
+@@ -44,6 +44,16 @@ func (ar AccountRetriever) GetAccountWithHeight(clientCtx client.Context, addr s
+ 	}
+ 
+ 	blockHeight := header.Get(grpctypes.GRPCBlockHeightHeader)
++
++	// TODO: this is a hack that returns 0 as the height so if the header is empty, it can still continue to create the transaction.
++	// When I try to submit a Tx using the grpc-address in the client.toml, it throws an error for
++	// ./gcosmos tx bank send val cosmos10r39fueph9fq7a6lgswu4zdsg8t3gxlqvvvyvn 1stake
++	// unexpected 'x-cosmos-block-height' header length; got 0, expected: 1
++	// This allows me to get to the 'confirm transaction before signing and broadcasting' step of signing the Tx.
++	if len(blockHeight) != 1 {
++		blockHeight = []string{"0"}
++	}
++
+ 	if l := len(blockHeight); l != 1 {
+ 		return nil, 0, fmt.Errorf("unexpected '%s' header length; got %d, expected: %d", grpctypes.GRPCBlockHeightHeader, l, 1)
+ 	}

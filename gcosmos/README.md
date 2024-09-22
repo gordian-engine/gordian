@@ -69,6 +69,7 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 ./grpcurl -plaintext -d '{"height":1}' localhost:9092 gordian.server.v1.GordianGRPC/GetBlock
 
 ./grpcurl -plaintext -d '{"address":"cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl","denom":"stake"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryAccountBalance
+./gcosmos q bank balances cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl --grpc-addr 127.0.0.1:9090 --grpc-insecure --output=json
 ```
 
 # Transaction Testing
@@ -78,9 +79,9 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 # TODO: get account number
 ./gcosmos tx sign ./example-tx.json --offline --from=val --sequence=1 --account-number=1 --chain-id=TODO:TEMPORARY_CHAIN_ID --keyring-backend=test > example-tx-signed.json
 
-./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SimulateTransaction
+./grpcurl -plaintext -emit-defaults -d '{"tx_bytes":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SimulateTransaction
 
-./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SubmitTransactionSync
+./grpcurl -plaintext -emit-defaults -d '{"tx_bytes":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SubmitTransactionSync
 
 # tx_hash is returned on SubmitTransaction. You can just retrieve a transaction hash if you SimulateTransaction.
 ./grpcurl -plaintext -emit-defaults -d '{"tx_hash":"D8FF0A405957A3D090A485CA3C997A25E2964F2E7840DDBCBFE805EC97192651"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryTransaction
