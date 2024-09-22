@@ -64,7 +64,7 @@ func (h debugHandler) HandleSubmitTx(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	res, err := h.gclient.SubmitTransactionSync(ctx, &ggrpc.DoBroadcastTxSyncRequest{
-		Tx: b,
+		TxBytes: b,
 	})
 	if err != nil {
 		h.log.Warn("Error attempting to submit transaction", "route", "submit_tx", "err", err)
@@ -94,7 +94,7 @@ func (h debugHandler) HandleSimulateTx(w http.ResponseWriter, req *http.Request)
 	ctx := req.Context()
 
 	res, err := h.gclient.SimulateTransaction(ctx, &ggrpc.SubmitSimulationTransactionRequest{
-		Tx: b,
+		TxBytes: b,
 	})
 	if err != nil {
 		h.log.Warn("Error attempting to simulate transaction", "route", "simulate_tx", "err", err)

@@ -12,19 +12,19 @@ func Pointy[T any](x T) *T {
 // convertGordianResponseFromSDKResult converts an app manager TxResult to the gRPC proto result.
 func convertGordianResponseFromSDKResult(res coreapp.TxResult) *TxResultResponse {
 	resp := &TxResultResponse{
-		Code:      res.Code,
-		Events:    convertEvent(res.Events),
-		Data:      res.Data,
-		Log:       res.Log,
-		Info:      res.Info,
-		GasWanted: res.GasWanted,
-		GasUsed:   res.GasUsed,
+		Code:   res.Code,
+		Events: convertEvent(res.Events),
+		Data:   string(res.Data),
+		// Log:       res.Log,
+		// Info:      res.Info,
+		GasWanted: int64(res.GasWanted),
+		GasUsed:   int64(res.GasUsed),
 		Codespace: res.Codespace,
 		TxHash:    "", // set with tx.Hash() after conversion
 	}
-	if res.Error != nil {
-		resp.Error = res.Error.Error()
-	}
+	// if res.Error != nil {
+	// 	resp.Error = res.Error.Error()
+	// }
 	return resp
 }
 

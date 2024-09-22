@@ -245,7 +245,7 @@ func (g *GordianGRPC) DoBroadcastTxAsync(context.Context, *DoBroadcastTxAsyncReq
 
 // SubmitTransactionSync implements GordianGRPCServer.
 func (g *GordianGRPC) SubmitTransactionSync(ctx context.Context, req *DoBroadcastTxSyncRequest) (*TxResultResponse, error) {
-	tx, err := g.txc.DecodeJSON(req.Tx)
+	tx, err := g.txc.DecodeJSON(req.TxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction: %w", err)
 	}
@@ -264,8 +264,8 @@ func (g *GordianGRPC) SubmitTransactionSync(ctx context.Context, req *DoBroadcas
 	if res.Error != nil {
 		// This is fine from the server's perspective, no need to log.
 		return &TxResultResponse{
-			Code: res.Code,
-			Log:  res.Error.Error(),
+			Code:  res.Code,
+			Error: res.Error.Error(),
 		}, nil
 	}
 
@@ -281,8 +281,8 @@ func (g *GordianGRPC) SubmitTransactionSync(ctx context.Context, req *DoBroadcas
 		// and adjust the status code,
 		// but since this is a debug endpoint, we'll ignore the type.
 		return &TxResultResponse{
-			Code: res.Code,
-			Log:  err.Error(),
+			Code:  res.Code,
+			Error: err.Error(),
 		}, nil
 	}
 
@@ -291,14 +291,12 @@ func (g *GordianGRPC) SubmitTransactionSync(ctx context.Context, req *DoBroadcas
 
 	txResp := &TxResultResponse{
 		Code:      res.Code,
-		Data:      res.Data,
-		Log:       res.Log,
 		Codespace: res.Codespace,
 		TxHash:    hStr,
 		Events:    convertEvent(res.Events),
-		Info:      res.Info,
-		GasWanted: res.GasWanted,
-		GasUsed:   res.GasUsed,
+		// Info:      res.Info,
+		GasWanted: int64(res.GasWanted),
+		GasUsed:   int64(res.GasUsed),
 	}
 	if res.Error != nil {
 		txResp.Error = res.Error.Error()

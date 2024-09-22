@@ -95,7 +95,7 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 
 // SimulateTransaction implements GordianGRPCServer.
 func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimulationTransactionRequest) (*TxResultResponse, error) {
-	b := req.Tx
+	b := req.TxBytes
 	tx, err := g.txc.DecodeJSON(b)
 	if err != nil {
 		return &TxResultResponse{

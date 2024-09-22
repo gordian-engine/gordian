@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 option go_package = "github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc";
+import "google/protobuf/any.proto";
 
 package gordian.server.v1;
 
@@ -143,7 +144,7 @@ message TxResultResponseList {
 }
 
 message DoBroadcastTxSyncRequest {
-    bytes tx = 1;
+    bytes tx_bytes = 1; // matches sdk txv1beta1.BroadcastTxRequest expectation
 }
 
 message DoBroadcastTxAsyncRequest {
@@ -191,7 +192,7 @@ message SubmitTransactionRequest {
 }
 
 message SubmitSimulationTransactionRequest {
-    bytes tx = 1;
+    bytes tx_bytes = 1;
 }
 
 message PendingTransactionsRequest {}
@@ -201,20 +202,40 @@ message PendingTransactionsResponse {
     repeated bytes txs = 1;
 }
 
-// cosmos-sdk/core/app/app.go#TxResult
+
 // TODO: import this directly from the SDK? or use our own?
 message TxResultResponse {
-    repeated Event events = 1 [json_name="events"];
-    // bytes resp = 2; //  []transaction.Msg
-    string error = 3 [json_name="error"];
-    uint32 code = 4 [json_name="code"];
-    bytes data = 5 [json_name="data"];
-    string log = 6 [json_name="log"];
-    string info = 7 [json_name="info"];
-    uint64 gas_wanted = 8 [json_name="gas_wanted"];
-    uint64 gas_used = 9 [json_name="gas_used"];
-    string codespace = 10 [json_name="codespace"];
-    string tx_hash = 11 [json_name="tx_hash"];
+    // old: cosmos-sdk/core/app/app.go#TxResult - this is not proto on the sdk side.
+    // repeated Event events = 1 [json_name="events"];
+    // // bytes resp = 2; //  []transaction.Msg
+    // string error = 3 [json_name="error"];
+    // uint32 code = 4 [json_name="code"];
+    // bytes data = 5 [json_name="data"];
+    // string log = 6 [json_name="log"];
+    // string info = 7 [json_name="info"];
+    // uint64 gas_wanted = 8 [json_name="gas_wanted"];
+    // uint64 gas_used = 9 [json_name="gas_used"];
+    // string codespace = 10 [json_name="codespace"];
+    // string tx_hash = 11 [json_name="tx_hash"];
+
+    // new: is now: types/abci.pb.go so we can decode into it in the SDK side on grpc submit
+    int64 height = 1;
+    string tx_hash = 2;
+    string codespace = 3;
+    uint32 code = 4;
+    string data = 5;
+    string raw_log = 6;
+    // reserved 7;  // ABCIMessageLogs info = 7;
+    google.protobuf.Any info = 7;
+    int64 gas_wanted = 8;
+    int64 gas_used = 9;
+    google.protobuf.Any tx = 10;
+    string timestamp = 11;
+    repeated Event events = 12;
+
+    string error = 13;
+
+
 }
 
 message Event {
