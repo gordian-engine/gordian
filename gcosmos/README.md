@@ -87,6 +87,15 @@ echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon
 ./grpcurl -plaintext -emit-defaults -d '{"tx_hash":"D8FF0A405957A3D090A485CA3C997A25E2964F2E7840DDBCBFE805EC97192651"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryTransaction
 ```
 
+# Transaction Direct via App
+```bash
+# Send a tx from the CLI -> the app's grpc, which is then routed to Gordian.
+./gcosmos tx bank send val cosmos10r39fueph9fq7a6lgswu4zdsg8t3gxlqvvvyvn 1stake --chain-id=TODO:TEMPORARY_CHAIN_ID --grpc-addr=localhost:9090 --grpc-insecure --broadcast-mode=external --yes
+
+# tx_hash is returned on SubmitTransaction. You can just retrieve a transaction hash if you SimulateTransaction.
+./grpcurl -plaintext -emit-defaults -d '{"tx_hash":"D8FF0A405957A3D090A485CA3C997A25E2964F2E7840DDBCBFE805EC97192651"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryTransaction
+```
+
 # HTTP Testing
 ```bash
 curl --header "Content-Type: application/json" --request POST \
