@@ -3,5 +3,6 @@ go 1.23.1
 use (
 	.
 	..
+	../gexternalsigner
 	./_cosmosvendor/cosmos-sdk/simapp/v2
 )
