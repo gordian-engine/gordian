@@ -41,7 +41,7 @@ Begin running the updated siampp commands from the `gcosmos` directory.
 rm -rf ~/.simappv2/
 go build -o gcosmos .
 
-./gcosmos init moniker
+./gcosmos init moniker --chain-id=gcosmos
 
 # example-mnemonic address: cosmos1r5v5srda7xfth3hn2s26txvrcrntldjumt8mhl
 echo -n "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art" > example-mnemonic.txt
