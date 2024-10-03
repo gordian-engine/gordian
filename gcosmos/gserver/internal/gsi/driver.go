@@ -234,6 +234,15 @@ func (d *Driver) handleInitialization(
 		return false
 	}
 
+	for _, tr := range blockResp.TxResults {
+		if tr.Error != nil {
+			d.log.Warn("Transaction error in genesis block", "err", tr.Error)
+			return false
+		}
+	}
+
+	d.log.Info("Successfully initialized genesis state", "appStateHash", glog.Hex(stateRoot))
+
 	gVals := make([]tmconsensus.Validator, len(blockResp.ValidatorUpdates))
 	for i, vu := range blockResp.ValidatorUpdates {
 		if vu.PubKeyType != "ed25519" {

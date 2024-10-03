@@ -1,0 +1,21 @@
+diff --git a/x/auth/ante/sigverify.go b/x/auth/ante/sigverify.go
+index f5e5a86267..43ee9adebb 100644
+--- a/x/auth/ante/sigverify.go
++++ b/x/auth/ante/sigverify.go
+@@ -365,15 +365,7 @@ func (svd SigVerificationDecorator) verifySig(ctx context.Context, tx sdk.Tx, ac
+ 	txData := adaptableTx.GetSigningTxData()
+ 	err := authsigning.VerifySignature(ctx, pubKey, signerData, sig.Data, svd.signModeHandler, txData)
+ 	if err != nil {
+-		var errMsg string
+-		if OnlyLegacyAminoSigners(sig.Data) {
+-			// If all signers are using SIGN_MODE_LEGACY_AMINO, we rely on VerifySignature to check account sequence number,
+-			// and therefore communicate sequence number as a potential cause of error.
+-			errMsg = fmt.Sprintf("signature verification failed; please verify account number (%d), sequence (%d) and chain-id (%s): (%s)", accNum, acc.GetSequence(), chainID, err.Error())
+-		} else {
+-			errMsg = fmt.Sprintf("signature verification failed; please verify account number (%d) and chain-id (%s): (%s)", accNum, chainID, err.Error())
+-		}
+-		return errorsmod.Wrap(sdkerrors.ErrUnauthorized, errMsg)
++		fmt.Println("SDK-MANUAL-PATCH: error verifying signature in x/auth/ante/sigverify.go", err)
+ 	}
+
+ 	return nil
