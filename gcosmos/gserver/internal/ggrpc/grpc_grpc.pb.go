@@ -25,6 +25,7 @@ const (
 	GordianGRPC_SimulateTransaction_FullMethodName = "/gordian.server.v1.GordianGRPC/SimulateTransaction"
 	GordianGRPC_PendingTransactions_FullMethodName = "/gordian.server.v1.GordianGRPC/PendingTransactions"
 	GordianGRPC_QueryAccountBalance_FullMethodName = "/gordian.server.v1.GordianGRPC/QueryAccountBalance"
+	GordianGRPC_QueryTransaction_FullMethodName    = "/gordian.server.v1.GordianGRPC/QueryTransaction"
 )
 
 // GordianGRPCClient is the client API for GordianGRPC service.
@@ -43,6 +44,7 @@ type GordianGRPCClient interface {
 	PendingTransactions(ctx context.Context, in *PendingTransactionsRequest, opts ...grpc.CallOption) (*PendingTransactionsResponse, error)
 	// (DEBUG) QueryAccountBalance returns the balance of an account.
 	QueryAccountBalance(ctx context.Context, in *QueryAccountBalanceRequest, opts ...grpc.CallOption) (*QueryAccountBalanceResponse, error)
+	QueryTransaction(ctx context.Context, in *QueryTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error)
 }
 
 type gordianGRPCClient struct {
@@ -107,6 +109,15 @@ func (c *gordianGRPCClient) QueryAccountBalance(ctx context.Context, in *QueryAc
 	return out, nil
 }
 
+func (c *gordianGRPCClient) QueryTransaction(ctx context.Context, in *QueryTransactionRequest, opts ...grpc.CallOption) (*TxResultResponse, error) {
+	out := new(TxResultResponse)
+	err := c.cc.Invoke(ctx, GordianGRPC_QueryTransaction_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GordianGRPCServer is the server API for GordianGRPC service.
 // All implementations must embed UnimplementedGordianGRPCServer
 // for forward compatibility
@@ -123,6 +134,7 @@ type GordianGRPCServer interface {
 	PendingTransactions(context.Context, *PendingTransactionsRequest) (*PendingTransactionsResponse, error)
 	// (DEBUG) QueryAccountBalance returns the balance of an account.
 	QueryAccountBalance(context.Context, *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error)
+	QueryTransaction(context.Context, *QueryTransactionRequest) (*TxResultResponse, error)
 	mustEmbedUnimplementedGordianGRPCServer()
 }
 
@@ -147,6 +159,9 @@ func (UnimplementedGordianGRPCServer) PendingTransactions(context.Context, *Pend
 }
 func (UnimplementedGordianGRPCServer) QueryAccountBalance(context.Context, *QueryAccountBalanceRequest) (*QueryAccountBalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryAccountBalance not implemented")
+}
+func (UnimplementedGordianGRPCServer) QueryTransaction(context.Context, *QueryTransactionRequest) (*TxResultResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryTransaction not implemented")
 }
 func (UnimplementedGordianGRPCServer) mustEmbedUnimplementedGordianGRPCServer() {}
 
@@ -269,6 +284,24 @@ func _GordianGRPC_QueryAccountBalance_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GordianGRPC_QueryTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryTransactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GordianGRPCServer).QueryTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GordianGRPC_QueryTransaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GordianGRPCServer).QueryTransaction(ctx, req.(*QueryTransactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GordianGRPC_ServiceDesc is the grpc.ServiceDesc for GordianGRPC service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -299,6 +332,10 @@ var GordianGRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryAccountBalance",
 			Handler:    _GordianGRPC_QueryAccountBalance_Handler,
+		},
+		{
+			MethodName: "QueryTransaction",
+			Handler:    _GordianGRPC_QueryTransaction_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

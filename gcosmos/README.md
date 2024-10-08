@@ -63,4 +63,7 @@ sh ./scripts/run_gcosmos.sh
 ./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SimulateTransaction
 
 ./grpcurl -plaintext -emit-defaults -d '{"tx":"'$(cat example-tx-signed.json | base64 | tr -d '\n')'"}' localhost:9092 gordian.server.v1.GordianGRPC/SubmitTransaction
+
+# tx_hash is returned on SubmitTransaction. You can just retrieve a transaction hash if you SimulateTransaction.
+./grpcurl -plaintext -emit-defaults -d '{"tx_hash":"D8FF0A405957A3D090A485CA3C997A25E2964F2E7840DDBCBFE805EC97192651"}' localhost:9092 gordian.server.v1.GordianGRPC/QueryTransaction
 ```

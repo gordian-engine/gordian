@@ -2,13 +2,29 @@ package ggrpc
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"cosmossdk.io/core/event"
 	coreserver "cosmossdk.io/core/server"
 	banktypes "cosmossdk.io/x/bank/types"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
+
+// QueryTransaction implements GordianGRPCServer.
+func (g *GordianGRPC) QueryTransaction(ctx context.Context, req *QueryTransactionRequest) (*TxResultResponse, error) {
+	g.txIdxLock.Lock()
+	defer g.txIdxLock.Unlock()
+	resp, ok := g.txIdx[req.TxHash]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "transaction not found")
+	}
+
+	return resp, nil
+}
 
 // SubmitTransaction implements GordianGRPCServer.
 func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransactionRequest) (*TxResultResponse, error) {
@@ -35,6 +51,15 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		}, nil
 	}
 
+	// TODO: ValidateTx only does stateful validation, not execution. This here lets us get the Events in the TxResult.
+	res, _, err = g.am.Simulate(ctx, tx)
+	if err != nil {
+		// Simulate should only return an error at this level,
+		// if it failed to get state from the store.
+		g.log.Warn("Error attempting to simulate transaction", "route", "simulate_tx", "err", err)
+		return nil, fmt.Errorf("failed to simulate transaction: %w", err)
+	}
+
 	// If it passed basic validation, then we can attempt to add it to the buffer.
 	if err := g.txBuf.AddTx(ctx, tx); err != nil {
 		// We could potentially check if it is a TxInvalidError here
@@ -43,7 +68,16 @@ func (g *GordianGRPC) SubmitTransaction(ctx context.Context, req *SubmitTransact
 		return nil, fmt.Errorf("failed to add transaction to buffer: %w", err)
 	}
 
-	return getGordianResponseFromSDKResult(res), nil
+	response := getGordianResponseFromSDKResult(res)
+
+	txHash := tx.Hash()
+	response.TxHash = strings.ToUpper(hex.EncodeToString(txHash[:]))
+
+	g.txIdxLock.Lock()
+	defer g.txIdxLock.Unlock()
+	g.txIdx[response.TxHash] = response
+
+	return response, nil
 }
 
 // SimulateTransaction implements GordianGRPCServer.
@@ -71,7 +105,12 @@ func (g *GordianGRPC) SimulateTransaction(ctx context.Context, req *SubmitSimula
 		}, nil
 	}
 
-	return getGordianResponseFromSDKResult(res), nil
+	resp := getGordianResponseFromSDKResult(res)
+
+	txHash := tx.Hash()
+	resp.TxHash = strings.ToUpper(hex.EncodeToString(txHash[:]))
+
+	return resp, nil
 }
 
 // PendingTransactions implements GordianGRPCServer.
