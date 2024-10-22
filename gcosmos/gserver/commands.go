@@ -9,11 +9,11 @@ import (
 	"github.com/cometbft/cometbft/privval"
 	"github.com/cosmos/cosmos-sdk/client"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
-	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/spf13/cobra"
 )
 

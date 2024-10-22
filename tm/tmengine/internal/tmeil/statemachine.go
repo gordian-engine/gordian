@@ -1,8 +1,8 @@
 package tmeil
 
 import (
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // StateMachineRoundEntrance is the value the state machine sends to the engine,

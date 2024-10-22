@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmcodec"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmcodec"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // MarshalCodec is a [tmcodec.MarshalCodec] that

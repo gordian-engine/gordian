@@ -1,10 +1,10 @@
-module github.com/rollchains/gordian/tmsqlite
+module github.com/gordian-engine/gordian/tmsqlite
 
 go 1.23.1
 
 require (
+	github.com/gordian-engine/gordian v0.0.0
 	github.com/mattn/go-sqlite3 v1.14.23
-	github.com/rollchains/gordian v0.0.0
 	github.com/stretchr/testify v1.9.0
 	modernc.org/sqlite v1.33.1
 )
@@ -30,4 +30,4 @@ require (
 	modernc.org/token v1.1.0 // indirect
 )
 
-replace github.com/rollchains/gordian => ..
+replace github.com/gordian-engine/gordian => ..

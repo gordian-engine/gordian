@@ -6,12 +6,12 @@ import (
 	"net/rpc"
 	"sync"
 
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmengine"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2pnetwork "github.com/libp2p/go-libp2p/core/network"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmengine"
 )
 
 // SeedService is the libp2p stream handler for the seed service,

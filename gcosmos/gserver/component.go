@@ -18,35 +18,35 @@ import (
 	cometconfig "github.com/cometbft/cometbft/config"
 	"github.com/cometbft/cometbft/privval"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/gordian-engine/gordian/gcosmos/gcstore"
+	"github.com/gordian-engine/gordian/gcosmos/gcstore/gcmemstore"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/ggrpc"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gp2papi"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsi"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gdriver/gtxbuf"
+	"github.com/gordian-engine/gordian/gwatchdog"
+	"github.com/gordian-engine/gordian/tm/tmcodec/tmjson"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/tm/tmdriver"
+	"github.com/gordian-engine/gordian/tm/tmengine"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmgossip"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p"
+	"github.com/gordian-engine/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/tm/tmstore/tmmemstore"
+	"github.com/gordian-engine/gordian/tmsqlite"
 	"github.com/libp2p/go-libp2p"
 	libp2pevent "github.com/libp2p/go-libp2p/core/event"
 	libp2pnetwork "github.com/libp2p/go-libp2p/core/network"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
-	"github.com/rollchains/gordian/gcosmos/gcstore"
-	"github.com/rollchains/gordian/gcosmos/gcstore/gcmemstore"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/ggrpc"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gp2papi"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/gdriver/gtxbuf"
-	"github.com/rollchains/gordian/gwatchdog"
-	"github.com/rollchains/gordian/tm/tmcodec/tmjson"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
-	"github.com/rollchains/gordian/tm/tmdriver"
-	"github.com/rollchains/gordian/tm/tmengine"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
-	"github.com/rollchains/gordian/tm/tmgossip"
-	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
-	"github.com/rollchains/gordian/tm/tmstore"
-	"github.com/rollchains/gordian/tm/tmstore/tmmemstore"
-	"github.com/rollchains/gordian/tmsqlite"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-//go:generate go run github.com/rollchains/gordian/gassert/cmd/generate-nodebug component_debug.go
+//go:generate go run github.com/gordian-engine/gordian/gassert/cmd/generate-nodebug component_debug.go
 
 // The various interfaces we expect a Component to satisfy.
 var (
@@ -558,7 +558,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 	if c.grpcLn != nil {
 		// TODO; share this with the http server as a wrapper.
-		// https://github.com/rollchains/gordian/pull/14
+		// https://github.com/gordian-engine/gordian/pull/14
 		c.grpcServer = ggrpc.NewGordianGRPCServer(ctx, c.log.With("sys", "grpc"), ggrpc.GRPCServerConfig{
 			Listener: c.grpcLn,
 

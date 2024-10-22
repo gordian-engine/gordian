@@ -1,6 +1,6 @@
 package tmconsensustest
 
-import "github.com/rollchains/gordian/tm/tmconsensus"
+import "github.com/gordian-engine/gordian/tm/tmconsensus"
 
 // AnnotationTestCase is a name and an Annotations value.
 // See [AnnotationCombinations] for more details.

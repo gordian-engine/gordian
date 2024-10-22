@@ -1,7 +1,7 @@
 package tmdriver
 
 import (
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // InitChainRequest is sent from the engine to the driver,

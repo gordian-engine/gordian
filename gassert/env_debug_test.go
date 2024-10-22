@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rollchains/gordian/gassert"
+	"github.com/gordian-engine/gordian/gassert"
 	"github.com/stretchr/testify/require"
 )
 

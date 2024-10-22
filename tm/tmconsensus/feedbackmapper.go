@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rollchains/gordian/gexchange"
+	"github.com/gordian-engine/gordian/gexchange"
 )
 
 // AcceptAllValidFeedbackMapper converts a [FineGrainedConsensusHandler]

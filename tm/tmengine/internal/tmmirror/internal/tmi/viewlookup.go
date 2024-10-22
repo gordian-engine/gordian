@@ -1,7 +1,7 @@
 package tmi
 
 import (
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // RVFieldFlags is used when looking up

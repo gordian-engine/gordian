@@ -3,8 +3,8 @@ package gcmd
 import (
 	"crypto/ed25519"
 
+	"github.com/gordian-engine/gordian/gcrypto"
 	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/rollchains/gordian/gcrypto"
 	"golang.org/x/crypto/blake2b"
 )
 

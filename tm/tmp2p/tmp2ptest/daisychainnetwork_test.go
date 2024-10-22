@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/rollchains/gordian/tm/tmp2p/tmp2ptest"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmp2ptest"
 )
 
 func TestDaisyChainNetwork_Compliance(t *testing.T) {

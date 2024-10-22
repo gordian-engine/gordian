@@ -1,6 +1,6 @@
 package tmelink
 
-import "github.com/rollchains/gordian/tm/tmconsensus"
+import "github.com/gordian-engine/gordian/tm/tmconsensus"
 
 // NetworkViewUpdate is a set of versioned round views, representing the engine's view of the network,
 // that the engine is intended to send to the gossip strategy.

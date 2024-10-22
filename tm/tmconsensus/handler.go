@@ -3,7 +3,7 @@ package tmconsensus
 import (
 	"context"
 
-	"github.com/rollchains/gordian/gexchange"
+	"github.com/gordian-engine/gordian/gexchange"
 )
 
 // ConsensusHandler is the interface to handle the set of consensus messages.

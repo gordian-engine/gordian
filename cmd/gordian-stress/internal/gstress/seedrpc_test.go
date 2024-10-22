@@ -5,10 +5,10 @@ import (
 	"net/rpc"
 	"testing"
 
-	"github.com/rollchains/gordian/cmd/gordian-stress/internal/gstress"
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
-	"github.com/rollchains/gordian/tm/tmengine"
+	"github.com/gordian-engine/gordian/cmd/gordian-stress/internal/gstress"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/tm/tmengine"
 	"github.com/stretchr/testify/require"
 )
 

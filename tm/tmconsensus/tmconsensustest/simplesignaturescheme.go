@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // SimpleSignatureScheme is a very basic signature scheme used for tests.

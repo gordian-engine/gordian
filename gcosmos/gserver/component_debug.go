@@ -3,8 +3,8 @@
 package gserver
 
 import (
-	"github.com/rollchains/gordian/gassert"
-	"github.com/rollchains/gordian/tm/tmengine"
+	"github.com/gordian-engine/gordian/gassert"
+	"github.com/gordian-engine/gordian/tm/tmengine"
 	"github.com/spf13/pflag"
 )
 
@@ -12,7 +12,7 @@ const assertRuleFlag = "g-assert-rules"
 
 func addAssertRuleFlag(fs *pflag.FlagSet) {
 	// Default to all rules.
-	fs.String(assertRuleFlag, "*", "Comma-separated assertion rules. Only available in debug builds. See package docs for github.com/rollchains/gordian/gassert.")
+	fs.String(assertRuleFlag, "*", "Comma-separated assertion rules. Only available in debug builds. See package docs for github.com/gordian-engine/gordian/gassert.")
 }
 
 func getAssertEngineOpt(cfg map[string]any) (tmengine.Opt, error) {

@@ -77,8 +77,8 @@ func (h *Libp2pHost) Provide(
 	}
 
 	return ProvideResult{
-		DataID: dataID,
-		Addrs:  locs,
+		DataID:  dataID,
+		Addrs:   locs,
 		Encoded: encoded,
 	}, nil
 }

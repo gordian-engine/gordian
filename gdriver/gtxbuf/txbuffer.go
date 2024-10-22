@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"runtime/trace"
 
-	"github.com/rollchains/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/internal/gchan"
 )
 
 // Buffer is a validator-local transaction buffer.

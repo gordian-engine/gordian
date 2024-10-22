@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rollchains/gordian/gcosmos/internal/gci"
-	"github.com/rollchains/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/gcosmos/internal/gci"
+	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/stretchr/testify/require"
 )
 

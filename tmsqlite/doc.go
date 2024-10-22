@@ -1,3 +1,3 @@
 // Package tmsqlite contains an SQLite implementation
-// of the [github.com/rollchains/gordian/tm/tmstore] interfaces.
+// of the [github.com/gordian-engine/gordian/tm/tmstore] interfaces.
 package tmsqlite

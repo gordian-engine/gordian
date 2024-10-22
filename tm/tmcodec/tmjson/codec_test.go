@@ -3,10 +3,10 @@ package tmjson_test
 import (
 	"testing"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmcodec"
-	"github.com/rollchains/gordian/tm/tmcodec/tmcodectest"
-	"github.com/rollchains/gordian/tm/tmcodec/tmjson"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmcodec"
+	"github.com/gordian-engine/gordian/tm/tmcodec/tmcodectest"
+	"github.com/gordian-engine/gordian/tm/tmcodec/tmjson"
 )
 
 func TestMarshalCodec(t *testing.T) {

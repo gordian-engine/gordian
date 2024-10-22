@@ -2,7 +2,7 @@
 
 package gasserttest
 
-import "github.com/rollchains/gordian/gassert"
+import "github.com/gordian-engine/gordian/gassert"
 
 // DefaultEnv returns an assertion environment that enables all assertion checks.
 func DefaultEnv() gassert.Env {

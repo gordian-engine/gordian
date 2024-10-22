@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/rollchains/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/internal/gchan"
 )
 
 type Watchdog struct {

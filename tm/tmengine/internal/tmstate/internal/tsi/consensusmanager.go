@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"runtime/trace"
 
-	"github.com/rollchains/gordian/internal/gchan"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // ConsensusManager is a subsystem of the state machine

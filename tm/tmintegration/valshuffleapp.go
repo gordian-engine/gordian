@@ -9,10 +9,10 @@ import (
 	"math/rand/v2"
 	"sync"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmdriver"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/internal/glog"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmdriver"
 	"golang.org/x/crypto/blake2b"
 )
 

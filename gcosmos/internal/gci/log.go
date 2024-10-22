@@ -4,7 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/cosmos/cosmos-sdk/server"
-	"github.com/rollchains/gordian/gcosmos/slogcosmos"
+	"github.com/gordian-engine/gordian/gcosmos/slogcosmos"
 	"github.com/spf13/cobra"
 )
 

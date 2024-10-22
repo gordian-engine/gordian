@@ -3,13 +3,13 @@ package tsi
 import (
 	"context"
 
-	"github.com/rollchains/gordian/gassert"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmdriver"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
+	"github.com/gordian-engine/gordian/gassert"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmdriver"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmeil"
 )
 
-//go:generate go run github.com/rollchains/gordian/gassert/cmd/generate-nodebug roundlifecycle_debug.go
+//go:generate go run github.com/gordian-engine/gordian/gassert/cmd/generate-nodebug roundlifecycle_debug.go
 
 // RoundLifecycle holds the values that need to exist only through a single round in the state machine.
 type RoundLifecycle struct {

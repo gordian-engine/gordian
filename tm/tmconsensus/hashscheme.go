@@ -1,6 +1,6 @@
 package tmconsensus
 
-import "github.com/rollchains/gordian/gcrypto"
+import "github.com/gordian-engine/gordian/gcrypto"
 
 // HashScheme defines ways to determine various hashes in a consensus engine.
 type HashScheme interface {

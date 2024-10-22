@@ -1,6 +1,6 @@
 package tmi
 
-import "github.com/rollchains/gordian/tm/tmconsensus"
+import "github.com/gordian-engine/gordian/tm/tmconsensus"
 
 // Snapshot is a copy of the kernel's state,
 // used in methods running on other goroutines

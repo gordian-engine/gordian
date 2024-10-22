@@ -1,6 +1,6 @@
 package tmgossiptest
 
-import "github.com/rollchains/gordian/tm/tmengine/tmelink"
+import "github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 
 type PassThroughStrategy struct {
 	Ready chan struct{}

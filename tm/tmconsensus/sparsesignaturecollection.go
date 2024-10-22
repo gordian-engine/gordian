@@ -3,7 +3,7 @@ package tmconsensus
 import (
 	"fmt"
 
-	"github.com/rollchains/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto"
 )
 
 // SparseSignatureCollection is a tm-specific,

@@ -1,7 +1,7 @@
 package tmgossip
 
 import (
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 )
 
 // Strategy is a gossip strategy, whose purpose is to observe changes to round state

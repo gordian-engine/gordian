@@ -3,7 +3,7 @@ package tmelink
 import (
 	"fmt"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // ReplayedHeaderRequest is sent from the Driver to the Engine

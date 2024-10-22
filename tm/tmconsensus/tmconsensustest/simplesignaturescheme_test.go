@@ -5,8 +5,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/stretchr/testify/require"
 )
 

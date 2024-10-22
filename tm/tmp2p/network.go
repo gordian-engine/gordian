@@ -3,7 +3,7 @@ package tmp2p
 import (
 	"context"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // Connection is the generalized connection to the p2p network.

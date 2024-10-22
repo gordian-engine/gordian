@@ -1,7 +1,7 @@
 package tmi
 
 import (
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 )
 
 // lagManager holds the current lag state and whether it has been sent.

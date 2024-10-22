@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/rollchains/gordian/gdriver/gtxbuf"
-	"github.com/rollchains/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/gdriver/gtxbuf"
+	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/stretchr/testify/require"
 )
 

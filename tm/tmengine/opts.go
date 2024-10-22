@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rollchains/gordian/gassert"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/gwatchdog"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmdriver"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
-	"github.com/rollchains/gordian/tm/tmgossip"
-	"github.com/rollchains/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/gassert"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gwatchdog"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmdriver"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmstate"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmgossip"
+	"github.com/gordian-engine/gordian/tm/tmstore"
 )
 
 // Opt is an option for the Engine.
@@ -88,7 +88,7 @@ func WithRoundStore(s tmstore.RoundStore) Opt {
 
 func WithStateMachineStore(s tmstore.StateMachineStore) Opt {
 	return func(_ *Engine, smc *tmstate.StateMachineConfig) error {
-		smc.StateMachineStore= s
+		smc.StateMachineStore = s
 		return nil
 	}
 }

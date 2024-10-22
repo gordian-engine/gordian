@@ -6,7 +6,7 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/rollchains/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto"
 )
 
 // Validator is the simple representation of a validator,

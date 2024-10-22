@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rollchains/gordian/tm/tmstore"
-	"github.com/rollchains/gordian/tm/tmstore/tmmemstore"
-	"github.com/rollchains/gordian/tm/tmstore/tmstoretest"
+	"github.com/gordian-engine/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/tm/tmstore/tmmemstore"
+	"github.com/gordian-engine/gordian/tm/tmstore/tmstoretest"
 )
 
 func TestStateMachineStore(t *testing.T) {

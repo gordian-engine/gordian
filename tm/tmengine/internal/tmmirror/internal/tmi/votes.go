@@ -1,6 +1,6 @@
 package tmi
 
-import "github.com/rollchains/gordian/gcrypto"
+import "github.com/gordian-engine/gordian/gcrypto"
 
 type AddPrevoteRequest struct {
 	H uint64

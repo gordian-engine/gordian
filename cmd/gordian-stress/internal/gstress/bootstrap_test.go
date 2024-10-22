@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/stretchr/testify/require"
 )
 

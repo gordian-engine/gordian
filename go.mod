@@ -1,4 +1,4 @@
-module github.com/rollchains/gordian
+module github.com/gordian-engine/gordian
 
 go 1.23
 

@@ -8,10 +8,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/rollchains/gordian/gexchange"
-	"github.com/rollchains/gordian/internal/gchan"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmp2p"
+	"github.com/gordian-engine/gordian/gexchange"
+	"github.com/gordian-engine/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmp2p"
 )
 
 // DaisyChain is an in-memory network modeled as a series of point-to-point connections.

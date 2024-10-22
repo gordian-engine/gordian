@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rollchains/gordian/tm/internal/tmtimeout"
-	tmenginetest "github.com/rollchains/gordian/tm/tmengine/tmenginetest"
+	"github.com/gordian-engine/gordian/tm/internal/tmtimeout"
+	tmenginetest "github.com/gordian-engine/gordian/tm/tmengine/tmenginetest"
 	"github.com/stretchr/testify/require"
 )
 

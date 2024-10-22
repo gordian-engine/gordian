@@ -1,4 +1,4 @@
-module github.com/rollchains/gordian/gcosmos
+module github.com/gordian-engine/gordian/gcosmos
 
 go 1.23
 

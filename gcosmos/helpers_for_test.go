@@ -19,8 +19,8 @@ import (
 	"cosmossdk.io/core/transaction"
 	simdcmd "cosmossdk.io/simapp/v2/simdv2/cmd"
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
-	"github.com/rollchains/gordian/gcosmos/internal/gci"
-	"github.com/rollchains/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/gcosmos/internal/gci"
+	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/rollchains/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto"
 )
 
 // HashUnknownError indicates a reference to an unknown or unrecognized hash.

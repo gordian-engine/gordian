@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate/tmstatetest"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmstate/tmstatetest"
 	"github.com/stretchr/testify/require"
 )
 

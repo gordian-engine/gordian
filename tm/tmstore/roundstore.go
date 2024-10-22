@@ -3,7 +3,7 @@ package tmstore
 import (
 	"context"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // RoundStore stores and retrieves the proposed headers, prevotes, and precommits

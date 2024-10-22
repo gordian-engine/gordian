@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/rollchains/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto"
 )
 
 type PrecommitProof struct {

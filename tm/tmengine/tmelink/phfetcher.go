@@ -3,7 +3,7 @@ package tmelink
 import (
 	"context"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // ProposedHeaderFetcher contains the input and output channels to fetch proposed headers.

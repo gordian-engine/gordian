@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/rollchains/gordian/gexchange"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gexchange"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // ChannelConsensusHandler is a [tmconsensus.ConsensusHandler]

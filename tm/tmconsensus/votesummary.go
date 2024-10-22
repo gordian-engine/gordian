@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rollchains/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto"
 )
 
 // VoteSummary summarizes the known votes in a round.

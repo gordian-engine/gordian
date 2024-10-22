@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"cosmossdk.io/core/transaction"
-	"github.com/rollchains/gordian/gcosmos/gserver/gservertest"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/gservertest"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsbd"
 	"github.com/stretchr/testify/require"
 )
 

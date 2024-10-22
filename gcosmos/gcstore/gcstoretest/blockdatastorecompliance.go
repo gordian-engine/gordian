@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rollchains/gordian/gcosmos/gcstore"
+	"github.com/gordian-engine/gordian/gcosmos/gcstore"
 	"github.com/stretchr/testify/require"
 )
 

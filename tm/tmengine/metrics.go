@@ -1,6 +1,6 @@
 package tmengine
 
-import "github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
+import "github.com/gordian-engine/gordian/tm/tmengine/internal/tmemetrics"
 
 // Metrics are the metrics for subsystems within the [Engine].
 // The fields in this type should not be considered stable

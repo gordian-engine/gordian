@@ -1,6 +1,6 @@
 package tsi
 
-import "github.com/rollchains/gordian/tm/tmconsensus"
+import "github.com/gordian-engine/gordian/tm/tmconsensus"
 
 // Step is the granular step within a single height-round.
 type Step uint8

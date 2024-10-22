@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
-	"github.com/rollchains/gordian/tm/tmstore"
-	"github.com/rollchains/gordian/tm/tmstore/tmstoretest"
-	"github.com/rollchains/gordian/tmsqlite"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/tm/tmstore/tmstoretest"
+	"github.com/gordian-engine/gordian/tmsqlite"
 	"github.com/stretchr/testify/require"
 )
 

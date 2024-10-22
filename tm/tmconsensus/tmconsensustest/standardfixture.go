@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmstore/tmmemstore"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmstore/tmmemstore"
 )
 
 // StandardFixture is a set of values used for typical test flows

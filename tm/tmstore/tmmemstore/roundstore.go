@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmstore"
 )
 
 type RoundStore struct {

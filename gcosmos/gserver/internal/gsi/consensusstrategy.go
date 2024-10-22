@@ -10,11 +10,11 @@ import (
 
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/internal/gchan"
-	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/internal/glog"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 type ConsensusStrategy struct {

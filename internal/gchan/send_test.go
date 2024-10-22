@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rollchains/gordian/internal/gchan"
-	"github.com/rollchains/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/stretchr/testify/require"
 )
 

@@ -1,8 +1,8 @@
 package tmi
 
 import (
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 )
 
 type gossipViewManager struct {

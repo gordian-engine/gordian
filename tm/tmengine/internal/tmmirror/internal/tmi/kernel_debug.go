@@ -5,8 +5,8 @@ package tmi
 import (
 	"fmt"
 
-	"github.com/rollchains/gordian/gassert"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/gassert"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 )
 
 // invariantReplayedHeaderResponse asserts that err is

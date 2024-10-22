@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmeil"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 	"github.com/stretchr/testify/require"
 )
 

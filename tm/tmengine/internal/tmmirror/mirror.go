@@ -7,17 +7,17 @@ import (
 	"log/slog"
 	"runtime/trace"
 
-	"github.com/rollchains/gordian/gassert"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/gwatchdog"
-	"github.com/rollchains/gordian/internal/gchan"
-	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmemetrics"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
-	"github.com/rollchains/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/gassert"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gwatchdog"
+	"github.com/gordian-engine/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/internal/glog"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmeil"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmemetrics"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmstore"
 )
 
 // Mirror maintains a read-only view of the chain state,

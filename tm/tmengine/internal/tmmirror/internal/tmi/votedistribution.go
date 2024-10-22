@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // voteDistribution was an artifact of the no-longer-present tmconsensus.RoundState2 type.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 type CommittedHeaderStore struct {

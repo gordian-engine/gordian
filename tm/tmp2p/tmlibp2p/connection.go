@@ -10,14 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gordian-engine/gordian/gexchange"
+	"github.com/gordian-engine/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/tm/tmcodec"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/rollchains/gordian/gexchange"
-	"github.com/rollchains/gordian/internal/gchan"
-	"github.com/rollchains/gordian/tm/tmcodec"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmp2p"
 )
 
 const topicConsensus = "consensus/v1"

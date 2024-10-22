@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gordian-engine/gordian/gcosmos/gcstore"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/gordian-engine/gordian/tm/tmcodec"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmstore"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2pnetwork "github.com/libp2p/go-libp2p/core/network"
 	libp2pprotocol "github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/rollchains/gordian/gcosmos/gcstore"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
-	"github.com/rollchains/gordian/tm/tmcodec"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmstore"
 )
 
 // DataHost provides header and block data over libp2p.

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmmirror/tmmirrortest"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror/tmmirrortest"
 	"github.com/stretchr/testify/require"
 )
 

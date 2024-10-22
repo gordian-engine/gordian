@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/rollchains/gordian/tm/tmgossip"
-	"github.com/rollchains/gordian/tm/tmintegration"
-	"github.com/rollchains/gordian/tm/tmp2p"
-	"github.com/rollchains/gordian/tm/tmp2p/tmp2ptest"
+	"github.com/gordian-engine/gordian/tm/tmgossip"
+	"github.com/gordian-engine/gordian/tm/tmintegration"
+	"github.com/gordian-engine/gordian/tm/tmp2p"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmp2ptest"
 )
 
 type DaisyChainInmemFactory struct {

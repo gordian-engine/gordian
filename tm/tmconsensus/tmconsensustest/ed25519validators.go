@@ -1,9 +1,9 @@
 package tmconsensustest
 
 import (
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/gcrypto/gcryptotest"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto/gcryptotest"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // PrivValEd25519 contains a Validator with an ed25519 key

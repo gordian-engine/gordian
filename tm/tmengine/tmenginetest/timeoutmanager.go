@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/rollchains/gordian/tm/internal/tmtimeout"
+	"github.com/gordian-engine/gordian/tm/internal/tmtimeout"
 )
 
 type hr struct {

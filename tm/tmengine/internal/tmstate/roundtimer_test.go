@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmengine"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmengine"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmstate"
 	"github.com/stretchr/testify/require"
 )
 

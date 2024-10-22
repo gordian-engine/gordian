@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rollchains/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto"
 )
 
 // RoundView is the engine's observed view of the state of a particular round.

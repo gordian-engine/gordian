@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/rollchains/gordian/gcrypto/gcryptotest"
+	"github.com/gordian-engine/gordian/gcrypto/gcryptotest"
 )
 
 func main() {

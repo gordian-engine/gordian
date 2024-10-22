@@ -3,9 +3,9 @@ package gcmemstore_test
 import (
 	"testing"
 
-	"github.com/rollchains/gordian/gcosmos/gcstore"
-	"github.com/rollchains/gordian/gcosmos/gcstore/gcmemstore"
-	"github.com/rollchains/gordian/gcosmos/gcstore/gcstoretest"
+	"github.com/gordian-engine/gordian/gcosmos/gcstore"
+	"github.com/gordian-engine/gordian/gcosmos/gcstore/gcmemstore"
+	"github.com/gordian-engine/gordian/gcosmos/gcstore/gcstoretest"
 )
 
 func TestBlockDataStoreCompliance(t *testing.T) {

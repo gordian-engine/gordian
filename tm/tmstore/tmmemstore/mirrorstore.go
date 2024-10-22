@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/rollchains/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/tm/tmstore"
 )
 
 // MirrorStore is an in-memory implementation of [tmstore.MirrorStore].

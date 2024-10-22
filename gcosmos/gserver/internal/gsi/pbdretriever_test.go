@@ -7,14 +7,14 @@ import (
 	"testing"
 
 	"cosmossdk.io/core/transaction"
-	"github.com/rollchains/gordian/gcosmos/gserver/gservertest"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmcodec/tmjson"
-	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
-	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p/tmlibp2ptest"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/gservertest"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsi"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmcodec/tmjson"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p/tmlibp2ptest"
 	"github.com/stretchr/testify/require"
 )
 

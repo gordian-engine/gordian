@@ -4,9 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/rollchains/gordian/gexchange"
-	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gexchange"
+	"github.com/gordian-engine/gordian/internal/glog"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // LoggingConsensusHandler logs the inputs to the [tmconsensus.ConsensusHandler] interface

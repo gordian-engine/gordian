@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // ChannelBroadcaster satisfies the tmp2p.Broadcaster interface,

@@ -3,7 +3,7 @@ package tmstore
 import (
 	"context"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // CommittedHeaderStore is the store that the Engine's Mirror uses for committed block headers.

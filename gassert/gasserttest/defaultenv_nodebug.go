@@ -2,7 +2,7 @@
 
 package gasserttest
 
-import "github.com/rollchains/gordian/gassert"
+import "github.com/gordian-engine/gordian/gassert"
 
 // DefaultEnv returns the no-op Env, in non-debug builds.
 func DefaultEnv() gassert.Env {

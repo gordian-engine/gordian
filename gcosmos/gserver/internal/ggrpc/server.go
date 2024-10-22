@@ -9,9 +9,9 @@ import (
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsi"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmstore"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsi"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmstore"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )

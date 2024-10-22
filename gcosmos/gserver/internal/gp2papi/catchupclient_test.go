@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"cosmossdk.io/core/transaction"
-	"github.com/rollchains/gordian/gcosmos/gserver/gservertest"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gp2papi"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/gservertest"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gp2papi"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 	"github.com/stretchr/testify/require"
 )
 

@@ -3,8 +3,8 @@ package tmstore
 import (
 	"context"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // ValidatorStore manages storage and retrieval of sets of validators,

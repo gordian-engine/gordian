@@ -5,17 +5,17 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/rollchains/gordian/gassert/gasserttest"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/gwatchdog"
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmconsensus"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
-	"github.com/rollchains/gordian/tm/tmdriver"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmeil"
-	"github.com/rollchains/gordian/tm/tmengine/internal/tmstate"
-	"github.com/rollchains/gordian/tm/tmengine/tmelink"
-	"github.com/rollchains/gordian/tm/tmstore/tmmemstore"
+	"github.com/gordian-engine/gordian/gassert/gasserttest"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gwatchdog"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/tm/tmdriver"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmeil"
+	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmstate"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmstore/tmmemstore"
 )
 
 // Fixture is a helper type to create a [tmstate.StateMachine] and its required inputs

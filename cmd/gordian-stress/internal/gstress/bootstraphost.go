@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/internal/glog"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/gorilla/mux"
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/internal/glog"
-	"github.com/rollchains/gordian/tm/tmconsensus"
 )
 
 // BootstrapHost is the host portion for bootstrapping a stress cluster.

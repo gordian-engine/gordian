@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // kState holds the kernel's mutable state.

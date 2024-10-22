@@ -6,7 +6,7 @@ import (
 	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/core/transaction"
 	"cosmossdk.io/server/v2/appmanager"
-	"github.com/rollchains/gordian/gdriver/gtxbuf"
+	"github.com/gordian-engine/gordian/gdriver/gtxbuf"
 )
 
 // SDKTxBuf is aliased to the fully qualified gtx.Buffer,

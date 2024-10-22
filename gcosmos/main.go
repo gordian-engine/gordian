@@ -12,10 +12,9 @@ import (
 	"cosmossdk.io/simapp/v2"
 	simdcmd "cosmossdk.io/simapp/v2/simdv2/cmd"
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
-	"github.com/rollchains/gordian/gcosmos/internal/gci"
+	"github.com/gordian-engine/gordian/gcosmos/internal/gci"
 	"github.com/spf13/cobra"
 )
-
 
 func main() {
 	var rootCmd *cobra.Command

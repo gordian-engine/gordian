@@ -11,11 +11,11 @@ import (
 	"sync"
 
 	"cosmossdk.io/core/transaction"
+	"github.com/gordian-engine/gordian/gcosmos/gserver/internal/gsbd"
+	"github.com/gordian-engine/gordian/internal/gchan"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 	libp2pprotocol "github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/rollchains/gordian/gcosmos/gserver/internal/gsbd"
-	"github.com/rollchains/gordian/internal/gchan"
 )
 
 // pbdP2PFetchRequest is sent from [*PBDRetriever.Retrieve] to the main loop

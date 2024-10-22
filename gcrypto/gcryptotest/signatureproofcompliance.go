@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rollchains/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/stretchr/testify/require"
 )
 

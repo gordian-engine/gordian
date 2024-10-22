@@ -6,12 +6,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gordian-engine/gordian/cmd/gordian-stress/internal/gstress"
+	"github.com/gordian-engine/gordian/internal/gtest"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/libp2p/go-libp2p"
 	libp2phost "github.com/libp2p/go-libp2p/core/host"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
-	"github.com/rollchains/gordian/cmd/gordian-stress/internal/gstress"
-	"github.com/rollchains/gordian/internal/gtest"
-	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/stretchr/testify/require"
 )
 

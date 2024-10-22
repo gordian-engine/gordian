@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/rollchains/gordian/gcosmos/gcstore"
+	"github.com/gordian-engine/gordian/gcosmos/gcstore"
 )
 
 type BlockDataStore struct {

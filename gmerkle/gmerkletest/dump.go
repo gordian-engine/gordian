@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rollchains/gordian/gmerkle"
+	"github.com/gordian-engine/gordian/gmerkle"
 )
 
 // DumpStringIDTree is a shorthand for DumpTree when the tree has string IDs.

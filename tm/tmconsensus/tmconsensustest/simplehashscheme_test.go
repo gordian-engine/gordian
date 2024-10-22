@@ -3,8 +3,8 @@ package tmconsensustest_test
 import (
 	"testing"
 
-	"github.com/rollchains/gordian/gcrypto"
-	"github.com/rollchains/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 )
 
 func TestSimpleHashScheme(t *testing.T) {

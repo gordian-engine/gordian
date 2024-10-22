@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/stretchr/testify/require"
 )
 

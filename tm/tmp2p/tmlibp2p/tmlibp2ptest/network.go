@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gordian-engine/gordian/tm/tmcodec"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -13,8 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
-	"github.com/rollchains/gordian/tm/tmcodec"
-	"github.com/rollchains/gordian/tm/tmp2p/tmlibp2p"
 )
 
 type Network struct {

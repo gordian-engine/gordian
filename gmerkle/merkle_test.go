@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/bits-and-blooms/bitset"
-	"github.com/rollchains/gordian/gmerkle"
+	"github.com/gordian-engine/gordian/gmerkle"
 	"github.com/stretchr/testify/require"
 )
 

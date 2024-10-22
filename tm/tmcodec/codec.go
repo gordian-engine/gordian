@@ -1,7 +1,7 @@
 package tmcodec
 
 import (
-	"github.com/rollchains/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 type Marshaler interface {
