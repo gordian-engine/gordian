@@ -27,7 +27,7 @@ The state machine consults a user-provided "driver" to track state changes
 and determine what data to propose to other network participants.
 
 The core Gordian repository (the one you are looking at now) does **not** provide a Driver.
-See [https://github.com/gordian-engine/gcosmos](gcosmos) for an example Driver integrating with the [Cosmos SDK](https://github.com/cosmos/cosmos-sdk).
+See [gcosmos](https://github.com/gordian-engine/gcosmos) for an example Driver integrating with the [Cosmos SDK](https://github.com/cosmos/cosmos-sdk).
 
 Outside of the driver, Gordian currently provides a networking layer using [libp2p](https://libp2p.io/),
 a storage layer using [SQLite](https://www.sqlite.org/),
@@ -75,4 +75,4 @@ The Gordian source code is available under the Apache 2.0 license.
 
 Copyright (c) 2024 Strangelove Crypto, Inc.
 
-[^1]: Tendermint is a registered trademark of All in Bits, Inc.
+[^1]: Tendermint is a registered trademark of All in Bits, Inc. and is used here for identification purposes only.
