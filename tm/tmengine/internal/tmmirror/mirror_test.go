@@ -1168,6 +1168,79 @@ func TestMirror_pastInitialHeight(t *testing.T) {
 	})
 }
 
+func TestMirror_restart(t *testing.T) {
+	t.Run("when committing height is more than 2 past initial height", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		mfx := tmmirrortest.NewFixture(ctx, t, 2)
+
+		// Now we need to get the committing height up to 3,
+		// which means voting height needs to be 4.
+		//
+		// To simplify this setup involving a few store writes,
+		// we will just use the normal exported API.
+
+		m := mfx.NewMirror()
+		defer m.Wait()
+		defer cancel()
+
+		ph1 := mfx.Fx.NextProposedHeader([]byte("app_data_1"), 0)
+		mfx.Fx.SignProposal(ctx, &ph1, 0)
+
+		// Just send precommits, no point in doing prevotes.
+
+		lastPH := ph1
+		for i := uint64(1); i < 5; i++ {
+			require.Equal(t, tmconsensus.HandleProposedHeaderAccepted, m.HandleProposedHeader(ctx, lastPH))
+
+			voteMap := map[string][]int{
+				string(lastPH.Header.Hash): {0, 1},
+			}
+			precommitProof := tmconsensus.PrecommitSparseProof{
+				Height:     i,
+				Round:      0,
+				PubKeyHash: string(mfx.Fx.ValSet().PubKeyHash),
+				Proofs:     mfx.Fx.SparsePrecommitProofMap(ctx, i, 0, voteMap),
+			}
+			require.Equal(t, tmconsensus.HandleVoteProofsAccepted.String(), m.HandlePrecommitProofs(ctx, precommitProof).String())
+
+			dataID := []byte(fmt.Sprintf("app_state_%d", i))
+			mfx.Fx.CommitBlock(lastPH.Header, dataID, 0, mfx.Fx.PrecommitProofMap(ctx, i, 0, voteMap))
+
+			lastPH = mfx.Fx.NextProposedHeader([]byte(fmt.Sprintf("app_data_%d", i)), 0)
+			mfx.Fx.SignProposal(ctx, &lastPH, 0)
+		}
+
+		// Now stop the running mirror.
+		cancel()
+		m.Wait()
+
+		// And start a new one.
+		// We have to use a new fixture for this with the old stores.
+		// There is some state carried over that makes a restart almost always lock up,
+		// if we try to make another mirror from the original fixture.
+		ctx, cancel = context.WithCancel(context.Background())
+		defer cancel()
+
+		mfx2 := tmmirrortest.NewFixture(ctx, t, 2)
+		mfx2.Cfg.Store = mfx.Cfg.Store
+		mfx2.Cfg.CommittedHeaderStore = mfx.Cfg.CommittedHeaderStore
+		mfx2.Cfg.RoundStore = mfx.Cfg.RoundStore
+		mfx2.Cfg.ValidatorStore = mfx.Cfg.ValidatorStore
+
+		m = mfx2.NewMirror()
+		defer m.Wait()
+		defer cancel()
+
+		// We already have lastPH seeded as a new entry,
+		// so just make sure it is handled correctly
+		require.Equal(t, tmconsensus.HandleProposedHeaderAccepted, m.HandleProposedHeader(ctx, lastPH))
+	})
+}
+
 func TestMirror_CommitToBlockStore(t *testing.T) {
 	t.Parallel()
 

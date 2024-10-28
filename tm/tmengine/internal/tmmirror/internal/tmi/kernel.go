@@ -1890,7 +1890,12 @@ func (k *Kernel) loadInitialCommittingView(ctx context.Context, s *kState) error
 	if h == k.initialHeight || h == k.initialHeight+1 {
 		vs = k.initialValSet
 	} else {
-		panic("TODO: load committing validators beyond initial height")
+		// Load commit proof at h-1, take next validators.
+		ch, err := k.hStore.LoadCommittedHeader(ctx, h-1)
+		if err != nil {
+			panic(err)
+		}
+		vs = ch.Header.NextValidatorSet
 	}
 
 	rv, err := k.loadInitialView(ctx, h, r, vs)
