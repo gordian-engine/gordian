@@ -59,7 +59,7 @@ instead of forking the entire consensus engine.
 
 ### Full demo with gcosmos
 
-We recommend the earlier mentioned [https://github.com/gordian-engine/gcosmos](gcosmos) repository
+We recommend the earlier mentioned [gcosmos](https://github.com/gordian-engine/gcosmos) repository
 for a full-featured demo involving Gordian integrating with the Cosmos SDK.
 
 ### Lightweight demo
