@@ -1,3 +1,4 @@
+![gordian-640-320](https://github.com/user-attachments/assets/3df2c242-7dfb-420e-a1a3-1ea325e9b549)
 # Gordian
 
 Gordian is a modular, [Byzantine-fault-tolerant](https://en.wikipedia.org/wiki/Byzantine_fault) consensus engine.
