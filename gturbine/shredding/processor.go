@@ -15,15 +15,6 @@ const (
 	maxBlockSize = 128 * 1024 * 1024 // 128MB maximum block size (matches Solana)
 )
 
-type ShredGroup struct {
-	DataShreds     []*gturbine.Shred
-	RecoveryShreds []*gturbine.Shred
-	GroupID        string // Changed to string for UUID
-	BlockHash      []byte
-	Height         uint64 // Added to struct level
-	OriginalSize   int
-}
-
 type Processor struct {
 	encoder     *erasure.Encoder
 	dataShreds  int
@@ -77,12 +68,14 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 	value, ok := p.groups.Load(shred.GroupID)
 	if !ok {
 		group := &ShredGroup{
-			DataShreds:     make([]*gturbine.Shred, shred.Total),
-			RecoveryShreds: make([]*gturbine.Shred, shred.Total),
-			GroupID:        shred.GroupID,
-			BlockHash:      shred.BlockHash,
-			Height:         shred.Height,
-			OriginalSize:   shred.FullDataSize,
+			DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
+			RecoveryShreds:      make([]*gturbine.Shred, shred.TotalRecoveryShreds),
+			TotalDataShreds:     shred.TotalDataShreds,
+			TotalRecoveryShreds: shred.TotalRecoveryShreds,
+			GroupID:             shred.GroupID,
+			BlockHash:           shred.BlockHash,
+			Height:              shred.Height,
+			OriginalSize:        shred.FullDataSize,
 		}
 		group.DataShreds[shred.Index] = shred
 		p.groups.Store(shred.GroupID, group)
@@ -118,12 +111,14 @@ func (p *Processor) CollectRecoveryShred(shred *gturbine.Shred) error {
 	value, ok := p.groups.Load(shred.GroupID)
 	if !ok {
 		group := &ShredGroup{
-			DataShreds:     make([]*gturbine.Shred, shred.Total),
-			RecoveryShreds: make([]*gturbine.Shred, shred.Total),
-			GroupID:        shred.GroupID,
-			BlockHash:      shred.BlockHash,
-			Height:         shred.Height,
-			OriginalSize:   shred.FullDataSize,
+			DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
+			RecoveryShreds:      make([]*gturbine.Shred, shred.TotalRecoveryShreds),
+			TotalDataShreds:     shred.TotalDataShreds,
+			TotalRecoveryShreds: shred.TotalRecoveryShreds,
+			GroupID:             shred.GroupID,
+			BlockHash:           shred.BlockHash,
+			Height:              shred.Height,
+			OriginalSize:        shred.FullDataSize,
 		}
 		group.RecoveryShreds[shred.Index] = shred
 		p.groups.Store(shred.GroupID, group)

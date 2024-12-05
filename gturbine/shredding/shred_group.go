@@ -9,6 +9,17 @@ import (
 	"github.com/gordian-engine/gordian/gturbine/erasure"
 )
 
+type ShredGroup struct {
+	DataShreds          []*gturbine.Shred
+	RecoveryShreds      []*gturbine.Shred
+	TotalDataShreds     int
+	TotalRecoveryShreds int
+	GroupID             string // Changed to string for UUID
+	BlockHash           []byte
+	Height              uint64 // Added to struct level
+	OriginalSize        int
+}
+
 // FromBlock creates a new ShredGroup from a block of data
 func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, chunkSize uint32) (*ShredGroup, error) {
 	if len(block) == 0 {
@@ -32,12 +43,14 @@ func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, 
 
 	// Create new shred group
 	group := &ShredGroup{
-		DataShreds:     make([]*gturbine.Shred, dataShreds),
-		RecoveryShreds: make([]*gturbine.Shred, recoveryShreds),
-		GroupID:        uuid.New().String(),
-		BlockHash:      blockHash[:],
-		Height:         height,
-		OriginalSize:   len(block),
+		DataShreds:          make([]*gturbine.Shred, dataShreds),
+		RecoveryShreds:      make([]*gturbine.Shred, recoveryShreds),
+		TotalDataShreds:     dataShreds,
+		TotalRecoveryShreds: recoveryShreds,
+		GroupID:             uuid.New().String(),
+		BlockHash:           blockHash[:],
+		Height:              height,
+		OriginalSize:        len(block),
 	}
 
 	// Create fixed-size data chunks
@@ -71,35 +84,37 @@ func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, 
 	// Create data shreds
 	for i := range dataBytes {
 		group.DataShreds[i] = &gturbine.Shred{
-			Index:        uint32(i),
-			Total:        uint32(dataShreds),
-			Data:         dataBytes[i],
-			BlockHash:    blockHash[:],
-			GroupID:      group.GroupID,
-			Height:       height,
-			FullDataSize: group.OriginalSize,
+			Index:               i,
+			TotalDataShreds:     dataShreds,
+			TotalRecoveryShreds: recoveryShreds,
+			Data:                dataBytes[i],
+			BlockHash:           blockHash[:],
+			GroupID:             group.GroupID,
+			Height:              height,
+			FullDataSize:        group.OriginalSize,
 		}
 	}
 
 	// Create recovery shreds
 	for i := range recoveryBytes {
 		group.RecoveryShreds[i] = &gturbine.Shred{
-			Index:        uint32(i),
-			Total:        uint32(len(recoveryBytes)),
-			Data:         recoveryBytes[i],
-			BlockHash:    blockHash[:],
-			GroupID:      group.GroupID,
-			Height:       height,
-			FullDataSize: group.OriginalSize,
+			Index:               i,
+			TotalDataShreds:     dataShreds,
+			TotalRecoveryShreds: recoveryShreds,
+			Data:                recoveryBytes[i],
+			BlockHash:           blockHash[:],
+			GroupID:             group.GroupID,
+			Height:              height,
+			FullDataSize:        group.OriginalSize,
 		}
 	}
 
 	return group, nil
 }
 
-// IsComplete checks if enough shreds are available for reconstruction
+// IsFull checks if enough shreds are available for reconstruction
 // NOTE: we'd like shredgroup to know the data threshold as a property on the shredgroup
-func (g *ShredGroup) IsComplete(dataThreshold int) bool {
+func (g *ShredGroup) IsFull(dataThreshold int) bool {
 
 	// TODO: ensure that we've met the threshold by quorum of both data and recovery using the
 	valid := 0
@@ -191,7 +206,7 @@ func (g *ShredGroup) CollectDataShred(shred *gturbine.Shred) (bool, error) {
 	}
 
 	g.DataShreds[shred.Index] = shred
-	return g.IsComplete(len(g.DataShreds)), nil
+	return g.IsFull(len(g.DataShreds)), nil
 }
 
 // CollectRecoveryShred adds a recovery shred to the group
@@ -217,5 +232,5 @@ func (g *ShredGroup) CollectRecoveryShred(shred *gturbine.Shred) (bool, error) {
 	}
 
 	g.RecoveryShreds[shred.Index] = shred
-	return g.IsComplete(len(g.DataShreds)), nil
+	return g.IsFull(len(g.DataShreds)), nil
 }
