@@ -16,47 +16,18 @@ const (
 )
 
 type Processor struct {
-	encoder     *erasure.Encoder
-	dataShreds  int
-	totalShreds int
-	chunkSize   uint32
-	groups      sync.Map // string -> *ShredGroup
-	cb          ProcessorCallback
+	groups sync.Map // string -> *ShredGroup
+	cb     ProcessorCallback
 }
 
 type ProcessorCallback interface {
 	ProcessBlock(height uint64, block []byte) error
 }
 
-func NewProcessor(chunkSize uint32, dataShreds, recoveryShreds int, cb ProcessorCallback) (*Processor, error) {
-	if chunkSize < minChunkSize || chunkSize > maxChunkSize {
-		return nil, fmt.Errorf("invalid chunk size %d: must be between %d and %d", chunkSize, minChunkSize, maxChunkSize)
-	}
-	if dataShreds <= 0 {
-		return nil, fmt.Errorf("dataShreds must be positive, got %d", dataShreds)
-	}
-	if recoveryShreds <= 0 {
-		return nil, fmt.Errorf("recoveryShreds must be positive, got %d", recoveryShreds)
-	}
-
-	// Validate maximum block size
-	maxPossibleBlockSize := int(chunkSize) * dataShreds
-	if maxPossibleBlockSize > maxBlockSize {
-		return nil, fmt.Errorf("chunk size and data shreds would allow blocks larger than %d bytes", maxBlockSize)
-	}
-
-	encoder, err := erasure.NewEncoder(dataShreds, recoveryShreds)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create encoder: %w", err)
-	}
-
+func NewProcessor(cb ProcessorCallback) *Processor {
 	return &Processor{
-		encoder:     encoder,
-		dataShreds:  dataShreds,
-		totalShreds: dataShreds + recoveryShreds,
-		chunkSize:   chunkSize,
-		cb:          cb,
-	}, nil
+		cb: cb,
+	}
 }
 
 // CollectDataShred processes an incoming data shred
@@ -90,7 +61,11 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 		return fmt.Errorf("failed to collect data shred: %w", err)
 	}
 	if full {
-		block, err := group.ReconstructBlock(p.encoder)
+		encoder, err := erasure.NewEncoder(group.TotalDataShreds, group.TotalRecoveryShreds)
+		if err != nil {
+			return fmt.Errorf("failed to create encoder: %w", err)
+		}
+		block, err := group.ReconstructBlock(encoder)
 		if err != nil {
 			return fmt.Errorf("failed to reconstruct block: %w", err)
 		}
@@ -133,7 +108,11 @@ func (p *Processor) CollectRecoveryShred(shred *gturbine.Shred) error {
 		return fmt.Errorf("failed to collect recovery shred: %w", err)
 	}
 	if full {
-		block, err := group.ReconstructBlock(p.encoder)
+		encoder, err := erasure.NewEncoder(group.TotalDataShreds, group.TotalRecoveryShreds)
+		if err != nil {
+			return fmt.Errorf("failed to create encoder: %w", err)
+		}
+		block, err := group.ReconstructBlock(encoder)
 		if err != nil {
 			return fmt.Errorf("failed to reconstruct block: %w", err)
 		}

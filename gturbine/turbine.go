@@ -4,14 +4,6 @@ import (
 	"crypto/ed25519"
 )
 
-// ShredType indicates whether a shred contains data or recovery information
-type ShredType int32
-
-const (
-	ShredTypeData ShredType = iota
-	ShredTypeRecovery
-)
-
 // Config holds Turbine configuration
 type Config struct {
 	DataPlaneFanout uint32
@@ -29,10 +21,9 @@ type Shred struct {
 	Height       uint64 // Block height for chain reference
 
 	// Shred-specific metadata
-	Index               int       // Index of this shred within the block
-	TotalDataShreds     int       // Total number of shreds for this block
-	TotalRecoveryShreds int       // Total number of shreds for this block
-	ShredType           ShredType // The type of the shred
+	Index               int // Index of this shred within the block
+	TotalDataShreds     int // Total number of shreds for this block
+	TotalRecoveryShreds int // Total number of shreds for this block
 
 	Data []byte // The actual shred data
 }
