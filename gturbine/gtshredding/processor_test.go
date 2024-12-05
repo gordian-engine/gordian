@@ -1,4 +1,4 @@
-package shredding
+package gtshredding
 
 // import (
 // 	"bytes"

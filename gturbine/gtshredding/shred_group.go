@@ -1,4 +1,4 @@
-package shredding
+package gtshredding
 
 import (
 	"crypto/sha256"
@@ -9,6 +9,7 @@ import (
 	"github.com/gordian-engine/gordian/gturbine/erasure"
 )
 
+// ShredGroup represents a group of shreds that can be used to reconstruct a block.
 type ShredGroup struct {
 	DataShreds          []*gturbine.Shred
 	RecoveryShreds      []*gturbine.Shred
