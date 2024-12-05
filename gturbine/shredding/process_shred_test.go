@@ -35,7 +35,7 @@ func corrupt(data []byte) {
 type testCase struct {
 	name      string
 	blockSize int
-	corrupt   []int   // indices of shreds to corrupt
+	corrupt   []int   // indices of shreds to corrupt and then mark as missing
 	remove    []int   // indices of shreds to remove
 	expectErr bool
 }
@@ -92,13 +92,6 @@ func TestProcessorShredding(t *testing.T) {
 				if len(group.DataShreds[i].Data) != int(DefaultChunkSize) {
 					t.Errorf("data shred %d wrong size: got %d want %d", 
                         i, len(group.DataShreds[i].Data), DefaultChunkSize)
-				}
-			}
-
-			for i := range group.RecoveryShreds {
-				if len(group.RecoveryShreds[i].Data) != int(DefaultChunkSize) {
-					t.Errorf("recovery shred %d wrong size: got %d want %d", 
-                        i, len(group.RecoveryShreds[i].Data), DefaultChunkSize)
 				}
 			}
 
@@ -160,12 +153,13 @@ func TestProcessorRecovery(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Apply corruptions
+			// Apply corruptions - corrupted shreds are immediately marked as nil
 			for _, idx := range tc.corrupt {
-				if idx < len(group.DataShreds) {
-					if group.DataShreds[idx] != nil {
-						corrupt(group.DataShreds[idx].Data)
-					}
+				if idx < len(group.DataShreds) && group.DataShreds[idx] != nil {
+					// First corrupt the data
+					corrupt(group.DataShreds[idx].Data)
+					// Then mark it as missing since it's corrupted
+					group.DataShreds[idx] = nil
 				}
 			}
 

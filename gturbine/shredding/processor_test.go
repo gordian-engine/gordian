@@ -8,16 +8,17 @@ import (
 	"testing"
 )
 
-const MaxBlockSize = 128 * 1024 * 1024 // 128MB blocks same as solana
-
 func TestProcessor(t *testing.T) {
 	t.Run("basic shred and reassemble", func(t *testing.T) {
-		processor, err := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
+		// Use 32:32 config
+		processor, err := NewProcessor(DefaultChunkSize, 32, 32)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		block := make([]byte, MaxBlockSize) // 128MB test block
+		// Calculate a valid block size based on configuration
+		blockSize := int(DefaultChunkSize) * 32 // 32 data shreds
+		block := make([]byte, blockSize)
 		if _, err := rand.Read(block); err != nil {
 			t.Fatal(err)
 		}
@@ -31,8 +32,8 @@ func TestProcessor(t *testing.T) {
 			t.Fatal("expected non-nil group")
 		}
 
-		if len(group.DataShreds) != DefaultDataShreds {
-			t.Errorf("expected %d data shreds, got %d", DefaultDataShreds, len(group.DataShreds))
+		if len(group.DataShreds) != 32 {
+			t.Errorf("expected %d data shreds, got %d", 32, len(group.DataShreds))
 		}
 
 		reassembled, err := processor.ReassembleBlock(group)
@@ -46,10 +47,11 @@ func TestProcessor(t *testing.T) {
 	})
 
 	t.Run("block size constraints", func(t *testing.T) {
-		processor, _ := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
+		processor, _ := NewProcessor(DefaultChunkSize, 32, 32)
 
-		// Test block exactly at max size
-		block := make([]byte, MaxBlockSize)
+		// Test block exactly at configured max size
+		maxSize := int(DefaultChunkSize) * 32
+		block := make([]byte, maxSize)
 		if _, err := rand.Read(block); err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +61,7 @@ func TestProcessor(t *testing.T) {
 		}
 
 		// Test oversized block
-		block = make([]byte, MaxBlockSize+1)
+		block = make([]byte, maxSize+1)
 		if _, err := rand.Read(block); err != nil {
 			t.Fatal(err)
 		}
@@ -76,15 +78,17 @@ func TestProcessor(t *testing.T) {
 			shouldRecover bool
 		}{
 			{"15% loss", 0.15, true},
-			{"45% loss", 0.45, true},
-			{"60% loss", 0.60, false},
+			{"45% loss", 0.45, true},  // Now recoverable with 32:32 configuration
+			{"60% loss", 0.60, false}, // Still too many losses to recover from
 		}
 
 		for _, sc := range scenarios {
 			t.Run(sc.name, func(t *testing.T) {
-				processor, _ := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
+				processor, _ := NewProcessor(DefaultChunkSize, 32, 32)
 
-				block := make([]byte, MaxBlockSize)
+				// Use max configured block size
+				blockSize := int(DefaultChunkSize) * 32
+				block := make([]byte, blockSize)
 				if _, err := rand.Read(block); err != nil {
 					t.Fatal(err)
 				}
@@ -131,6 +135,41 @@ func TestProcessor(t *testing.T) {
 					t.Error("expected recovery to fail")
 				}
 			})
+		}
+	})
+
+	t.Run("varying block sizes", func(t *testing.T) {
+		processor, _ := NewProcessor(DefaultChunkSize, 32, 32)
+		maxSize := int(DefaultChunkSize) * 32
+
+		testSizes := []int{
+			DefaultChunkSize,              // One chunk
+			maxSize/2,                     // Half max size
+			maxSize - DefaultChunkSize,    // One chunk less than max
+			maxSize,                       // Exact max size
+		}
+
+		for _, size := range testSizes {
+			block := make([]byte, size)
+			if _, err := rand.Read(block); err != nil {
+				t.Fatal(err)
+			}
+
+			group, err := processor.ProcessBlock(block, 1)
+			if err != nil {
+				t.Errorf("failed to process block of size %d: %v", size, err)
+				continue
+			}
+
+			reassembled, err := processor.ReassembleBlock(group)
+			if err != nil {
+				t.Errorf("failed to reassemble block of size %d: %v", size, err)
+				continue
+			}
+
+			if !bytes.Equal(block, reassembled) {
+				t.Errorf("mismatch for block size %d", size)
+			}
 		}
 	})
 }
