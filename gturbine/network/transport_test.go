@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gordian-engine/gordian/gexchange"
 	"github.com/gordian-engine/gordian/gturbine"
 	"github.com/gordian-engine/gordian/gturbine/builder"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
@@ -19,11 +20,24 @@ type testHandler struct {
 	heights []uint64
 }
 
-func (h *testHandler) OnProposedHeader(_ context.Context, ph tmconsensus.ProposedHeader) error {
+func (h *testHandler) HandleProposedHeader(context.Context, tmconsensus.ProposedHeader) gexchange.Feedback {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	// Store block data from header for verification
-	return nil
+	return gexchange.FeedbackAccepted
+}
+func (h *testHandler) HandlePrevoteProofs(context.Context, tmconsensus.PrevoteSparseProof) gexchange.Feedback {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Store block data from header for verification
+	return gexchange.FeedbackAccepted
+
+}
+func (h *testHandler) HandlePrecommitProofs(context.Context, tmconsensus.PrecommitSparseProof) gexchange.Feedback {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Store block data from header for verification
+	return gexchange.FeedbackAccepted
 }
 
 func TestTransport(t *testing.T) {

@@ -3,29 +3,31 @@ package shredding
 import (
 	"bytes"
 	"crypto/rand"
+	"math"
+	mrand "math/rand"
 	"testing"
 )
 
 func TestProcessor(t *testing.T) {
-	t.Run("basic process and reassemble", func(t *testing.T) {
-		processor, err := NewProcessor(32, 4, 2)
+	t.Run("basic shred and reassemble", func(t *testing.T) {
+		processor, err := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		block := []byte("test block data")
-		height := uint64(100)
-
-		group, err := processor.ProcessBlock(block, height)
+		block := make([]byte, DefaultChunkSize*4) // 256KB test block
+		rand.Read(block)
+		group, err := processor.ProcessBlock(block, 1)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if len(group.DataShreds) != 4 {
-			t.Errorf("expected 4 data shreds, got %d", len(group.DataShreds))
+		if group == nil {
+			t.Fatal("expected non-nil group")
 		}
-		if len(group.RecoveryShreds) != 2 {
-			t.Errorf("expected 2 recovery shreds, got %d", len(group.RecoveryShreds))
+
+		if len(group.DataShreds) != DefaultDataShreds {
+			t.Errorf("expected %d data shreds, got %d", DefaultDataShreds, len(group.DataShreds))
 		}
 
 		reassembled, err := processor.ReassembleBlock(group)
@@ -38,78 +40,67 @@ func TestProcessor(t *testing.T) {
 		}
 	})
 
-	t.Run("recovery from missing shreds", func(t *testing.T) {
-		processor, err := NewProcessor(32, 4, 2)
-		if err != nil {
-			t.Fatal(err)
+	t.Run("packet loss scenarios", func(t *testing.T) {
+		scenarios := []struct {
+			name          string
+			lossRate      float64
+			shouldRecover bool
+		}{
+			{"15% loss", 0.15, true},
+			{"45% loss", 0.45, true},
+			{"60% loss", 0.60, false},
 		}
 
-		block := []byte("test block that needs recovery")
-		group, err := processor.ProcessBlock(block, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
+		for _, sc := range scenarios {
+			t.Run(sc.name, func(t *testing.T) {
+				processor, _ := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
 
-		// Remove some data shreds
-		group.DataShreds[0] = nil
-		group.DataShreds[1] = nil
+				// Create 4MB block
+				block := make([]byte, DefaultChunkSize*32)
+				rand.Read(block)
 
-		reassembled, err := processor.ReassembleBlock(group)
-		if err != nil {
-			t.Fatal(err)
-		}
+				group, err := processor.ProcessBlock(block, 1)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-		if !bytes.Equal(block, reassembled) {
-			t.Error("reassembled block does not match original after recovery")
-		}
-	})
+				// Calculate shreds to drop
+				totalShreds := len(group.DataShreds) + len(group.RecoveryShreds)
+				dropCount := int(math.Round(float64(totalShreds) * sc.lossRate))
 
-	t.Run("large block processing", func(t *testing.T) {
-		processor, err := NewProcessor(64*1024, 4, 2) // 64KB chunks
-		if err != nil {
-			t.Fatal(err)
-		}
+				// Track which shreds we've dropped
+				dropped := make(map[int]bool)
+				for i := 0; i < dropCount; i++ {
+					var idx int
+					// Keep trying until we find an undropped shred
+					for {
+						idx = mrand.Intn(totalShreds)
+						if !dropped[idx] {
+							dropped[idx] = true
+							break
+						}
+					}
 
-		block := make([]byte, 256*1024) // 256KB block
-		if _, err := rand.Read(block); err != nil {
-			t.Fatal(err)
-		}
+					// Drop the shred
+					if idx < len(group.DataShreds) {
+						group.DataShreds[idx] = nil
+					} else {
+						group.RecoveryShreds[idx-len(group.DataShreds)] = nil
+					}
+				}
 
-		group, err := processor.ProcessBlock(block, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		reassembled, err := processor.ReassembleBlock(group)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !bytes.Equal(block, reassembled) {
-			t.Error("reassembled large block does not match original")
-		}
-	})
-
-	t.Run("too many missing shreds", func(t *testing.T) {
-		processor, err := NewProcessor(32, 4, 2)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		block := []byte("test block")
-		group, err := processor.ProcessBlock(block, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Remove too many shreds to recover
-		group.DataShreds[0] = nil
-		group.DataShreds[1] = nil
-		group.DataShreds[2] = nil
-
-		_, err = processor.ReassembleBlock(group)
-		if err == nil {
-			t.Error("expected error with too many missing shreds")
+				// Attempt reassembly
+				reassembled, err := processor.ReassembleBlock(group)
+				if sc.shouldRecover {
+					if err != nil {
+						t.Errorf("expected recovery to succeed, got: %v", err)
+					} else if !bytes.Equal(block, reassembled) {
+						t.Error("reassembled block does not match original")
+					}
+				} else if err == nil {
+					t.Error("expected recovery to fail")
+				}
+			})
 		}
 	})
 }
