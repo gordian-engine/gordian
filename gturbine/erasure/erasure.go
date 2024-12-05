@@ -57,6 +57,23 @@ func (e *Encoder) GenerateRecoveryShreds(shreds [][]byte) ([][]byte, error) {
 }
 
 func (e *Encoder) Reconstruct(allShreds [][]byte) error {
+	if len(allShreds) != e.dataShreds+e.recoveryShreds {
+		return fmt.Errorf("expected %d total shreds, got %d", e.dataShreds+e.recoveryShreds, len(allShreds))
+	}
+
+	// Count non-nil shreds
+	validShreds := 0
+	for _, shred := range allShreds {
+		if shred != nil {
+			validShreds++
+		}
+	}
+
+	// Need at least dataShreds valid pieces for reconstruction
+	if validShreds < e.dataShreds {
+		return fmt.Errorf("insufficient shreds for reconstruction: have %d, need %d", validShreds, e.dataShreds)
+	}
+
 	if err := e.enc.Reconstruct(allShreds); err != nil {
 		return fmt.Errorf("reconstruction failed: %w", err)
 	}

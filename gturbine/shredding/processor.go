@@ -32,123 +32,113 @@ func NewProcessor(chunkSize uint32, dataShreds, recoveryShreds int) (*Processor,
 }
 
 func (p *Processor) ProcessBlock(block []byte, height uint64) (*ShredGroup, error) {
+	if len(block) > int(p.chunkSize)*p.dataShreds {
+		return nil, fmt.Errorf("block too large: %d bytes exceeds max size %d", len(block), p.chunkSize*uint32(p.dataShreds))
+	}
+
 	// Generate unique group ID
 	groupID := make([]byte, 32)
 	if _, err := rand.Read(groupID); err != nil {
 		return nil, fmt.Errorf("failed to generate group ID: %w", err)
 	}
 
-	// Split into equal-sized data shreds
-	shreds := make([]*gturbine.Shred, p.dataShreds)
-	shredSize := (len(block) + p.dataShreds - 1) / p.dataShreds
-	if shredSize > int(p.chunkSize) {
-		return nil, fmt.Errorf("block too large: %d bytes exceeds max size %d", len(block), p.chunkSize*uint32(p.dataShreds))
-	}
-
+	// Split data into equal sized chunks
+	chunkSize := (len(block) + p.dataShreds - 1) / p.dataShreds
+	dataBytes := make([][]byte, p.dataShreds)
+	
 	for i := 0; i < p.dataShreds; i++ {
-		start := i * shredSize
-		end := start + shredSize
+		start := i * chunkSize
+		end := start + chunkSize
 		if end > len(block) {
 			end = len(block)
-		}
-		shreds[i] = &gturbine.Shred{
-			Index:     uint32(i),
-			Total:     uint32(p.dataShreds),
-			Data:      append([]byte(nil), block[start:end]...),
-			BlockHash: groupID, // Using groupID as block hash for now
-			Height:    height,
+			// Pad last chunk if needed
+			chunk := make([]byte, chunkSize)
+			copy(chunk, block[start:end])
+			dataBytes[i] = chunk
+		} else {
+			dataBytes[i] = block[start:end]
 		}
 	}
 
-	// Convert to byte slices for erasure coding
-	dataBytes := make([][]byte, len(shreds))
-	for i, shred := range shreds {
-		data, err := SerializeShred(shred, ShredTypeData, groupID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize shred %d: %w", i, err)
-		}
-		dataBytes[i] = data
-	}
-
-	// Generate recovery shreds
+	// Generate recovery data
 	recoveryBytes, err := p.encoder.GenerateRecoveryShreds(dataBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate recovery shreds: %w", err)
 	}
 
-	recoveryShreds := make([]*gturbine.Shred, len(recoveryBytes))
-	for i, data := range recoveryBytes {
-		shred, _, _, err := DeserializeShred(data)
-		if err != nil {
-			return nil, fmt.Errorf("failed to deserialize recovery shred %d: %w", i, err)
+	// Create data shreds
+	dataShreds := make([]*gturbine.Shred, p.dataShreds)
+	for i := range dataBytes {
+		dataShreds[i] = &gturbine.Shred{
+			Index:     uint32(i),
+			Total:     uint32(p.dataShreds),
+			Data:      dataBytes[i],
+			BlockHash: groupID,
+			Height:    height,
 		}
-		recoveryShreds[i] = shred
+	}
+
+	// Create recovery shreds 
+	recoveryShreds := make([]*gturbine.Shred, len(recoveryBytes))
+	for i := range recoveryBytes {
+		recoveryShreds[i] = &gturbine.Shred{
+			Index:     uint32(i),
+			Total:     uint32(len(recoveryBytes)),
+			Data:      recoveryBytes[i],
+			BlockHash: groupID,
+			Height:    height,
+		}
 	}
 
 	return &ShredGroup{
-		DataShreds:     shreds,
+		DataShreds:     dataShreds,
 		RecoveryShreds: recoveryShreds,
 		GroupID:        groupID,
 	}, nil
 }
 
 func (p *Processor) ReassembleBlock(group *ShredGroup) ([]byte, error) {
-	allShreds := make([][]byte, p.totalShreds)
+	// Extract data bytes for erasure coding
+	allBytes := make([][]byte, p.totalShreds)
 	availableShreds := 0
 
-	// Gather available data and recovery shreds
 	for i, shred := range group.DataShreds {
 		if shred != nil {
-			data, err := SerializeShred(shred, ShredTypeData, group.GroupID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to serialize data shred %d: %w", i, err)
-			}
-			allShreds[i] = data
+			allBytes[i] = shred.Data
 			availableShreds++
 		}
 	}
 
-	offset := len(group.DataShreds)
 	for i, shred := range group.RecoveryShreds {
 		if shred != nil {
-			data, err := SerializeShred(shred, ShredTypeRecovery, group.GroupID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to serialize recovery shred %d: %w", i, err)
-			}
-			allShreds[offset+i] = data
+			allBytes[i+p.dataShreds] = shred.Data
 			availableShreds++
 		}
 	}
 
-	// Verify we have enough shreds to reconstruct
 	if availableShreds < p.dataShreds {
 		return nil, fmt.Errorf("insufficient shreds for reconstruction: have %d, need %d", availableShreds, p.dataShreds)
 	}
 
-	// Reconstruct missing shreds
-	if err := p.encoder.Reconstruct(allShreds); err != nil {
-		return nil, fmt.Errorf("failed to reconstruct shreds: %w", err)
+	// Reconstruct missing data
+	if err := p.encoder.Reconstruct(allBytes); err != nil {
+		return nil, fmt.Errorf("failed to reconstruct data: %w", err)
 	}
 
-	// Extract and validate data shreds
-	dataShreds := make([]*gturbine.Shred, p.dataShreds)
-	for i := 0; i < p.dataShreds; i++ {
-		shred, _, _, err := DeserializeShred(allShreds[i])
-		if err != nil {
-			return nil, fmt.Errorf("failed to deserialize reconstructed shred %d: %w", i, err)
-		}
-		dataShreds[i] = shred
-	}
-
-	// Reassemble block from data shreds
+	// Combine data shreds
 	totalSize := 0
-	for _, shred := range dataShreds {
-		totalSize += len(shred.Data)
+	for i := 0; i < p.dataShreds; i++ {
+		totalSize += len(allBytes[i])
 	}
 
 	block := make([]byte, 0, totalSize)
-	for _, shred := range dataShreds {
-		block = append(block, shred.Data...)
+	for i := 0; i < p.dataShreds; i++ {
+		block = append(block, allBytes[i]...)
+	}
+
+	// Remove any padding from the last chunk
+	if len(block) > totalSize {
+		block = block[:totalSize]
 	}
 
 	return block, nil

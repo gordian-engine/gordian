@@ -15,8 +15,11 @@ func TestProcessor(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		block := make([]byte, DefaultChunkSize*4) // 256KB test block
-		rand.Read(block)
+		block := make([]byte, MaxBlockSize) // 128MB test block
+		if _, err := rand.Read(block); err != nil {
+			t.Fatal(err)
+		}
+
 		group, err := processor.ProcessBlock(block, 1)
 		if err != nil {
 			t.Fatal(err)
@@ -40,6 +43,30 @@ func TestProcessor(t *testing.T) {
 		}
 	})
 
+	t.Run("block size constraints", func(t *testing.T) {
+		processor, _ := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
+
+		// Test block exactly at max size
+		block := make([]byte, MaxBlockSize)
+		if _, err := rand.Read(block); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := processor.ProcessBlock(block, 1); err != nil {
+			t.Errorf("failed to process max size block: %v", err)
+		}
+
+		// Test oversized block
+		block = make([]byte, MaxBlockSize+1)
+		if _, err := rand.Read(block); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := processor.ProcessBlock(block, 1); err == nil {
+			t.Error("expected error for oversized block")
+		}
+	})
+
 	t.Run("packet loss scenarios", func(t *testing.T) {
 		scenarios := []struct {
 			name          string
@@ -55,9 +82,10 @@ func TestProcessor(t *testing.T) {
 			t.Run(sc.name, func(t *testing.T) {
 				processor, _ := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
 
-				// Create 4MB block
-				block := make([]byte, DefaultChunkSize*32)
-				rand.Read(block)
+				block := make([]byte, MaxBlockSize)
+				if _, err := rand.Read(block); err != nil {
+					t.Fatal(err)
+				}
 
 				group, err := processor.ProcessBlock(block, 1)
 				if err != nil {

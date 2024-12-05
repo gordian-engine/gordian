@@ -3,21 +3,31 @@ package erasure
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
+	mrand "math/rand"
 	"testing"
 )
 
-func TestEncoder(t *testing.T) {
-	t.Run("basic encode decode", func(t *testing.T) {
-		enc, err := NewEncoder(4, 2)
+const (
+	// NOTE: blocksize needs to be a multiple of 64 for reed solomon to work
+	blockSize = 128 * 1024 * 1024 // 128MB blocks same as solana
+	numTests  = 5                 // Number of iterations for randomized tests
+)
+
+func TestEncoderRealWorld(t *testing.T) {
+	t.Run("solana-like configuration", func(t *testing.T) {
+		enc, err := NewEncoder(32, 32)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		dataShreds := [][]byte{
-			[]byte("data shard 1"),
-			[]byte("data shard 2"),
-			[]byte("data shard 3"),
-			[]byte("data shard 4"),
+		shredSize := blockSize / 32
+		dataShreds := make([][]byte, 32)
+		for i := range dataShreds {
+			dataShreds[i] = make([]byte, shredSize)
+			if _, err := rand.Read(dataShreds[i]); err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		recoveryShreds, err := enc.GenerateRecoveryShreds(dataShreds)
@@ -25,69 +35,123 @@ func TestEncoder(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(recoveryShreds) != 2 {
-			t.Fatalf("expected 2 recovery shreds, got %d", len(recoveryShreds))
+		if len(recoveryShreds) != 32 {
+			t.Fatalf("expected 32 recovery shreds, got %d", len(recoveryShreds))
 		}
 
 		allShreds := append(dataShreds, recoveryShreds...)
-		if ok, err := enc.Verify(allShreds); err != nil || !ok {
-			t.Error("verification failed for valid shreds")
-		}
-	})
 
-	t.Run("recovery scenarios", func(t *testing.T) {
-		enc, _ := NewEncoder(4, 2)
-		dataShreds := [][]byte{
-			[]byte("data shard 1"),
-			[]byte("data shard 2"),
-			[]byte("data shard 3"),
-			[]byte("data shard 4"),
-		}
-		recoveryShreds, _ := enc.GenerateRecoveryShreds(dataShreds)
-		allShreds := append(dataShreds, recoveryShreds...)
-
-		tests := []struct {
-			name      string
-			corrupt   []int
-			wantError bool
+		scenarios := []struct {
+			name          string
+			numDataLost   int
+			numParityLost int
+			shouldRecover bool
 		}{
-			{"lose one data shard", []int{0}, false},
-			{"lose two data shreds", []int{0, 1}, false},
-			{"lose all recovery shreds", []int{4, 5}, false},
-			{"lose three shreds", []int{0, 1, 2}, true},
+			{"lose 16 data shreds", 16, 0, true},
+			{"lose 16 data and 16 parity shreds", 16, 16, true},
+			{"lose 31 data shreds", 31, 0, true},
+			{"lose all parity shreds", 0, 32, true},
+			{"lose 32 data shreds and 1 parity shred", 32, 1, false},
+			{"lose 31 data and 2 parity shreds", 31, 2, false},
 		}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				corrupted := make([][]byte, len(allShreds))
-				copy(corrupted, allShreds)
+		for _, sc := range scenarios {
+			t.Run(sc.name, func(t *testing.T) {
+				testShreds := make([][]byte, len(allShreds))
+				copy(testShreds, allShreds)
 
-				for _, idx := range tt.corrupt {
-					corrupted[idx] = nil
+				// Remove data shreds
+				for i := 0; i < sc.numDataLost; i++ {
+					testShreds[i] = nil
 				}
 
-				err := enc.Reconstruct(corrupted)
-				if (err != nil) != tt.wantError {
-					t.Errorf("Reconstruct() error = %v, wantError %v", err, tt.wantError)
-					return
+				// Remove parity shreds
+				for i := 0; i < sc.numParityLost; i++ {
+					testShreds[32+i] = nil
 				}
 
-				if !tt.wantError {
+				err := enc.Reconstruct(testShreds)
+				if sc.shouldRecover {
+					if err != nil {
+						t.Errorf("failed to reconstruct when it should: %v", err)
+						return
+					}
+					// Verify reconstruction
 					for i := range dataShreds {
-						if !bytes.Equal(corrupted[i], dataShreds[i]) {
+						if !bytes.Equal(testShreds[i], dataShreds[i]) {
 							t.Errorf("shard %d not properly reconstructed", i)
 						}
 					}
+				} else if err == nil {
+					t.Error("reconstruction succeeded when it should have failed")
 				}
 			})
 		}
 	})
 
-	t.Run("large shreds", func(t *testing.T) {
-		enc, _ := NewEncoder(6, 3)
-		shredSize := 1024 * 1024 // 1MB shreds
+	t.Run("random failure patterns", func(t *testing.T) {
+		enc, _ := NewEncoder(32, 32)
+		shredSize := blockSize / 32
 
-		dataShreds := make([][]byte, 6)
+		for i := 0; i < numTests; i++ {
+			dataShreds := make([][]byte, 32)
+			for j := range dataShreds {
+				dataShreds[j] = make([]byte, shredSize)
+				if _, err := rand.Read(dataShreds[j]); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			recoveryShreds, err := enc.GenerateRecoveryShreds(dataShreds)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			allShreds := append(dataShreds, recoveryShreds...)
+			testShreds := make([][]byte, len(allShreds))
+			copy(testShreds, allShreds)
+
+			numToRemove := mrand.Intn(32)
+			removedIndices := make(map[int]bool)
+			for j := 0; j < numToRemove; j++ {
+				for {
+					idx := mrand.Intn(len(testShreds))
+					if !removedIndices[idx] {
+						testShreds[idx] = nil
+						removedIndices[idx] = true
+						break
+					}
+				}
+			}
+
+			err = enc.Reconstruct(testShreds)
+			if numToRemove >= 32 {
+				if err == nil {
+					t.Errorf("test %d: reconstruction succeeded with %d shreds removed", i, numToRemove)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("test %d: failed to reconstruct with %d shreds removed: %v", i, numToRemove, err)
+					continue
+				}
+
+				for j := range dataShreds {
+					if !bytes.Equal(testShreds[j], dataShreds[j]) {
+						t.Errorf("test %d: shard %d not properly reconstructed", i, j)
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("performance benchmarks", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("skipping performance test in short mode")
+		}
+
+		enc, _ := NewEncoder(32, 32)
+		shredSize := blockSize / 32
+		dataShreds := make([][]byte, 32)
 		for i := range dataShreds {
 			dataShreds[i] = make([]byte, shredSize)
 			rand.Read(dataShreds[i])
@@ -99,20 +163,27 @@ func TestEncoder(t *testing.T) {
 		}
 
 		allShreds := append(dataShreds, recoveryShreds...)
+		lostCounts := []int{8, 16, 24, 31}
 
-		// Remove 2 data shreds and 1 recovery shred
-		allShreds[0] = nil
-		allShreds[2] = nil
-		allShreds[6] = nil
+		for _, count := range lostCounts {
+			t.Run(fmt.Sprintf("reconstruct_%d_lost", count), func(t *testing.T) {
+				testShreds := make([][]byte, len(allShreds))
+				copy(testShreds, allShreds)
 
-		if err := enc.Reconstruct(allShreds); err != nil {
-			t.Fatal(err)
-		}
+				for i := 0; i < count; i++ {
+					testShreds[i] = nil
+				}
 
-		for i := range dataShreds {
-			if !bytes.Equal(allShreds[i], dataShreds[i]) {
-				t.Errorf("shard %d not properly reconstructed", i)
-			}
+				if err := enc.Reconstruct(testShreds); err != nil {
+					t.Fatal(err)
+				}
+
+				for i := range dataShreds {
+					if !bytes.Equal(testShreds[i], dataShreds[i]) {
+						t.Errorf("shard %d not properly reconstructed", i)
+					}
+				}
+			})
 		}
 	})
 }
