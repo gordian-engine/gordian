@@ -12,13 +12,14 @@ type Config struct {
 	ChunkSize       uint32
 }
 
-// Shred represents a piece of a block
+// Shred represents a piece of a block that can be sent over the network
 type Shred struct {
-	Index     uint32
-	Total     uint32  
-	Data      []byte
-	BlockHash []byte
-	Height    uint64
+	Index     uint32  // Index of this shred within the block
+	Total     uint32  // Total number of shreds for this block
+	Data      []byte  // The actual shred data
+	BlockHash []byte  // Hash for data verification
+	GroupID   []byte  // ID for associating shreds from the same block 
+	Height    uint64  // Block height for chain reference 
 }
 
 // Validator represents a node in the network
