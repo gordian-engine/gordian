@@ -18,7 +18,7 @@ type Shred struct {
 	Total     uint32  // Total number of shreds for this block
 	Data      []byte  // The actual shred data
 	BlockHash []byte  // Hash for data verification
-	GroupID   []byte  // ID for associating shreds from the same block 
+	GroupID   string  // UUID for associating shreds from the same block 
 	Height    uint64  // Block height for chain reference 
 }
 
