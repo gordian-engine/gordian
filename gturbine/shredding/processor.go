@@ -16,7 +16,8 @@ const (
 )
 
 type Processor struct {
-	groups sync.Map // string -> *ShredGroup
+	groups map[string]*ShredGroup
+	mu     sync.Mutex
 	cb     ProcessorCallback
 }
 
@@ -36,7 +37,9 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 		return fmt.Errorf("nil shred")
 	}
 
-	value, ok := p.groups.Load(shred.GroupID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	group, ok := p.groups[shred.GroupID]
 	if !ok {
 		group := &ShredGroup{
 			DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
@@ -49,12 +52,10 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 			OriginalSize:        shred.FullDataSize,
 		}
 		group.DataShreds[shred.Index] = shred
-		p.groups.Store(shred.GroupID, group)
+
+		p.groups[shred.GroupID] = group
 		return nil
 	}
-
-	// Get or create the shred group
-	group := value.(*ShredGroup)
 
 	full, err := group.CollectDataShred(shred)
 	if err != nil {
@@ -72,7 +73,7 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 		if err := p.cb.ProcessBlock(shred.Height, block); err != nil {
 			return fmt.Errorf("failed to process block: %w", err)
 		}
-		p.DeleteGroup(group.GroupID)
+		delete(p.groups, group.GroupID)
 	}
 	return nil
 }
@@ -83,7 +84,10 @@ func (p *Processor) CollectRecoveryShred(shred *gturbine.Shred) error {
 		return fmt.Errorf("nil shred")
 	}
 
-	value, ok := p.groups.Load(shred.GroupID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	group, ok := p.groups[shred.GroupID]
 	if !ok {
 		group := &ShredGroup{
 			DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
@@ -96,12 +100,9 @@ func (p *Processor) CollectRecoveryShred(shred *gturbine.Shred) error {
 			OriginalSize:        shred.FullDataSize,
 		}
 		group.RecoveryShreds[shred.Index] = shred
-		p.groups.Store(shred.GroupID, group)
+		p.groups[shred.GroupID] = group
 		return nil
 	}
-
-	// Get or create the shred group
-	group := value.(*ShredGroup)
 
 	full, err := group.CollectRecoveryShred(shred)
 	if err != nil {
@@ -119,21 +120,7 @@ func (p *Processor) CollectRecoveryShred(shred *gturbine.Shred) error {
 		if err := p.cb.ProcessBlock(shred.Height, block); err != nil {
 			return fmt.Errorf("failed to process block: %w", err)
 		}
-		p.DeleteGroup(group.GroupID)
+		delete(p.groups, group.GroupID)
 	}
 	return err
-}
-
-// GetGroup retrieves a shred group by its ID
-func (p *Processor) GetGroup(groupID string) (*ShredGroup, bool) {
-	value, exists := p.groups.Load(groupID)
-	if !exists {
-		return nil, false
-	}
-	return value.(*ShredGroup), true
-}
-
-// DeleteGroup removes a shred group
-func (p *Processor) DeleteGroup(groupID string) {
-	p.groups.Delete(groupID)
 }

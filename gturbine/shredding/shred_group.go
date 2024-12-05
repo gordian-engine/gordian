@@ -20,7 +20,7 @@ type ShredGroup struct {
 	OriginalSize        int
 }
 
-// FromBlock creates a new ShredGroup from a block of data
+// NewShredGroup creates a new ShredGroup from a block of data
 func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, chunkSize uint32) (*ShredGroup, error) {
 	if len(block) == 0 {
 		return nil, fmt.Errorf("empty block")
