@@ -1,8 +1,6 @@
 package gturbine
 
-import (
-	"crypto/ed25519"
-)
+import "github.com/gordian-engine/gordian/tm/tmconsensus"
 
 // Config holds Turbine configuration
 type Config struct {
@@ -28,23 +26,30 @@ type Shred struct {
 	Data []byte // The actual shred data
 }
 
-// Validator represents a node in the network
-type Validator struct {
-	PubKey  ed25519.PublicKey
-	Stake   uint64
-	NetAddr string
+type Tree struct {
+	Root   *Layer
+	Height uint32
+	Fanout uint32
 }
 
-// Layer represents a level in the Turbine tree
 type Layer struct {
-	Validators []Validator
+	Validators []tmconsensus.Validator
 	Parent     *Layer
 	Children   []*Layer
 }
 
-// Tree represents the complete Turbine propagation structure
-type Tree struct {
-	Root   *Layer
-	Fanout uint32
-	Height uint32
+// GetLayerByHeight returns layer at given height (0-based)
+func (t *Tree) GetLayerByHeight(height uint32) *Layer {
+	if height >= t.Height {
+		return nil
+	}
+
+	current := t.Root
+	for i := uint32(0); i < height; i++ {
+		if len(current.Children) == 0 {
+			return nil
+		}
+		current = current.Children[0]
+	}
+	return current
 }

@@ -1,7 +1,10 @@
 package builder
 
 import (
+	"bytes"
+
 	"github.com/gordian-engine/gordian/gturbine"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 // FindLayerPosition finds a validator's layer and index in the tree
@@ -13,7 +16,7 @@ func FindLayerPosition(tree *gturbine.Tree, pubKey []byte) (*gturbine.Layer, int
 	layer := tree.Root
 	for layer != nil {
 		for i, v := range layer.Validators {
-			if string(v.PubKey) == string(pubKey) {
+			if bytes.Equal(v.PubKey.PubKeyBytes(), pubKey) {
 				return layer, i
 			}
 		}
@@ -27,7 +30,7 @@ func FindLayerPosition(tree *gturbine.Tree, pubKey []byte) (*gturbine.Layer, int
 }
 
 // GetChildren returns the validators that should receive forwarded shreds
-func GetChildren(tree *gturbine.Tree, pubKey []byte) []gturbine.Validator {
+func GetChildren(tree *gturbine.Tree, pubKey []byte) []tmconsensus.Validator {
 	layer, idx := FindLayerPosition(tree, pubKey)
 	if layer == nil || len(layer.Children) == 0 {
 		return nil
@@ -37,6 +40,14 @@ func GetChildren(tree *gturbine.Tree, pubKey []byte) []gturbine.Validator {
 	childLayer := layer.Children[0]
 	startIdx := (idx * len(childLayer.Validators)) / len(layer.Validators)
 	endIdx := ((idx + 1) * len(childLayer.Validators)) / len(layer.Validators)
+	if startIdx == endIdx {
+		endIdx = startIdx + 1
+	}
+
+	// Ensure endIdx doesn't exceed slice bounds
+	if endIdx > len(childLayer.Validators) {
+		endIdx = len(childLayer.Validators)
+	}
 
 	return childLayer.Validators[startIdx:endIdx]
 }
