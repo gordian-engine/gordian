@@ -2,14 +2,21 @@ package shredding
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 
 	"github.com/gordian-engine/gordian/gturbine"
 	"github.com/gordian-engine/gordian/gturbine/erasure"
 )
 
+// Constants for error checking
+const (
+	minChunkSize = 1024              // 1KB minimum
+	maxChunkSize = 1 << 20          // 1MB maximum chunk size
+	maxBlockSize = 128 * 1024 * 1024 // 128MB maximum block size (matches Solana)
+)
+
 type Processor struct {
-	shredder    *Shredder
 	encoder     *erasure.Encoder
 	dataShreds  int
 	totalShreds int
@@ -17,13 +24,28 @@ type Processor struct {
 }
 
 func NewProcessor(chunkSize uint32, dataShreds, recoveryShreds int) (*Processor, error) {
+	if chunkSize < minChunkSize || chunkSize > maxChunkSize {
+		return nil, fmt.Errorf("invalid chunk size %d: must be between %d and %d", chunkSize, minChunkSize, maxChunkSize)
+	}
+	if dataShreds <= 0 {
+		return nil, fmt.Errorf("dataShreds must be positive, got %d", dataShreds)
+	}
+	if recoveryShreds <= 0 {
+		return nil, fmt.Errorf("recoveryShreds must be positive, got %d", recoveryShreds)
+	}
+
+	// Validate maximum block size
+	maxPossibleBlockSize := int(chunkSize) * dataShreds
+	if maxPossibleBlockSize > maxBlockSize {
+		return nil, fmt.Errorf("chunk size and data shreds would allow blocks larger than %d bytes", maxBlockSize)
+	}
+
 	encoder, err := erasure.NewEncoder(dataShreds, recoveryShreds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create encoder: %w", err)
 	}
 
 	return &Processor{
-		shredder:    NewShredder(chunkSize),
 		encoder:     encoder,
 		dataShreds:  dataShreds,
 		totalShreds: dataShreds + recoveryShreds,
@@ -32,9 +54,18 @@ func NewProcessor(chunkSize uint32, dataShreds, recoveryShreds int) (*Processor,
 }
 
 func (p *Processor) ProcessBlock(block []byte, height uint64) (*ShredGroup, error) {
-	if len(block) > int(p.chunkSize)*p.dataShreds {
-		return nil, fmt.Errorf("block too large: %d bytes exceeds max size %d", len(block), p.chunkSize*uint32(p.dataShreds))
+	if len(block) == 0 {
+		return nil, fmt.Errorf("empty block")
 	}
+	if len(block) > maxBlockSize {
+		return nil, fmt.Errorf("block too large: %d bytes exceeds max size %d", len(block), maxBlockSize)
+	}
+	if len(block) > int(p.chunkSize)*p.dataShreds {
+		return nil, fmt.Errorf("block too large for configured shred size: %d bytes exceeds max size %d", len(block), p.chunkSize*uint32(p.dataShreds))
+	}
+
+	// Calculate block hash for verification
+	blockHash := sha256.Sum256(block)
 
 	// Generate unique group ID
 	groupID := make([]byte, 32)
@@ -42,25 +73,29 @@ func (p *Processor) ProcessBlock(block []byte, height uint64) (*ShredGroup, erro
 		return nil, fmt.Errorf("failed to generate group ID: %w", err)
 	}
 
-	// Split data into equal sized chunks
-	chunkSize := (len(block) + p.dataShreds - 1) / p.dataShreds
+	// Create fixed-size data chunks
 	dataBytes := make([][]byte, p.dataShreds)
+	bytesPerShred := int(p.chunkSize)
 	
+	// Initialize all shreds to full chunk size with zeros
 	for i := 0; i < p.dataShreds; i++ {
-		start := i * chunkSize
-		end := start + chunkSize
-		if end > len(block) {
-			end = len(block)
-			// Pad last chunk if needed
-			chunk := make([]byte, chunkSize)
-			copy(chunk, block[start:end])
-			dataBytes[i] = chunk
-		} else {
-			dataBytes[i] = block[start:end]
-		}
+		dataBytes[i] = make([]byte, bytesPerShred)
 	}
 
-	// Generate recovery data
+	// Copy data into shreds
+	remaining := len(block)
+	offset := 0
+	for i := 0; i < p.dataShreds && remaining > 0; i++ {
+		toCopy := remaining
+		if toCopy > bytesPerShred {
+			toCopy = bytesPerShred
+		}
+		copy(dataBytes[i], block[offset:offset+toCopy])
+		offset += toCopy
+		remaining -= toCopy
+	}
+
+	// Generate recovery data using erasure coding
 	recoveryBytes, err := p.encoder.GenerateRecoveryShreds(dataBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate recovery shreds: %w", err)
@@ -73,19 +108,19 @@ func (p *Processor) ProcessBlock(block []byte, height uint64) (*ShredGroup, erro
 			Index:     uint32(i),
 			Total:     uint32(p.dataShreds),
 			Data:      dataBytes[i],
-			BlockHash: groupID,
+			BlockHash: blockHash[:],
 			Height:    height,
 		}
 	}
 
-	// Create recovery shreds 
+	// Create recovery shreds
 	recoveryShreds := make([]*gturbine.Shred, len(recoveryBytes))
 	for i := range recoveryBytes {
 		recoveryShreds[i] = &gturbine.Shred{
 			Index:     uint32(i),
 			Total:     uint32(len(recoveryBytes)),
 			Data:      recoveryBytes[i],
-			BlockHash: groupID,
+			BlockHash: blockHash[:],
 			Height:    height,
 		}
 	}
@@ -94,25 +129,64 @@ func (p *Processor) ProcessBlock(block []byte, height uint64) (*ShredGroup, erro
 		DataShreds:     dataShreds,
 		RecoveryShreds: recoveryShreds,
 		GroupID:        groupID,
+		BlockHash:      blockHash[:],
+		OriginalSize:   len(block),
 	}, nil
 }
 
 func (p *Processor) ReassembleBlock(group *ShredGroup) ([]byte, error) {
+	if group == nil {
+		return nil, fmt.Errorf("nil shred group")
+	}
+	if len(group.DataShreds) != p.dataShreds {
+		return nil, fmt.Errorf("incorrect number of data shreds: got %d, want %d", len(group.DataShreds), p.dataShreds)
+	}
+
+	// Find first non-nil data shred for height reference
+	var refHeight uint64
+	var foundRef bool
+	for _, shred := range group.DataShreds {
+		if shred != nil {
+			refHeight = shred.Height
+			foundRef = true
+			break
+		}
+	}
+	if !foundRef {
+		return nil, fmt.Errorf("no valid data shreds found")
+	}
+
 	// Extract data bytes for erasure coding
 	allBytes := make([][]byte, p.totalShreds)
 	availableShreds := 0
 
+	// Copy available data shreds
 	for i, shred := range group.DataShreds {
 		if shred != nil {
+			if len(shred.Data) != int(p.chunkSize) {
+				return nil, fmt.Errorf("invalid shred size: got %d, want %d", len(shred.Data), p.chunkSize)
+			}
+			if shred.Height != refHeight {
+				return nil, fmt.Errorf("mismatched heights in data shreds")
+			}
 			allBytes[i] = shred.Data
 			availableShreds++
 		}
 	}
 
-	for i, shred := range group.RecoveryShreds {
-		if shred != nil {
-			allBytes[i+p.dataShreds] = shred.Data
-			availableShreds++
+	// Copy available recovery shreds
+	if group.RecoveryShreds != nil {
+		for i, shred := range group.RecoveryShreds {
+			if shred != nil {
+				if len(shred.Data) != int(p.chunkSize) {
+					return nil, fmt.Errorf("invalid recovery shred size: got %d, want %d", len(shred.Data), p.chunkSize)
+				}
+				if shred.Height != refHeight {
+					return nil, fmt.Errorf("mismatched heights in recovery shreds")
+				}
+				allBytes[i+p.dataShreds] = shred.Data
+				availableShreds++
+			}
 		}
 	}
 
@@ -125,20 +199,23 @@ func (p *Processor) ReassembleBlock(group *ShredGroup) ([]byte, error) {
 		return nil, fmt.Errorf("failed to reconstruct data: %w", err)
 	}
 
-	// Combine data shreds
-	totalSize := 0
-	for i := 0; i < p.dataShreds; i++ {
-		totalSize += len(allBytes[i])
+	// Combine data shreds into block
+	block := make([]byte, 0, group.OriginalSize)
+	remaining := group.OriginalSize
+
+	for i := 0; i < p.dataShreds && remaining > 0; i++ {
+		toCopy := remaining
+		if toCopy > int(p.chunkSize) {
+			toCopy = int(p.chunkSize)
+		}
+		block = append(block, allBytes[i][:toCopy]...)
+		remaining -= toCopy
 	}
 
-	block := make([]byte, 0, totalSize)
-	for i := 0; i < p.dataShreds; i++ {
-		block = append(block, allBytes[i]...)
-	}
-
-	// Remove any padding from the last chunk
-	if len(block) > totalSize {
-		block = block[:totalSize]
+	// Verify reconstructed block hash
+	computedHash := sha256.Sum256(block)
+	if string(computedHash[:]) != string(group.BlockHash) {
+		return nil, fmt.Errorf("block hash mismatch after reconstruction")
 	}
 
 	return block, nil
@@ -148,4 +225,6 @@ type ShredGroup struct {
 	DataShreds     []*gturbine.Shred
 	RecoveryShreds []*gturbine.Shred
 	GroupID        []byte
+	BlockHash      []byte
+	OriginalSize   int
 }

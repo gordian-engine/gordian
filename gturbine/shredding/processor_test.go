@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+const MaxBlockSize = 128 * 1024 * 1024 // 128MB blocks same as solana
+
 func TestProcessor(t *testing.T) {
 	t.Run("basic shred and reassemble", func(t *testing.T) {
 		processor, err := NewProcessor(DefaultChunkSize, DefaultDataShreds, DefaultRecoveryShreds)
