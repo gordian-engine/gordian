@@ -48,6 +48,8 @@ func TestProcessorMemoryCleanup(t *testing.T) {
 	time.Sleep(cleanupInterval * 4)
 
 	// Verify completed block was cleaned up
+	p.completedBlocksMu.RLock()
+	defer p.completedBlocksMu.RUnlock()
 	if _, exists := p.completedBlocks[string(group.BlockHash)]; exists {
 		t.Error("completed block should have been cleaned up")
 	}
