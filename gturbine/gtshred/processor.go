@@ -99,20 +99,31 @@ func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 		if err := p.cb.ProcessBlock(shred.Height, shred.BlockHash, block); err != nil {
 			return fmt.Errorf("failed to process block: %w", err)
 		}
-		// remove the group from the map
-		delete(p.groups, group.GroupID)
 
 		// then mark the block as completed at time.Now()
 		p.completedBlocks[string(shred.BlockHash)] = time.Now()
+
+		// Reset the group before removing it (allows GC to collect old shreds)
+		group.Reset()
+		delete(p.groups, group.GroupID)
 	}
 	return nil
 }
 
-// In Processor
 func (p *Processor) cleanupStaleGroups(now time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	for hash, completedAt := range p.completedBlocks {
 		if now.Sub(completedAt) > p.cleanupInterval {
 			delete(p.completedBlocks, hash)
+			// Find and reset any groups with this block hash
+			for id, group := range p.groups {
+				if string(group.BlockHash) == hash {
+					group.Reset()
+					delete(p.groups, id)
+				}
+			}
 		}
 	}
 }
