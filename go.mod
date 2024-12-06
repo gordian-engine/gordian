@@ -6,6 +6,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.13.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20240428194347-eebcea082ee0
 	github.com/gorilla/mux v1.8.1
+	github.com/klauspost/reedsolomon v1.12.4
 	github.com/libp2p/go-libp2p v0.35.0
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/libp2p/go-libp2p-pubsub v0.11.0
@@ -15,6 +16,7 @@ require (
 	github.com/tv42/httpunix v0.0.0-20191220191345-2ba4b9c3382c
 	golang.org/x/crypto v0.27.0
 	golang.org/x/tools v0.22.0
+	google.golang.org/protobuf v1.34.2
 )
 
 require (
@@ -56,7 +58,7 @@ require (
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/koron/go-ssdp v0.0.4 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
@@ -140,7 +142,6 @@ require (
 	golang.org/x/text v0.18.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	gonum.org/v1/gonum v0.15.1 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.2.2 // indirect
 )
