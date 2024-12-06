@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 
 	"github.com/gordian-engine/gordian/gturbine"
-	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
 type TreeBuilder struct {
@@ -19,24 +18,22 @@ func NewTreeBuilder(fanout uint32) *TreeBuilder {
 }
 
 // BuildTree creates a new propagation tree with stake-weighted validator ordering
-func (b *TreeBuilder) BuildTree(validators []tmconsensus.Validator, slot uint64, shredIndex uint32) (*gturbine.Tree, error) {
-	if len(validators) == 0 {
+// It takes valIndices which is a presorted array of indices. It returns the tree
+// with the indices as the values. It is up to the caller to map these indicies to
+// the actual validators
+func (b *TreeBuilder) BuildTree(valIndices []uint64, slot uint64, shredIndex uint32) (*gturbine.Tree, error) {
+	if len(valIndices) == 0 {
 		return nil, nil
 	}
-
-	// Sort validators by stake (power) and pubkey
-	sortedVals := make([]tmconsensus.Validator, len(validators))
-	copy(sortedVals, validators)
-	tmconsensus.SortValidators(sortedVals)
 
 	// Generate deterministic seed for shuffling
 	seed := b.deriveTreeSeed(slot, shredIndex, 0)
 
 	// Fisher-Yates shuffle with deterministic seed
-	for i := len(sortedVals) - 1; i > 0; i-- {
+	for i := len(valIndices) - 1; i > 0; i-- {
 		// Use seed to generate index
 		j := int(binary.LittleEndian.Uint64(seed) % uint64(i+1))
-		sortedVals[i], sortedVals[j] = sortedVals[j], sortedVals[i]
+		valIndices[i], valIndices[j] = valIndices[j], valIndices[i]
 
 		// Update seed for next iteration
 		h := sha256.New()
@@ -49,7 +46,7 @@ func (b *TreeBuilder) BuildTree(validators []tmconsensus.Validator, slot uint64,
 		Fanout: b.fanout,
 	}
 
-	remaining := sortedVals
+	remaining := valIndices
 	currentLayer := &gturbine.Layer{}
 	tree.Root = currentLayer
 	tree.Height = 1

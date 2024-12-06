@@ -1,7 +1,5 @@
 package gturbine
 
-import "github.com/gordian-engine/gordian/tm/tmconsensus"
-
 // Config holds Turbine configuration
 type Config struct {
 	DataPlaneFanout uint32
@@ -17,7 +15,7 @@ type Tree struct {
 }
 
 type Layer struct {
-	Validators []tmconsensus.Validator
+	Validators []uint64
 	Parent     *Layer
 	Children   []*Layer
 }

@@ -1,30 +1,18 @@
 package gtbuilder
 
 import (
-	"bytes"
-	"crypto/ed25519"
 	"testing"
 
-	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/gturbine"
-	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
-func makeTestTree(validatorCount int) *gturbine.Tree {
+func makeTestTree(count int) *gturbine.Tree {
 	b := NewTreeBuilder(200)
-	validators := make([]tmconsensus.Validator, validatorCount)
-
-	for i := 0; i < validatorCount; i++ {
-		pubKey := ed25519.PublicKey(make([]byte, ed25519.PublicKeySize))
-		pubKey[0] = byte(i % 255)
-		pubKey[1] = byte(i / 255)
-		validators[i] = tmconsensus.Validator{
-			PubKey: gcrypto.Ed25519PubKey(pubKey),
-			Power:  uint64((validatorCount - i) * 100),
-		}
+	indices := make([]uint64, count)
+	for i := 0; i < count; i++ {
+		indices[i] = uint64(i)
 	}
-
-	tree, _ := b.BuildTree(validators, 1, 0)
+	tree, _ := b.BuildTree(indices, 1, 0)
 	return tree
 }
 
@@ -32,38 +20,26 @@ func TestHelpers(t *testing.T) {
 	t.Run("find position in large tree", func(t *testing.T) {
 		tree := makeTestTree(500)
 
-		// Test finding root validator
-		searchKey := make([]byte, ed25519.PublicKeySize)
-		searchKey[0] = byte(0 % 255)
-		searchKey[1] = byte(0 / 255)
-		layer, idx := FindLayerPosition(tree, searchKey)
+		// Test finding first validator
+		layer, idx := FindLayerPosition(tree, 0)
 		if layer == nil {
 			t.Fatal("validator not found")
 		}
-
-		// Verify the found validator has our search key
-		foundKey := layer.Validators[idx].PubKey.PubKeyBytes()
-		if !bytes.Equal(searchKey, foundKey) {
-			t.Errorf("found wrong validator: want %v, got %v", searchKey, foundKey)
+		if layer.Validators[idx] != 0 {
+			t.Errorf("found wrong validator index: want 0, got %d", layer.Validators[idx])
 		}
 
-		// Test finding last layer validator
-		searchKey[0] = byte(499 % 255)
-		searchKey[1] = byte(499 / 255)
-		layer, idx = FindLayerPosition(tree, searchKey)
+		// Test finding last validator
+		layer, idx = FindLayerPosition(tree, 499)
 		if layer == nil {
 			t.Fatal("validator not found")
 		}
-		foundKey = layer.Validators[idx].PubKey.PubKeyBytes()
-		if !bytes.Equal(searchKey, foundKey) {
-			t.Errorf("found wrong validator: want %v, got %v", searchKey, foundKey)
+		if layer.Validators[idx] != 499 {
+			t.Errorf("found wrong validator index: want 499, got %d", layer.Validators[idx])
 		}
 
 		// Test non-existent validator
-		badKey := make([]byte, ed25519.PublicKeySize)
-		badKey[0] = 255
-		badKey[1] = 255
-		layer, idx = FindLayerPosition(tree, badKey)
+		layer, idx = FindLayerPosition(tree, 1000)
 		if layer != nil || idx != -1 {
 			t.Error("found non-existent validator")
 		}
@@ -73,28 +49,28 @@ func TestHelpers(t *testing.T) {
 		tree := makeTestTree(500)
 
 		// Root layer validators should each get 1 child
-		for i, v := range tree.Root.Validators {
-			children := GetChildren(tree, v.PubKey.PubKeyBytes())
+		for _, v := range tree.Root.Validators {
+			children := GetChildren(tree, v)
 			expectedCount := 1 // 200 validators divided by 200 fanout
 			if len(children) != expectedCount {
-				t.Errorf("validator %d: expected %d children, got %d", i, expectedCount, len(children))
+				t.Errorf("validator %d: expected %d children, got %d", v, expectedCount, len(children))
 			}
 		}
 
 		// Middle layer validators should each get 0 or 1 child
-		for i, v := range tree.Root.Children[0].Validators {
-			children := GetChildren(tree, v.PubKey.PubKeyBytes())
+		for _, v := range tree.Root.Children[0].Validators {
+			children := GetChildren(tree, v)
 			if len(children) > 1 {
-				t.Errorf("middle layer validator %d has too many children: %d", i, len(children))
+				t.Errorf("middle layer validator %d has too many children: %d", v, len(children))
 			}
 		}
 
 		// Last layer validators should have no children
 		lastLayer := tree.Root.Children[0].Children[0]
-		for i, v := range lastLayer.Validators {
-			children := GetChildren(tree, v.PubKey.PubKeyBytes())
+		for _, v := range lastLayer.Validators {
+			children := GetChildren(tree, v)
 			if len(children) != 0 {
-				t.Errorf("last layer validator %d has children when it shouldn't: %d", i, len(children))
+				t.Errorf("last layer validator %d has children when it shouldn't: %d", v, len(children))
 			}
 		}
 	})
