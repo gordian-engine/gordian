@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/gordian-engine/gordian/gturbine"
-	"github.com/gordian-engine/gordian/gturbine/erasure"
+	"github.com/gordian-engine/gordian/gturbine/gtencoding"
+	"github.com/gordian-engine/gordian/gturbine/gtshred"
 )
 
 // Constants for error checking
@@ -22,17 +22,18 @@ type Processor struct {
 }
 
 type ProcessorCallback interface {
-	ProcessBlock(height uint64, block []byte) error
+	ProcessBlock(height uint64, blockHash []byte, block []byte) error
 }
 
 func NewProcessor(cb ProcessorCallback) *Processor {
 	return &Processor{
-		cb: cb,
+		cb:     cb,
+		groups: make(map[string]*ShredGroup),
 	}
 }
 
 // CollectDataShred processes an incoming data shred
-func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
+func (p *Processor) CollectShred(shred *gtshred.Shred) error {
 	if shred == nil {
 		return fmt.Errorf("nil shred")
 	}
@@ -42,8 +43,8 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 	group, ok := p.groups[shred.GroupID]
 	if !ok {
 		group := &ShredGroup{
-			DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
-			RecoveryShreds:      make([]*gturbine.Shred, shred.TotalRecoveryShreds),
+			DataShreds:          make([]*gtshred.Shred, shred.TotalDataShreds),
+			RecoveryShreds:      make([]*gtshred.Shred, shred.TotalRecoveryShreds),
 			TotalDataShreds:     shred.TotalDataShreds,
 			TotalRecoveryShreds: shred.TotalRecoveryShreds,
 			GroupID:             shred.GroupID,
@@ -57,12 +58,12 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 		return nil
 	}
 
-	full, err := group.CollectDataShred(shred)
+	full, err := group.CollectShred(shred)
 	if err != nil {
 		return fmt.Errorf("failed to collect data shred: %w", err)
 	}
 	if full {
-		encoder, err := erasure.NewEncoder(group.TotalDataShreds, group.TotalRecoveryShreds)
+		encoder, err := gtencoding.NewEncoder(group.TotalDataShreds, group.TotalRecoveryShreds)
 		if err != nil {
 			return fmt.Errorf("failed to create encoder: %w", err)
 		}
@@ -70,57 +71,10 @@ func (p *Processor) CollectDataShred(shred *gturbine.Shred) error {
 		if err != nil {
 			return fmt.Errorf("failed to reconstruct block: %w", err)
 		}
-		if err := p.cb.ProcessBlock(shred.Height, block); err != nil {
+		if err := p.cb.ProcessBlock(shred.Height, shred.BlockHash, block); err != nil {
 			return fmt.Errorf("failed to process block: %w", err)
 		}
 		delete(p.groups, group.GroupID)
 	}
 	return nil
-}
-
-// CollectRecoveryShred processes an incoming recovery shred
-func (p *Processor) CollectRecoveryShred(shred *gturbine.Shred) error {
-	if shred == nil {
-		return fmt.Errorf("nil shred")
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	group, ok := p.groups[shred.GroupID]
-	if !ok {
-		group := &ShredGroup{
-			DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
-			RecoveryShreds:      make([]*gturbine.Shred, shred.TotalRecoveryShreds),
-			TotalDataShreds:     shred.TotalDataShreds,
-			TotalRecoveryShreds: shred.TotalRecoveryShreds,
-			GroupID:             shred.GroupID,
-			BlockHash:           shred.BlockHash,
-			Height:              shred.Height,
-			OriginalSize:        shred.FullDataSize,
-		}
-		group.RecoveryShreds[shred.Index] = shred
-		p.groups[shred.GroupID] = group
-		return nil
-	}
-
-	full, err := group.CollectRecoveryShred(shred)
-	if err != nil {
-		return fmt.Errorf("failed to collect recovery shred: %w", err)
-	}
-	if full {
-		encoder, err := erasure.NewEncoder(group.TotalDataShreds, group.TotalRecoveryShreds)
-		if err != nil {
-			return fmt.Errorf("failed to create encoder: %w", err)
-		}
-		block, err := group.ReconstructBlock(encoder)
-		if err != nil {
-			return fmt.Errorf("failed to reconstruct block: %w", err)
-		}
-		if err := p.cb.ProcessBlock(shred.Height, block); err != nil {
-			return fmt.Errorf("failed to process block: %w", err)
-		}
-		delete(p.groups, group.GroupID)
-	}
-	return err
 }

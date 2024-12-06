@@ -3,6 +3,7 @@ package gtshredding
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"testing"
 )
 
@@ -41,13 +42,15 @@ type testCase struct {
 }
 
 type testProcessorCallback struct {
-	count int
-	data  []byte
+	count     int
+	blockHash []byte
+	data      []byte
 }
 
-func (cb *testProcessorCallback) ProcessBlock(height uint64, block []byte) error {
+func (cb *testProcessorCallback) ProcessBlock(height uint64, blockHash []byte, block []byte) error {
 	cb.count++
 	cb.data = block
+	cb.blockHash = blockHash
 	return nil
 }
 
@@ -109,22 +112,29 @@ func TestProcessorShredding(t *testing.T) {
 
 			// collect all data shreds except the last 4, so that recovery shreds are necessary to reassemble
 			for i := 0; i < DefaultDataShreds-4; i++ {
-				p.CollectDataShred(group.DataShreds[i])
+				p.CollectShred(group.DataShreds[i])
 			}
 
 			// collect all recovery shreds
 			for i := 0; i < DefaultRecoveryShreds; i++ {
-				p.CollectRecoveryShred(group.RecoveryShreds[i])
+				p.CollectShred(group.RecoveryShreds[i])
 			}
 
 			if p.cb.(*testProcessorCallback).count != 1 {
 				t.Error("expected ProcessBlock to be called once")
 			}
 
+			blockHash := sha256.Sum256(block)
+
+			if !bytes.Equal(blockHash[:], cb.blockHash) {
+				t.Errorf("block hash mismatch: got %v want %v", cb.blockHash, group.BlockHash)
+			}
+
 			if !bytes.Equal(block, cb.data) {
 				t.Errorf("reassembled block doesn't match original: got len %d want len %d",
 					len(cb.data), len(block))
 			}
+
 		})
 	}
 }

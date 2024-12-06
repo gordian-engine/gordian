@@ -5,217 +5,134 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"time"
-
-	"github.com/gordian-engine/gordian/gturbine"
-	"github.com/gordian-engine/gordian/gturbine/builder"
-	"github.com/gordian-engine/gordian/gturbine/shredding"
-	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
-const (
-	maxShredSize  = 64 * 1024 // 64KB max shred size
-	retryAttempts = 3
-	retryDelay    = time.Second * 2
-)
-
+// Transport handles shred sending/receiving over UDP
 type Transport struct {
-	mu          sync.RWMutex
-	conn        *net.UDPConn
-	tree        *gturbine.Tree
-	handler     tmconsensus.ConsensusHandler
-	processor   *shredding.Processor
-	pubKey      []byte
-	shredGroups map[string]*shredding.ShredGroup // groupID -> ShredGroup
-	ctx         context.Context
-	cancel      context.CancelFunc
-	done        chan struct{}
+	basePort  int
+	numPorts  int
+	listeners []*net.UDPConn
+	handlers  []ShredHandler
+	ctx       context.Context
+	cancel    context.CancelFunc
+	mu        sync.RWMutex
 }
 
+// ShredHandler processes received shreds
+type ShredHandler interface {
+	HandleShred(data []byte, from net.Addr) error
+}
+
+// Config contains Transport configuration
 type Config struct {
-	ListenAddr   string
-	ChunkSize    uint32
-	DataShards   int
-	ParityShards int
-	ValidatorKey []byte
+	BasePort int
+	NumPorts int
 }
 
-func NewTransport(cfg Config) (*Transport, error) {
-	addr, err := net.ResolveUDPAddr("udp", cfg.ListenAddr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid address: %w", err)
+// DefaultConfig returns standard Transport configuration
+func DefaultConfig() Config {
+	return Config{
+		BasePort: 12000,
+		NumPorts: 10,
 	}
+}
 
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to listen: %w", err)
-	}
-
-	processor, err := shredding.NewProcessor(cfg.ChunkSize, cfg.DataShards, cfg.ParityShards)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create processor: %w", err)
-	}
-
+// NewTransport creates a new Transport instance
+func NewTransport(cfg Config) *Transport {
 	ctx, cancel := context.WithCancel(context.Background())
-	t := &Transport{
-		conn:        conn,
-		processor:   processor,
-		pubKey:      cfg.ValidatorKey,
-		shredGroups: make(map[string]*shredding.ShredGroup),
-		ctx:         ctx,
-		cancel:      cancel,
-		done:        make(chan struct{}),
+	return &Transport{
+		basePort:  cfg.BasePort,
+		numPorts:  cfg.NumPorts,
+		listeners: make([]*net.UDPConn, 0, cfg.NumPorts),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
-
-	go t.readLoop()
-	return t, nil
 }
 
-func (t *Transport) BroadcastBlock(block []byte, height uint64, slot uint64, shredIdx uint32) error {
-	group, err := t.processor.ProcessBlock(block, height)
-	if err != nil {
-		return fmt.Errorf("failed to process block: %w", err)
-	}
-
+// Start initializes all UDP listeners
+func (t *Transport) Start() error {
 	t.mu.Lock()
-	children := builder.GetChildren(t.tree, t.pubKey)
-	t.mu.Unlock()
+	defer t.mu.Unlock()
 
-	// Send shreds to children with retries
-	for _, shred := range group.DataShreds {
-		if err := t.sendShredWithRetry(shred, children); err != nil {
-			return fmt.Errorf("failed to send data shred: %w", err)
-		}
-	}
-
-	for _, shred := range group.RecoveryShreds {
-		if err := t.sendShredWithRetry(shred, children); err != nil {
-			return fmt.Errorf("failed to send recovery shred: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (t *Transport) sendShredWithRetry(shred *gturbine.Shred, targets []gturbine.Validator) error {
-	data, err := shredding.SerializeShred(shred, shredding.ShredTypeData, nil)
-	if err != nil {
-		return err
-	}
-
-	for _, target := range targets {
-		addr, err := net.ResolveUDPAddr("udp", target.NetAddr)
+	for i := 0; i < t.numPorts; i++ {
+		addr := &net.UDPAddr{Port: t.basePort + i}
+		conn, err := net.ListenUDP("udp", addr)
 		if err != nil {
-			continue
+			t.close()
+			return fmt.Errorf("failed to start UDP listener on port %d: %w", addr.Port, err)
 		}
-
-		for i := 0; i < retryAttempts; i++ {
-			_, err = t.conn.WriteToUDP(data, addr)
-			if err == nil {
-				break
-			}
-			time.Sleep(retryDelay)
-		}
+		t.listeners = append(t.listeners, conn)
+		go t.listen(conn)
 	}
 	return nil
 }
 
-func (t *Transport) readLoop() {
-	defer close(t.done)
-	buf := make([]byte, maxShredSize)
+// Stop gracefully shuts down the transport
+func (t *Transport) Stop() {
+	t.cancel()
+	t.close()
+}
+
+// BasePort returns the base port number for this transport
+func (t *Transport) BasePort() int {
+	return t.basePort
+}
+
+// AddHandler registers a new shred handler
+func (t *Transport) AddHandler(h ShredHandler) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.handlers = append(t.handlers, h)
+}
+
+// SendShred sends data to the specified address
+func (t *Transport) SendShred(data []byte, to *net.UDPAddr) error {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Try each listener until send succeeds
+	var lastErr error
+	for _, conn := range t.listeners {
+		_, err := conn.WriteToUDP(data, to)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+	return fmt.Errorf("failed to send shred: %w", lastErr)
+}
+
+func (t *Transport) listen(conn *net.UDPConn) {
+	buf := make([]byte, 65507) // Max UDP packet size
 
 	for {
 		select {
 		case <-t.ctx.Done():
 			return
 		default:
-			n, _, err := t.conn.ReadFromUDP(buf)
-			if err != nil {
-				if t.ctx.Err() != nil {
-					return
-				}
-				continue
-			}
-
-			shred, shredType, groupID, err := shredding.DeserializeShred(buf[:n])
+			n, addr, err := conn.ReadFromUDP(buf)
 			if err != nil {
 				continue
 			}
 
-			t.processReceivedShred(shred, shredType, groupID)
+			data := make([]byte, n)
+			copy(data, buf[:n])
+
+			t.mu.RLock()
+			for _, h := range t.handlers {
+				go h.HandleShred(data, addr)
+			}
+			t.mu.RUnlock()
 		}
 	}
 }
 
-func (t *Transport) processReceivedShred(shred *gturbine.Shred, shredType shredding.ShredType, groupID []byte) {
+func (t *Transport) close() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	groupKey := string(groupID)
-	group, exists := t.shredGroups[groupKey]
-	if !exists {
-		group = &shredding.ShredGroup{
-			DataShreds: make([]*gturbine.Shred, shred.Total),
-			GroupID:    groupID,
-		}
-		t.shredGroups[groupKey] = group
+	for _, l := range t.listeners {
+		l.Close()
 	}
-
-	if shredType == shredding.ShredTypeData {
-		group.DataShreds[shred.Index] = shred
-	} else {
-		group.RecoveryShreds = append(group.RecoveryShreds, shred)
-	}
-
-	// Check if we have all shreds
-	complete := true
-	for _, s := range group.DataShreds {
-		if s == nil {
-			complete = false
-			break
-		}
-	}
-
-	if complete {
-		go t.handleCompleteGroup(groupKey, group)
-	}
-}
-
-func (t *Transport) handleCompleteGroup(groupKey string, group *shredding.ShredGroup) {
-	_, err := t.processor.ReassembleBlock(group)
-	if err != nil {
-		return
-	}
-
-	t.mu.Lock()
-	delete(t.shredGroups, groupKey)
-	handler := t.handler
-	t.mu.Unlock()
-
-	if handler != nil {
-		// Convert block to ProposedHeader and pass to consensus
-		// Implementation depends on block format
-	}
-}
-
-// Implement tmp2p.Connection interface methods
-func (t *Transport) SetConsensusHandler(_ context.Context, h tmconsensus.ConsensusHandler) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.handler = h
-}
-
-func (t *Transport) Disconnect() {
-	t.cancel()
-	t.conn.Close()
-}
-
-func (t *Transport) Disconnected() <-chan struct{} {
-	return t.done
-}
-
-func (t *Transport) SetTree(tree *gturbine.Tree) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.tree = tree
+	t.listeners = nil
 }

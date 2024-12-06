@@ -5,18 +5,18 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/gordian-engine/gordian/gturbine"
+	"github.com/gordian-engine/gordian/gturbine/gtshred"
 )
 
 func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 	tests := []struct {
 		name    string
-		shred   gturbine.Shred
+		shred   *gtshred.Shred
 		wantErr bool
 	}{
 		{
 			name: "basic encode/decode",
-			shred: gturbine.Shred{
+			shred: &gtshred.Shred{
 				FullDataSize:        1000,
 				BlockHash:           bytes.Repeat([]byte{1}, 32),
 				GroupID:             uuid.New().String(),
@@ -30,7 +30,7 @@ func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 		},
 		{
 			name: "empty data",
-			shred: gturbine.Shred{
+			shred: &gtshred.Shred{
 				FullDataSize:        0,
 				BlockHash:           bytes.Repeat([]byte{2}, 32),
 				GroupID:             uuid.New().String(),
@@ -44,7 +44,7 @@ func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 		},
 		{
 			name: "large data",
-			shred: gturbine.Shred{
+			shred: &gtshred.Shred{
 				FullDataSize:        1000000,
 				BlockHash:           bytes.Repeat([]byte{3}, 32),
 				GroupID:             uuid.New().String(),
@@ -118,7 +118,7 @@ func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 
 func TestBinaryShardCodec_InvalidGroupID(t *testing.T) {
 	codec := &BinaryShardCodec{}
-	shred := gturbine.Shred{
+	shred := &gtshred.Shred{
 		GroupID: "invalid-uuid",
 		// Other fields can be empty for this test
 	}
@@ -131,7 +131,7 @@ func TestBinaryShardCodec_InvalidGroupID(t *testing.T) {
 
 func TestBinaryShardCodec_DataSizes(t *testing.T) {
 	codec := &BinaryShardCodec{}
-	shred := gturbine.Shred{
+	shred := &gtshred.Shred{
 		FullDataSize:        1000,
 		BlockHash:           bytes.Repeat([]byte{1}, 32),
 		GroupID:             uuid.New().String(),
@@ -147,8 +147,7 @@ func TestBinaryShardCodec_DataSizes(t *testing.T) {
 		t.Fatalf("Failed to encode shred: %v", err)
 	}
 
-	expectedPrefixSize := intSize*5 + uuidSize + blockHashSize
-	if len(encoded) != expectedPrefixSize+len(shred.Data) {
-		t.Errorf("Encoded data size mismatch: got %v, want %v", len(encoded), expectedPrefixSize+len(shred.Data))
+	if len(encoded) != prefixSize+len(shred.Data) {
+		t.Errorf("Encoded data size mismatch: got %v, want %v", len(encoded), prefixSize+len(shred.Data))
 	}
 }

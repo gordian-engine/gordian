@@ -1,8 +1,8 @@
 package gtencoding
 
-import "github.com/gordian-engine/gordian/gturbine"
+import "github.com/gordian-engine/gordian/gturbine/gtshred"
 
 type ShardCodec interface {
-	Encode(shred gturbine.Shred) ([]byte, error)
-	Decode(data []byte) (gturbine.Shred, error)
+	Encode(shred *gtshred.Shred) ([]byte, error)
+	Decode(data []byte) (*gtshred.Shred, error)
 }

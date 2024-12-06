@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/gordian-engine/gordian/gturbine"
-	"github.com/gordian-engine/gordian/gturbine/erasure"
+	"github.com/gordian-engine/gordian/gturbine/gtencoding"
+	"github.com/gordian-engine/gordian/gturbine/gtshred"
 )
 
 // ShredGroup represents a group of shreds that can be used to reconstruct a block.
 type ShredGroup struct {
-	DataShreds          []*gturbine.Shred
-	RecoveryShreds      []*gturbine.Shred
+	DataShreds          []*gtshred.Shred
+	RecoveryShreds      []*gtshred.Shred
 	TotalDataShreds     int
 	TotalRecoveryShreds int
 	GroupID             string // Changed to string for UUID
@@ -34,18 +34,19 @@ func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, 
 	}
 
 	// Create encoder for this block
-	encoder, err := erasure.NewEncoder(dataShreds, recoveryShreds)
+	encoder, err := gtencoding.NewEncoder(dataShreds, recoveryShreds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create encoder: %w", err)
 	}
 
 	// Calculate block hash for verification
+	// TODO hasher should be interface.
 	blockHash := sha256.Sum256(block)
 
 	// Create new shred group
 	group := &ShredGroup{
-		DataShreds:          make([]*gturbine.Shred, dataShreds),
-		RecoveryShreds:      make([]*gturbine.Shred, recoveryShreds),
+		DataShreds:          make([]*gtshred.Shred, dataShreds),
+		RecoveryShreds:      make([]*gtshred.Shred, recoveryShreds),
 		TotalDataShreds:     dataShreds,
 		TotalRecoveryShreds: recoveryShreds,
 		GroupID:             uuid.New().String(),
@@ -84,7 +85,8 @@ func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, 
 
 	// Create data shreds
 	for i := range dataBytes {
-		group.DataShreds[i] = &gturbine.Shred{
+		group.DataShreds[i] = &gtshred.Shred{
+			Type:                gtshred.DataShred,
 			Index:               i,
 			TotalDataShreds:     dataShreds,
 			TotalRecoveryShreds: recoveryShreds,
@@ -98,7 +100,8 @@ func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, 
 
 	// Create recovery shreds
 	for i := range recoveryBytes {
-		group.RecoveryShreds[i] = &gturbine.Shred{
+		group.RecoveryShreds[i] = &gtshred.Shred{
+			Type:                gtshred.RecoveryShred,
 			Index:               i,
 			TotalDataShreds:     dataShreds,
 			TotalRecoveryShreds: recoveryShreds,
@@ -115,9 +118,7 @@ func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, 
 
 // IsFull checks if enough shreds are available for reconstruction
 // NOTE: we'd like shredgroup to know the data threshold as a property on the shredgroup
-func (g *ShredGroup) IsFull(dataThreshold int) bool {
-
-	// TODO: ensure that we've met the threshold by quorum of both data and recovery using the
+func (g *ShredGroup) IsFull() bool {
 	valid := 0
 	for _, s := range g.DataShreds {
 		if s != nil {
@@ -129,11 +130,12 @@ func (g *ShredGroup) IsFull(dataThreshold int) bool {
 			valid++
 		}
 	}
-	return valid >= dataThreshold
+
+	return valid >= g.TotalDataShreds
 }
 
 // ReconstructBlock attempts to reconstruct the original block from available shreds
-func (g *ShredGroup) ReconstructBlock(encoder *erasure.Encoder) ([]byte, error) {
+func (g *ShredGroup) ReconstructBlock(encoder *gtencoding.Encoder) ([]byte, error) {
 
 	// Extract data bytes for erasure coding
 	allBytes := make([][]byte, len(g.DataShreds)+len(g.RecoveryShreds))
@@ -185,7 +187,7 @@ func (g *ShredGroup) ReconstructBlock(encoder *erasure.Encoder) ([]byte, error) 
 }
 
 // CollectDataShred adds a data shred to the group
-func (g *ShredGroup) CollectDataShred(shred *gturbine.Shred) (bool, error) {
+func (g *ShredGroup) CollectShred(shred *gtshred.Shred) (bool, error) {
 	if shred == nil {
 		return false, fmt.Errorf("nil shred")
 	}
@@ -201,37 +203,24 @@ func (g *ShredGroup) CollectDataShred(shred *gturbine.Shred) (bool, error) {
 		return false, fmt.Errorf("block hash mismatch")
 	}
 
-	// Validate shred index
-	if int(shred.Index) >= len(g.DataShreds) {
-		return false, fmt.Errorf("invalid shred index: %d", shred.Index)
+	switch shred.Type {
+	case gtshred.DataShred:
+		// Validate shred index
+		if int(shred.Index) >= len(g.DataShreds) {
+			return false, fmt.Errorf("invalid data shred index: %d", shred.Index)
+		}
+
+		g.DataShreds[shred.Index] = shred
+	case gtshred.RecoveryShred:
+		// Validate shred index
+		if int(shred.Index) >= len(g.RecoveryShreds) {
+			return false, fmt.Errorf("invalid recovery shred index: %d", shred.Index)
+		}
+
+		g.RecoveryShreds[shred.Index] = shred
+	default:
+		return false, fmt.Errorf("invalid shred type: %d", shred.Type)
 	}
 
-	g.DataShreds[shred.Index] = shred
-	return g.IsFull(len(g.DataShreds)), nil
-}
-
-// CollectRecoveryShred adds a recovery shred to the group
-func (g *ShredGroup) CollectRecoveryShred(shred *gturbine.Shred) (bool, error) {
-	if shred == nil {
-		return false, fmt.Errorf("nil shred")
-	}
-
-	// Validate shred matches group parameters
-	if shred.GroupID != g.GroupID {
-		return false, fmt.Errorf("group ID mismatch: got %s, want %s", shred.GroupID, g.GroupID)
-	}
-	if shred.Height != g.Height {
-		return false, fmt.Errorf("height mismatch: got %d, want %d", shred.Height, g.Height)
-	}
-	if string(shred.BlockHash) != string(g.BlockHash) {
-		return false, fmt.Errorf("block hash mismatch")
-	}
-
-	// Validate shred index
-	if int(shred.Index) >= len(g.RecoveryShreds) {
-		return false, fmt.Errorf("invalid recovery shred index: %d", shred.Index)
-	}
-
-	g.RecoveryShreds[shred.Index] = shred
-	return g.IsFull(len(g.DataShreds)), nil
+	return g.IsFull(), nil
 }
