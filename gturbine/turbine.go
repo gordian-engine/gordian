@@ -1,13 +1,5 @@
 package gturbine
 
-// Config holds Turbine configuration
-type Config struct {
-	DataPlaneFanout uint32
-	BaseFECRate     uint32
-	MaxLayers       uint32
-	ChunkSize       uint32
-}
-
 type Tree struct {
 	Root   *Layer
 	Height uint32
