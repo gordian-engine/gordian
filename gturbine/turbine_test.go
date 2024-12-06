@@ -10,12 +10,12 @@ import (
 
 	"github.com/gordian-engine/gordian/gturbine/gtencoding"
 	"github.com/gordian-engine/gordian/gturbine/gtnetwork"
-	"github.com/gordian-engine/gordian/gturbine/gtshredding"
+	"github.com/gordian-engine/gordian/gturbine/gtshred"
 )
 
 type testNode struct {
 	transport    *gtnetwork.Transport
-	processor    *gtshredding.Processor
+	processor    *gtshred.Processor
 	codec        gtencoding.ShardCodec
 	shredHandler *testShredHandler
 	blockHandler *testBlockHandler
@@ -65,7 +65,7 @@ func newTestNode(t *testing.T, basePort int) *testNode {
 
 	cb := &testBlockHandler{}
 
-	processor := gtshredding.NewProcessor(cb)
+	processor := gtshred.NewProcessor(cb)
 
 	shredHandler := &testShredHandler{}
 	node := &testNode{
@@ -106,7 +106,7 @@ func TestBlockPropagation(t *testing.T) {
 	const testHeight = 12345
 
 	// Node 1: Shred the block
-	shredGroup, err := gtshredding.NewShredGroup(originalBlock, testHeight, 16, 4, 1024)
+	shredGroup, err := gtshred.NewShredGroup(originalBlock, testHeight, 16, 4, 1024)
 	if err != nil {
 		t.Fatalf("Failed to shred block: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestPartialBlockReconstruction(t *testing.T) {
 	const testHeight = 54321
 
 	// Create shreds
-	shredGroup, err := gtshredding.NewShredGroup(originalBlock, testHeight, 16, 4, 1024)
+	shredGroup, err := gtshred.NewShredGroup(originalBlock, testHeight, 16, 4, 1024)
 	if err != nil {
 		t.Fatalf("Failed to shred block: %v", err)
 	}

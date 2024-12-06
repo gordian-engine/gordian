@@ -1,4 +1,4 @@
-package gtshredding
+package gtshred
 
 import (
 	"fmt"
