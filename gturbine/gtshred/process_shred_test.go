@@ -86,7 +86,8 @@ func TestProcessorShredding(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var cb = new(testProcessorCallback)
 
-			p := NewProcessor(context.Background(), cb, time.Minute)
+			p := NewProcessor(cb, time.Minute)
+			go p.RunBackgroundCleanup(context.Background())
 
 			block := makeRandomBlock(tc.blockSize)
 			group, err := NewShredGroup(block, TestHeight, DefaultDataShreds, DefaultRecoveryShreds, DefaultChunkSize)

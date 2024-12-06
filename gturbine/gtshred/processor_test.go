@@ -10,7 +10,8 @@ func TestProcessorMemoryCleanup(t *testing.T) {
 	// Create processor with short cleanup interval for testing
 	var cb = new(testProcessorCallback)
 	cleanupInterval := 100 * time.Millisecond
-	p := NewProcessor(context.Background(), cb, cleanupInterval)
+	p := NewProcessor(cb, cleanupInterval)
+	go p.RunBackgroundCleanup(context.Background())
 
 	// Create a test block and shred group
 	block := []byte("test block data")

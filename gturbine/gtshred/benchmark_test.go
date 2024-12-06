@@ -36,7 +36,8 @@ func BenchmarkShredProcessing(b *testing.B) {
 			}
 
 			// Create processor with noop callback
-			p := NewProcessor(context.Background(), &noopCallback{}, time.Minute)
+			p := NewProcessor(&noopCallback{}, time.Minute)
+			go p.RunBackgroundCleanup(context.Background())
 
 			// Reset timer before main benchmark loop
 			b.ResetTimer()
@@ -88,7 +89,8 @@ func BenchmarkShredReconstruction(b *testing.B) {
 	for _, pattern := range patterns {
 		b.Run(pattern.name, func(b *testing.B) {
 			// Create processor
-			p := NewProcessor(context.Background(), &noopCallback{}, time.Minute)
+			p := NewProcessor(&noopCallback{}, time.Minute)
+			go p.RunBackgroundCleanup(context.Background())
 
 			b.ResetTimer()
 

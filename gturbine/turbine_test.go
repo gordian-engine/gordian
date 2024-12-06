@@ -66,7 +66,8 @@ func newTestNode(t *testing.T, basePort int) *testNode {
 
 	cb := &testBlockHandler{}
 
-	processor := gtshred.NewProcessor(context.Background(), cb, time.Minute)
+	processor := gtshred.NewProcessor(cb, time.Minute)
+	go processor.RunBackgroundCleanup(context.Background())
 
 	shredHandler := &testShredHandler{}
 	node := &testNode{
