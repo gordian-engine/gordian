@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/gordian-engine/gordian/gturbine/gtencoding"
+	"github.com/gordian-engine/gordian/gturbine/gtnetwork"
 	"github.com/gordian-engine/gordian/gturbine/gtshredding"
-	"github.com/gordian-engine/gordian/gturbine/network"
 )
 
 type testNode struct {
-	transport    *network.Transport
+	transport    *gtnetwork.Transport
 	processor    *gtshredding.Processor
 	codec        gtencoding.ShardCodec
 	shredHandler *testShredHandler
@@ -58,7 +58,7 @@ func (h *testBlockHandler) ProcessBlock(height uint64, blockHash []byte, block [
 func newTestNode(t *testing.T, basePort int) *testNode {
 	encoder := gtencoding.NewBinaryShardCodec()
 
-	transport := network.NewTransport(network.Config{
+	transport := gtnetwork.NewTransport(gtnetwork.Config{
 		BasePort: basePort,
 		NumPorts: 10,
 	})
