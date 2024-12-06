@@ -137,11 +137,8 @@ func (g *ShredGroup) isFull() bool {
 	return valid >= g.TotalDataShreds
 }
 
-// ReconstructBlock attempts to reconstruct the original block from available shreds
-func (g *ShredGroup) ReconstructBlock(encoder *gtencoding.Encoder) ([]byte, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
+// reconstructBlock attempts to reconstruct the original block from available shreds
+func (g *ShredGroup) reconstructBlock(encoder *gtencoding.Encoder) ([]byte, error) {
 	// Extract data bytes for erasure coding
 	allBytes := make([][]byte, len(g.DataShreds)+len(g.RecoveryShreds))
 
@@ -192,8 +189,8 @@ func (g *ShredGroup) ReconstructBlock(encoder *gtencoding.Encoder) ([]byte, erro
 	return reconstructed, nil
 }
 
-// CollectDataShred adds a data shred to the group
-func (g *ShredGroup) CollectShred(shred *gturbine.Shred) (bool, error) {
+// collectShred adds a data shred to the group
+func (g *ShredGroup) collectShred(shred *gturbine.Shred) (bool, error) {
 	if shred == nil {
 		return false, fmt.Errorf("nil shred")
 	}
@@ -208,9 +205,6 @@ func (g *ShredGroup) CollectShred(shred *gturbine.Shred) (bool, error) {
 	if string(shred.BlockHash) != string(g.BlockHash) {
 		return false, fmt.Errorf("block hash mismatch")
 	}
-
-	g.mu.Lock()
-	defer g.mu.Unlock()
 
 	switch shred.Type {
 	case gturbine.DataShred:
@@ -232,23 +226,4 @@ func (g *ShredGroup) CollectShred(shred *gturbine.Shred) (bool, error) {
 	}
 
 	return g.isFull(), nil
-}
-
-// Reset clears the ShredGroup data while maintaining allocated memory
-func (g *ShredGroup) Reset() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	g.GroupID = uuid.New().String()
-	g.BlockHash = g.BlockHash[:0]
-	g.Height = 0
-	g.OriginalSize = 0
-
-	// Clear but keep underlying arrays
-	for i := range g.DataShreds {
-		g.DataShreds[i] = nil
-	}
-	for i := range g.RecoveryShreds {
-		g.RecoveryShreds[i] = nil
-	}
 }

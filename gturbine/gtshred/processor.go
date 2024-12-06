@@ -71,7 +71,7 @@ func NewProcessor(ctx context.Context, cb ProcessorCallback, cleanupInterval tim
 	return p
 }
 
-// CollectDataShred processes an incoming data shred
+// CollectShred processes an incoming data shred
 func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 	if shred == nil {
 		return fmt.Errorf("nil shred")
@@ -91,6 +91,7 @@ func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 	p.groupsMu.RUnlock()
 
 	if !ok {
+		// TODO use existing shredgroups if they have already been allocated to save memory
 		// If the group doesn't exist, create it and add the shred
 		group := &ShredGroupWithTimestamp{
 			ShredGroup: &ShredGroup{
@@ -116,7 +117,20 @@ func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 		return nil
 	}
 
-	full, err := group.CollectShred(shred)
+	group.mu.Lock()
+	defer group.mu.Unlock()
+
+	// After locking the group, check if the block has already been completed
+	p.completedBlocksMu.RLock()
+	// Skip shreds from already processed blocks
+	_, completed = p.completedBlocks[string(group.BlockHash)]
+	p.completedBlocksMu.RUnlock()
+
+	if completed {
+		return nil
+	}
+
+	full, err := group.collectShred(shred)
 	if err != nil {
 		return fmt.Errorf("failed to collect data shred: %w", err)
 	}
@@ -125,20 +139,24 @@ func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 		if err != nil {
 			return fmt.Errorf("failed to create encoder: %w", err)
 		}
-		block, err := group.ReconstructBlock(encoder)
+
+		block, err := group.reconstructBlock(encoder)
 		if err != nil {
 			return fmt.Errorf("failed to reconstruct block: %w", err)
 		}
+
 		if err := p.cb.ProcessBlock(shred.Height, shred.BlockHash, block); err != nil {
 			return fmt.Errorf("failed to process block: %w", err)
 		}
 
-		// then mark the block as completed at time.Now()
-		p.completedBlocks[string(shred.BlockHash)] = time.Now()
-
-		// Reset the group before removing it (allows GC to collect old shreds)
-		group.Reset()
+		p.groupsMu.Lock()
 		delete(p.groups, group.GroupID)
+		p.groupsMu.Unlock()
+
+		// then mark the block as completed at time.Now()
+		p.completedBlocksMu.Lock()
+		p.completedBlocks[string(shred.BlockHash)] = time.Now()
+		p.completedBlocksMu.Unlock()
 	}
 	return nil
 }
@@ -186,7 +204,6 @@ func (p *Processor) cleanupStaleGroups(now time.Time) {
 		// Take write lock once for all deletions
 		p.groupsMu.Lock()
 		for _, id := range deleteGroups {
-			p.groups[id].Reset() // TODO: is this necessary?
 			delete(p.groups, id)
 		}
 		p.groupsMu.Unlock()
