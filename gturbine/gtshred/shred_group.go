@@ -224,3 +224,19 @@ func (g *ShredGroup) CollectShred(shred *gturbine.Shred) (bool, error) {
 
 	return g.IsFull(), nil
 }
+
+// Reset clears the ShredGroup data while maintaining allocated memory
+func (g *ShredGroup) Reset() {
+	g.GroupID = uuid.New().String()
+	g.BlockHash = g.BlockHash[:0]
+	g.Height = 0
+	g.OriginalSize = 0
+
+	// Clear but keep underlying arrays
+	for i := range g.DataShreds {
+		g.DataShreds[i] = nil
+	}
+	for i := range g.RecoveryShreds {
+		g.RecoveryShreds[i] = nil
+	}
+}

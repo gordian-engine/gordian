@@ -3,6 +3,7 @@ package gtshred
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/gordian-engine/gordian/gturbine"
 	"github.com/gordian-engine/gordian/gturbine/gtencoding"
@@ -16,26 +17,50 @@ const (
 )
 
 type Processor struct {
-	groups map[string]*ShredGroup
-	mu     sync.Mutex
-	cb     ProcessorCallback
+	groups          map[string]*ShredGroup
+	mu              sync.Mutex
+	cb              ProcessorCallback
+	completedBlocks map[string]time.Time
+	cleanupInterval time.Duration
 }
 
 type ProcessorCallback interface {
 	ProcessBlock(height uint64, blockHash []byte, block []byte) error
 }
 
-func NewProcessor(cb ProcessorCallback) *Processor {
-	return &Processor{
-		cb:     cb,
-		groups: make(map[string]*ShredGroup),
+func NewProcessor(cb ProcessorCallback, cleanupInterval time.Duration) *Processor {
+	p := &Processor{
+		cb:              cb,
+		groups:          make(map[string]*ShredGroup),
+		completedBlocks: make(map[string]time.Time),
+		cleanupInterval: cleanupInterval,
 	}
+
+	// Start cleanup goroutine
+	go func() {
+		ticker := time.NewTicker(cleanupInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case now := <-ticker.C:
+				p.cleanupStaleGroups(now)
+			}
+		}
+	}()
+
+	return p
 }
 
 // CollectDataShred processes an incoming data shred
 func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 	if shred == nil {
 		return fmt.Errorf("nil shred")
+	}
+
+	// Skip shreds from already processed blocks
+	if _, completed := p.completedBlocks[string(shred.BlockHash)]; completed {
+		return nil
 	}
 
 	p.mu.Lock()
@@ -74,7 +99,20 @@ func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 		if err := p.cb.ProcessBlock(shred.Height, shred.BlockHash, block); err != nil {
 			return fmt.Errorf("failed to process block: %w", err)
 		}
+		// remove the group from the map
 		delete(p.groups, group.GroupID)
+
+		// then mark the block as completed at time.Now()
+		p.completedBlocks[string(shred.BlockHash)] = time.Now()
 	}
 	return nil
+}
+
+// In Processor
+func (p *Processor) cleanupStaleGroups(now time.Time) {
+	for hash, completedAt := range p.completedBlocks {
+		if now.Sub(completedAt) > p.cleanupInterval {
+			delete(p.completedBlocks, hash)
+		}
+	}
 }

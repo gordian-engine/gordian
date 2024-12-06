@@ -1,5 +1,10 @@
 package gtshred
 
+import (
+	"testing"
+	"time"
+)
+
 // import (
 // 	"bytes"
 // 	"crypto/rand"
@@ -7,6 +12,53 @@ package gtshred
 // 	mrand "math/rand"
 // 	"testing"
 // )
+
+func TestProcessorMemoryCleanup(t *testing.T) {
+	// Create processor with short cleanup interval for testing
+	var cb = new(testProcessorCallback)
+	cleanupInterval := 100 * time.Millisecond
+	p := NewProcessor(cb, cleanupInterval)
+
+	// Create a test block and shred group
+	block := []byte("test block data")
+	group, err := NewShredGroup(block, 1, 2, 1, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Process some shreds from the group to mark it complete
+	for i := 0; i < len(group.DataShreds); i++ {
+		err := p.CollectShred(group.DataShreds[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Verify block is marked as completed
+	if _, exists := p.completedBlocks[string(group.BlockHash)]; !exists {
+		t.Error("block should be marked as completed")
+	}
+
+	// Try to process another shred from same block
+	err = p.CollectShred(group.RecoveryShreds[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify no new group was created for this block
+	groupCount := len(p.groups)
+	if groupCount > 1 {
+		t.Errorf("expected at most 1 group, got %d", groupCount)
+	}
+
+	// Wait for cleanup
+	time.Sleep(cleanupInterval * 2)
+
+	// Verify completed block was cleaned up
+	if _, exists := p.completedBlocks[string(group.BlockHash)]; exists {
+		t.Error("completed block should have been cleaned up")
+	}
+}
 
 // func TestProcessor(t *testing.T) {
 // 	t.Run("basic shred and reassemble", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"testing"
+	"time"
 )
 
 const (
@@ -84,7 +85,7 @@ func TestProcessorShredding(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var cb = new(testProcessorCallback)
 
-			p := NewProcessor(cb)
+			p := NewProcessor(cb, time.Minute)
 
 			block := makeRandomBlock(tc.blockSize)
 			group, err := NewShredGroup(block, TestHeight, DefaultDataShreds, DefaultRecoveryShreds, DefaultChunkSize)
