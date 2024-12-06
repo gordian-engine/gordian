@@ -2,6 +2,7 @@ package gturbine_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -65,7 +66,7 @@ func newTestNode(t *testing.T, basePort int) *testNode {
 
 	cb := &testBlockHandler{}
 
-	processor := gtshred.NewProcessor(cb, time.Minute)
+	processor := gtshred.NewProcessor(context.Background(), cb, time.Minute)
 
 	shredHandler := &testShredHandler{}
 	node := &testNode{

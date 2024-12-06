@@ -1,6 +1,7 @@
 package gtshred
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -9,7 +10,7 @@ func TestProcessorMemoryCleanup(t *testing.T) {
 	// Create processor with short cleanup interval for testing
 	var cb = new(testProcessorCallback)
 	cleanupInterval := 100 * time.Millisecond
-	p := NewProcessor(cb, cleanupInterval)
+	p := NewProcessor(context.Background(), cb, cleanupInterval)
 
 	// Create a test block and shred group
 	block := []byte("test block data")

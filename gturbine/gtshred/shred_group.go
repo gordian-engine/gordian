@@ -3,6 +3,7 @@ package gtshred
 import (
 	"crypto/sha256"
 	"fmt"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gordian-engine/gordian/gturbine"
@@ -19,6 +20,8 @@ type ShredGroup struct {
 	BlockHash           []byte
 	Height              uint64 // Added to struct level
 	OriginalSize        int
+
+	mu sync.Mutex
 }
 
 // NewShredGroup creates a new ShredGroup from a block of data
@@ -116,15 +119,15 @@ func NewShredGroup(block []byte, height uint64, dataShreds, recoveryShreds int, 
 	return group, nil
 }
 
-// IsFull checks if enough shreds are available for reconstruction
-// NOTE: we'd like shredgroup to know the data threshold as a property on the shredgroup
-func (g *ShredGroup) IsFull() bool {
+// isFull checks if enough shreds are available to attempt reconstruction.
+func (g *ShredGroup) isFull() bool {
 	valid := 0
 	for _, s := range g.DataShreds {
 		if s != nil {
 			valid++
 		}
 	}
+
 	for _, s := range g.RecoveryShreds {
 		if s != nil {
 			valid++
@@ -136,6 +139,8 @@ func (g *ShredGroup) IsFull() bool {
 
 // ReconstructBlock attempts to reconstruct the original block from available shreds
 func (g *ShredGroup) ReconstructBlock(encoder *gtencoding.Encoder) ([]byte, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 
 	// Extract data bytes for erasure coding
 	allBytes := make([][]byte, len(g.DataShreds)+len(g.RecoveryShreds))
@@ -178,6 +183,7 @@ func (g *ShredGroup) ReconstructBlock(encoder *gtencoding.Encoder) ([]byte, erro
 	}
 
 	// Verify reconstructed block hash
+	// TODO hasher should be interface.
 	computedHash := sha256.Sum256(reconstructed)
 	if string(computedHash[:]) != string(g.BlockHash) {
 		return nil, fmt.Errorf("block hash mismatch after reconstruction")
@@ -203,6 +209,9 @@ func (g *ShredGroup) CollectShred(shred *gturbine.Shred) (bool, error) {
 		return false, fmt.Errorf("block hash mismatch")
 	}
 
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	switch shred.Type {
 	case gturbine.DataShred:
 		// Validate shred index
@@ -222,7 +231,7 @@ func (g *ShredGroup) CollectShred(shred *gturbine.Shred) (bool, error) {
 		return false, fmt.Errorf("invalid shred type: %d", shred.Type)
 	}
 
-	return g.IsFull(), nil
+	return g.isFull(), nil
 }
 
 // Reset clears the ShredGroup data while maintaining allocated memory

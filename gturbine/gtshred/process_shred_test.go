@@ -2,6 +2,7 @@ package gtshred
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"testing"
@@ -85,7 +86,7 @@ func TestProcessorShredding(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var cb = new(testProcessorCallback)
 
-			p := NewProcessor(cb, time.Minute)
+			p := NewProcessor(context.Background(), cb, time.Minute)
 
 			block := makeRandomBlock(tc.blockSize)
 			group, err := NewShredGroup(block, TestHeight, DefaultDataShreds, DefaultRecoveryShreds, DefaultChunkSize)

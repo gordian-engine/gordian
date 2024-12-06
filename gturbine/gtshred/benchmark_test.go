@@ -1,6 +1,7 @@
 package gtshred
 
 import (
+	"context"
 	"crypto/rand"
 	"testing"
 	"time"
@@ -18,10 +19,10 @@ func BenchmarkShredProcessing(b *testing.B) {
 		size      int
 		chunkSize uint32
 	}{
-		{"8MB", 8 << 20, 1 << 18},    // 256KB chunks
-		{"16MB", 16 << 20, 1 << 19},  // 512KB chunks
-		{"32MB", 32 << 20, 1 << 20},  // 1MB chunks
-		{"64MB", 64 << 20, 1 << 21},  // 2MB chunks
+		{"8MB", 8 << 20, 1 << 18},     // 256KB chunks
+		{"16MB", 16 << 20, 1 << 19},   // 512KB chunks
+		{"32MB", 32 << 20, 1 << 20},   // 1MB chunks
+		{"64MB", 64 << 20, 1 << 21},   // 2MB chunks
 		{"128MB", 128 << 20, 1 << 22}, // 4MB chunks
 	}
 
@@ -35,7 +36,7 @@ func BenchmarkShredProcessing(b *testing.B) {
 			}
 
 			// Create processor with noop callback
-			p := NewProcessor(&noopCallback{}, time.Minute)
+			p := NewProcessor(context.Background(), &noopCallback{}, time.Minute)
 
 			// Reset timer before main benchmark loop
 			b.ResetTimer()
@@ -56,7 +57,7 @@ func BenchmarkShredProcessing(b *testing.B) {
 
 				b.StopTimer()
 				// Reset processor state between iterations
-				p.groups = make(map[string]*ShredGroup)
+				p.groups = make(map[string]*ShredGroupWithTimestamp)
 				p.completedBlocks = make(map[string]time.Time)
 				b.StartTimer()
 			}
@@ -87,7 +88,7 @@ func BenchmarkShredReconstruction(b *testing.B) {
 	for _, pattern := range patterns {
 		b.Run(pattern.name, func(b *testing.B) {
 			// Create processor
-			p := NewProcessor(&noopCallback{}, time.Minute)
+			p := NewProcessor(context.Background(), &noopCallback{}, time.Minute)
 
 			b.ResetTimer()
 
@@ -121,7 +122,7 @@ func BenchmarkShredReconstruction(b *testing.B) {
 				}
 
 				b.StopTimer()
-				p.groups = make(map[string]*ShredGroup)
+				p.groups = make(map[string]*ShredGroupWithTimestamp)
 				p.completedBlocks = make(map[string]time.Time)
 				b.StartTimer()
 			}
