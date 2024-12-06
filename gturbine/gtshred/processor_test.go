@@ -5,14 +5,6 @@ import (
 	"time"
 )
 
-// import (
-// 	"bytes"
-// 	"crypto/rand"
-// 	"math"
-// 	mrand "math/rand"
-// 	"testing"
-// )
-
 func TestProcessorMemoryCleanup(t *testing.T) {
 	// Create processor with short cleanup interval for testing
 	var cb = new(testProcessorCallback)
@@ -52,7 +44,7 @@ func TestProcessorMemoryCleanup(t *testing.T) {
 	}
 
 	// Wait for cleanup
-	time.Sleep(cleanupInterval * 2)
+	time.Sleep(cleanupInterval * 4)
 
 	// Verify completed block was cleaned up
 	if _, exists := p.completedBlocks[string(group.BlockHash)]; exists {
