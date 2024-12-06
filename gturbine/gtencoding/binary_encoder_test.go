@@ -5,18 +5,18 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/gordian-engine/gordian/gturbine/gtshred"
+	"github.com/gordian-engine/gordian/gturbine"
 )
 
 func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 	tests := []struct {
 		name    string
-		shred   *gtshred.Shred
+		shred   *gturbine.Shred
 		wantErr bool
 	}{
 		{
 			name: "basic encode/decode",
-			shred: &gtshred.Shred{
+			shred: &gturbine.Shred{
 				FullDataSize:        1000,
 				BlockHash:           bytes.Repeat([]byte{1}, 32),
 				GroupID:             uuid.New().String(),
@@ -30,7 +30,7 @@ func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 		},
 		{
 			name: "empty data",
-			shred: &gtshred.Shred{
+			shred: &gturbine.Shred{
 				FullDataSize:        0,
 				BlockHash:           bytes.Repeat([]byte{2}, 32),
 				GroupID:             uuid.New().String(),
@@ -44,7 +44,7 @@ func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 		},
 		{
 			name: "large data",
-			shred: &gtshred.Shred{
+			shred: &gturbine.Shred{
 				FullDataSize:        1000000,
 				BlockHash:           bytes.Repeat([]byte{3}, 32),
 				GroupID:             uuid.New().String(),
@@ -118,7 +118,7 @@ func TestBinaryShardCodec_EncodeDecode(t *testing.T) {
 
 func TestBinaryShardCodec_InvalidGroupID(t *testing.T) {
 	codec := &BinaryShardCodec{}
-	shred := &gtshred.Shred{
+	shred := &gturbine.Shred{
 		GroupID: "invalid-uuid",
 		// Other fields can be empty for this test
 	}
@@ -131,7 +131,7 @@ func TestBinaryShardCodec_InvalidGroupID(t *testing.T) {
 
 func TestBinaryShardCodec_DataSizes(t *testing.T) {
 	codec := &BinaryShardCodec{}
-	shred := &gtshred.Shred{
+	shred := &gturbine.Shred{
 		FullDataSize:        1000,
 		BlockHash:           bytes.Repeat([]byte{1}, 32),
 		GroupID:             uuid.New().String(),

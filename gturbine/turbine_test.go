@@ -1,4 +1,4 @@
-package gturbine
+package gturbine_test
 
 import (
 	"bytes"

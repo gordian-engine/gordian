@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/gordian-engine/gordian/gturbine"
 	"github.com/gordian-engine/gordian/gturbine/gtencoding"
-	"github.com/gordian-engine/gordian/gturbine/gtshred"
 )
 
 // Constants for error checking
@@ -33,7 +33,7 @@ func NewProcessor(cb ProcessorCallback) *Processor {
 }
 
 // CollectDataShred processes an incoming data shred
-func (p *Processor) CollectShred(shred *gtshred.Shred) error {
+func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 	if shred == nil {
 		return fmt.Errorf("nil shred")
 	}
@@ -43,8 +43,8 @@ func (p *Processor) CollectShred(shred *gtshred.Shred) error {
 	group, ok := p.groups[shred.GroupID]
 	if !ok {
 		group := &ShredGroup{
-			DataShreds:          make([]*gtshred.Shred, shred.TotalDataShreds),
-			RecoveryShreds:      make([]*gtshred.Shred, shred.TotalRecoveryShreds),
+			DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
+			RecoveryShreds:      make([]*gturbine.Shred, shred.TotalRecoveryShreds),
 			TotalDataShreds:     shred.TotalDataShreds,
 			TotalRecoveryShreds: shred.TotalRecoveryShreds,
 			GroupID:             shred.GroupID,

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/gordian-engine/gordian/gturbine/gtshred"
+	"github.com/gordian-engine/gordian/gturbine"
 )
 
 const (
@@ -35,7 +35,7 @@ func NewBinaryShardCodec() *BinaryShardCodec {
 	return &BinaryShardCodec{}
 }
 
-func (bsc *BinaryShardCodec) Encode(shred *gtshred.Shred) ([]byte, error) {
+func (bsc *BinaryShardCodec) Encode(shred *gturbine.Shred) ([]byte, error) {
 	out := make([]byte, prefixSize+len(shred.Data))
 
 	// Write version
@@ -76,8 +76,8 @@ func (bsc *BinaryShardCodec) Encode(shred *gtshred.Shred) ([]byte, error) {
 
 }
 
-func (bsc *BinaryShardCodec) Decode(data []byte) (*gtshred.Shred, error) {
-	shred := gtshred.Shred{}
+func (bsc *BinaryShardCodec) Decode(data []byte) (*gturbine.Shred, error) {
+	shred := gturbine.Shred{}
 
 	// Read version
 	version := binary.LittleEndian.Uint16(data[:2])
@@ -86,7 +86,7 @@ func (bsc *BinaryShardCodec) Decode(data []byte) (*gtshred.Shred, error) {
 	}
 
 	// Read type
-	shred.Type = gtshred.ShredType(binary.LittleEndian.Uint16(data[2:4]))
+	shred.Type = gturbine.ShredType(binary.LittleEndian.Uint16(data[2:4]))
 
 	// Read full data size
 	shred.FullDataSize = int(binary.LittleEndian.Uint64(data[4:12]))
