@@ -236,6 +236,9 @@ func (g *ShredGroup) CollectShred(shred *gturbine.Shred) (bool, error) {
 
 // Reset clears the ShredGroup data while maintaining allocated memory
 func (g *ShredGroup) Reset() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	g.GroupID = uuid.New().String()
 	g.BlockHash = g.BlockHash[:0]
 	g.Height = 0
