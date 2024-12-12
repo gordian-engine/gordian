@@ -2,6 +2,7 @@ package gtshred
 
 import (
 	"context"
+	"crypto/sha256"
 	"testing"
 	"time"
 )
@@ -10,31 +11,32 @@ func TestProcessorMemoryCleanup(t *testing.T) {
 	// Create processor with short cleanup interval for testing
 	var cb = new(testProcessorCallback)
 	cleanupInterval := 100 * time.Millisecond
-	p := NewProcessor(cb, cleanupInterval)
+	hasher := sha256.New
+	p := NewProcessor(cb, hasher, hasher, cleanupInterval)
 	go p.RunBackgroundCleanup(context.Background())
 
 	// Create a test block and shred group
 	block := []byte("test block data")
-	group, err := NewShredGroup(block, 1, 2, 1, 100)
+	group, err := ShredBlock(block, hasher, 1, 2, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Process some shreds from the group to mark it complete
-	for i := 0; i < len(group.DataShreds); i++ {
-		err := p.CollectShred(group.DataShreds[i])
+	for i := 0; i < len(group.Shreds); i++ {
+		err := p.CollectShred(group.Shreds[i])
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// Verify block is marked as completed
-	if _, exists := p.completedBlocks[string(group.BlockHash)]; !exists {
+	if _, exists := p.completedBlocks[string(group.Metadata.BlockHash)]; !exists {
 		t.Error("block should be marked as completed")
 	}
 
 	// Try to process another shred from same block
-	err = p.CollectShred(group.RecoveryShreds[0])
+	err = p.CollectShred(group.Shreds[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +53,7 @@ func TestProcessorMemoryCleanup(t *testing.T) {
 	// Verify completed block was cleaned up
 	p.completedBlocksMu.RLock()
 	defer p.completedBlocksMu.RUnlock()
-	if _, exists := p.completedBlocks[string(group.BlockHash)]; exists {
+	if _, exists := p.completedBlocks[string(group.Metadata.BlockHash)]; exists {
 		t.Error("completed block should have been cleaned up")
 	}
 }

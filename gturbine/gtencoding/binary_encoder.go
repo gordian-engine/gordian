@@ -13,7 +13,6 @@ const (
 	int32Size   = 4
 	int64Size   = 8
 	versionSize = int16Size
-	typeSize    = int16Size
 	uuidSize    = 16
 
 	fullDataSizeSize        = int64Size
@@ -23,8 +22,9 @@ const (
 	indexSize               = int64Size
 	totalDataShredsSize     = int64Size
 	totalRecoveryShredsSize = int64Size
+	shredHashSize           = 32
 
-	prefixSize    = versionSize + typeSize + fullDataSizeSize + blockHashSize + groupIDSize + heightSize + indexSize + totalDataShredsSize + totalRecoveryShredsSize
+	prefixSize    = versionSize + fullDataSizeSize + blockHashSize + groupIDSize + heightSize + indexSize + totalDataShredsSize + totalRecoveryShredsSize + shredHashSize
 	binaryVersion = 1
 )
 
@@ -41,33 +41,35 @@ func (bsc *BinaryShardCodec) Encode(shred *gturbine.Shred) ([]byte, error) {
 	// Write version
 	binary.LittleEndian.PutUint16(out[:2], binaryVersion)
 
-	// Write type
-	binary.LittleEndian.PutUint16(out[2:4], uint16(shred.Type))
+	m := shred.Metadata
 
 	// Write full data size
-	binary.LittleEndian.PutUint64(out[4:12], uint64(shred.FullDataSize))
+	binary.LittleEndian.PutUint64(out[2:10], uint64(m.FullDataSize))
 
 	// Write block hash
-	copy(out[12:44], shred.BlockHash)
+	copy(out[10:42], m.BlockHash)
 
-	uid, err := uuid.Parse(shred.GroupID)
+	uid, err := uuid.Parse(m.GroupID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse group ID: %w", err)
 	}
 	// Write group ID
-	copy(out[44:60], uid[:])
+	copy(out[42:58], uid[:])
 
 	// Write height
-	binary.LittleEndian.PutUint64(out[60:68], shred.Height)
+	binary.LittleEndian.PutUint64(out[58:66], m.Height)
 
 	// Write index
-	binary.LittleEndian.PutUint64(out[68:76], uint64(shred.Index))
+	binary.LittleEndian.PutUint64(out[66:74], uint64(shred.Index))
 
 	// Write total data shreds
-	binary.LittleEndian.PutUint64(out[76:84], uint64(shred.TotalDataShreds))
+	binary.LittleEndian.PutUint64(out[74:82], uint64(m.TotalDataShreds))
 
 	// Write total recovery shreds
-	binary.LittleEndian.PutUint64(out[84:92], uint64(shred.TotalRecoveryShreds))
+	binary.LittleEndian.PutUint64(out[82:90], uint64(m.TotalRecoveryShreds))
+
+	// Write hash
+	copy(out[90:122], shred.Hash)
 
 	// Write data
 	copy(out[prefixSize:], shred.Data)
@@ -85,36 +87,41 @@ func (bsc *BinaryShardCodec) Decode(data []byte) (*gturbine.Shred, error) {
 		return nil, fmt.Errorf("unsupported version: %d", version)
 	}
 
-	// Read type
-	shred.Type = gturbine.ShredType(binary.LittleEndian.Uint16(data[2:4]))
+	m := new(gturbine.ShredMetadata)
 
 	// Read full data size
-	shred.FullDataSize = int(binary.LittleEndian.Uint64(data[4:12]))
+	m.FullDataSize = int(binary.LittleEndian.Uint64(data[2:10]))
 
 	// Read block hash
-	shred.BlockHash = make([]byte, blockHashSize)
-	copy(shred.BlockHash, data[12:44])
+	m.BlockHash = make([]byte, blockHashSize)
+	copy(m.BlockHash, data[10:42])
 
 	// Read group ID
 	uid := uuid.UUID{}
-	copy(uid[:], data[44:60])
-	shred.GroupID = uid.String()
+	copy(uid[:], data[42:58])
+	m.GroupID = uid.String()
 
 	// Read height
-	shred.Height = binary.LittleEndian.Uint64(data[60:68])
+	m.Height = binary.LittleEndian.Uint64(data[58:66])
 
 	// Read index
-	shred.Index = int(binary.LittleEndian.Uint64(data[68:76]))
+	shred.Index = int(binary.LittleEndian.Uint64(data[66:74]))
 
 	// Read total data shreds
-	shred.TotalDataShreds = int(binary.LittleEndian.Uint64(data[76:84]))
+	m.TotalDataShreds = int(binary.LittleEndian.Uint64(data[74:82]))
 
 	// Read total recovery shreds
-	shred.TotalRecoveryShreds = int(binary.LittleEndian.Uint64(data[84:92]))
+	m.TotalRecoveryShreds = int(binary.LittleEndian.Uint64(data[82:90]))
+
+	// Read hash
+	shred.Hash = make([]byte, shredHashSize)
+	copy(shred.Hash, data[90:122])
 
 	// Read data
 	shred.Data = make([]byte, len(data)-prefixSize)
 	copy(shred.Data, data[prefixSize:])
+
+	shred.Metadata = m
 
 	return &shred, nil
 }

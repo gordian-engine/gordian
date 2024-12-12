@@ -12,27 +12,25 @@ type Layer struct {
 	Children   []*Layer
 }
 
-type ShredType int
-
-const (
-	DataShred ShredType = iota
-	RecoveryShred
-)
+// ShredMetadata contains metadata required to reconstruct a block from its shreds
+type ShredMetadata struct {
+	GroupID             string
+	FullDataSize        int
+	BlockHash           []byte
+	Height              uint64
+	TotalDataShreds     int
+	TotalRecoveryShreds int
+}
 
 // Shred represents a piece of a block that can be sent over the network
 type Shred struct {
 	// Metadata for block reconstruction
-	FullDataSize int    // Size of the full block
-	BlockHash    []byte // Hash for data verification
-	GroupID      string // UUID for associating shreds from the same block
-	Height       uint64 // Block height for chain reference
-
+	Metadata *ShredMetadata
 	// Shred-specific metadata
-	Type                ShredType
-	Index               int // Index of this shred within the block
-	TotalDataShreds     int // Total number of shreds for this block
-	TotalRecoveryShreds int // Total number of shreds for this block
+	Index int    // Index of this shred within the block
+	Hash  []byte // Hash of the shred data
 
+	// Shred data
 	Data []byte // The actual shred data
 }
 

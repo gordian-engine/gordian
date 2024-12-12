@@ -64,11 +64,11 @@ func TestProcessorShredding(t *testing.T) {
 		},
 		{
 			name:      "uneven block size",
-			blockSize: DefaultChunkSize*DefaultDataShreds - 1000,
+			blockSize: 32,
 		},
 		{
 			name:      "oversized block",
-			blockSize: DefaultChunkSize*DefaultDataShreds + 1,
+			blockSize: maxBlockSize + 1,
 			expectErr: true,
 		},
 		{
@@ -86,11 +86,12 @@ func TestProcessorShredding(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var cb = new(testProcessorCallback)
 
-			p := NewProcessor(cb, time.Minute)
+			hasher := sha256.New
+			p := NewProcessor(cb, hasher, hasher, time.Minute)
 			go p.RunBackgroundCleanup(context.Background())
 
 			block := makeRandomBlock(tc.blockSize)
-			group, err := NewShredGroup(block, TestHeight, DefaultDataShreds, DefaultRecoveryShreds, DefaultChunkSize)
+			b, err := ShredBlock(block, hasher, TestHeight, DefaultDataShreds, DefaultRecoveryShreds)
 
 			if tc.expectErr {
 				if err == nil {
@@ -103,38 +104,32 @@ func TestProcessorShredding(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			// Verify all shreds are properly sized
-			for i := range group.DataShreds {
-				if len(group.DataShreds[i].Data) != int(DefaultChunkSize) {
-					t.Errorf("data shred %d wrong size: got %d want %d",
-						i, len(group.DataShreds[i].Data), DefaultChunkSize)
-				}
-			}
-
 			// Collect threshold shreds into processor
 
 			// collect all data shreds except the last 4, so that recovery shreds are necessary to reassemble
 			for i := 0; i < DefaultDataShreds-4; i++ {
-				p.CollectShred(group.DataShreds[i])
+				p.CollectShred(b.Shreds[i])
 			}
 
 			// collect all recovery shreds
-			for i := 0; i < DefaultRecoveryShreds; i++ {
-				p.CollectShred(group.RecoveryShreds[i])
+			for i := DefaultDataShreds; i < DefaultDataShreds+DefaultRecoveryShreds; i++ {
+				p.CollectShred(b.Shreds[i])
 			}
 
 			if p.cb.(*testProcessorCallback).count != 1 {
-				t.Error("expected ProcessBlock to be called once")
+				t.Fatal("expected ProcessBlock to be called once")
 			}
 
-			blockHash := sha256.Sum256(block)
+			h := hasher()
+			h.Write(block)
+			blockHash := h.Sum(nil)
 
 			if !bytes.Equal(blockHash[:], cb.blockHash) {
-				t.Errorf("block hash mismatch: got %v want %v", cb.blockHash, group.BlockHash)
+				t.Fatalf("block hash mismatch: got %v want %v", cb.blockHash, b.Metadata.BlockHash)
 			}
 
 			if !bytes.Equal(block, cb.data) {
-				t.Errorf("reassembled block doesn't match original: got len %d want len %d",
+				t.Fatalf("reassembled block doesn't match original: got len %d want len %d",
 					len(cb.data), len(block))
 			}
 

@@ -1,13 +1,17 @@
 package gtshred
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"hash"
 	"sync"
 	"time"
 
+	"github.com/gordian-engine/gordian/gerasure"
+	"github.com/gordian-engine/gordian/gerasure/gereedsolomon"
 	"github.com/gordian-engine/gordian/gturbine"
-	"github.com/gordian-engine/gordian/gturbine/gtencoding"
 )
 
 // Constants for error checking
@@ -17,10 +21,13 @@ const (
 	maxBlockSize = 128 * 1024 * 1024 // 128MB maximum block size (matches Solana)
 )
 
-// ShredGroupWithTimestamp is a ShredGroup with a timestamp for tracking when the group was created (when the first shred was received).
-type ShredGroupWithTimestamp struct {
-	*ShredGroup
+// ReconstructorWithTimestamp is a Reconstructor with a timestamp for tracking when the first shred was received.
+type ReconstructorWithTimestamp struct {
+	*gereedsolomon.Reconstructor
+	Metadata  *gturbine.ShredMetadata
 	Timestamp time.Time
+
+	mu sync.Mutex
 }
 
 type Processor struct {
@@ -28,12 +35,15 @@ type Processor struct {
 	cb ProcessorCallback
 
 	// groups is a cache of shred groups currently being processed.
-	groups   map[string]*ShredGroupWithTimestamp
+	groups   map[string]*ReconstructorWithTimestamp
 	groupsMu sync.RWMutex
 
 	// completedBlocks is a cache of block hashes that have been fully reassembled and should no longer be processed.
 	completedBlocks   map[string]time.Time
 	completedBlocksMu sync.RWMutex
+
+	shredHasher func() hash.Hash
+	blockHasher func() hash.Hash
 
 	// cleanupInterval is the interval at which stale groups are cleaned up and completed blocks are removed
 	cleanupInterval time.Duration
@@ -45,10 +55,12 @@ type ProcessorCallback interface {
 }
 
 // NewProcessor creates a new Processor with the given callback and cleanup interval.
-func NewProcessor(cb ProcessorCallback, cleanupInterval time.Duration) *Processor {
+func NewProcessor(cb ProcessorCallback, shredHasher func() hash.Hash, blockHasher func() hash.Hash, cleanupInterval time.Duration) *Processor {
 	return &Processor{
 		cb:              cb,
-		groups:          make(map[string]*ShredGroupWithTimestamp),
+		shredHasher:     shredHasher,
+		blockHasher:     blockHasher,
+		groups:          make(map[string]*ReconstructorWithTimestamp),
 		completedBlocks: make(map[string]time.Time),
 		cleanupInterval: cleanupInterval,
 	}
@@ -77,11 +89,19 @@ func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 	}
 
 	// Skip shreds from already processed blocks
-	if p.isCompleted(shred.BlockHash) {
+	if p.isCompleted(shred.Metadata.BlockHash) {
 		return nil
 	}
 
-	group, ok := p.getGroup(shred.GroupID)
+	h := p.shredHasher()
+	h.Write(shred.Data)
+	hash := h.Sum(nil)
+
+	if !bytes.Equal(hash, shred.Hash) {
+		return fmt.Errorf("shred hash mismatch: got %x want %x", hash, shred.Hash)
+	}
+
+	group, ok := p.getGroup(shred.Metadata.GroupID)
 	if !ok {
 		// If the group doesn't exist, create it and add the shred
 		return p.initGroup(shred)
@@ -90,34 +110,43 @@ func (p *Processor) CollectShred(shred *gturbine.Shred) error {
 	group.mu.Lock()
 	defer group.mu.Unlock()
 
+	m := group.Metadata
+
 	// After locking the group, check if the block has already been completed.
-	if p.isCompleted(group.BlockHash) {
+	if p.isCompleted(m.BlockHash) {
 		return nil
 	}
 
-	full, err := group.collectShred(shred)
+	if err := group.Reconstructor.ReconstructData(nil, shred.Index, shred.Data); err != nil {
+		if !errors.Is(err, gerasure.ErrIncompleteSet) {
+			return err
+		}
+		return nil
+	}
+
+	// The block is now full, reconstruct it and process it.
+	block, err := group.Reconstructor.Data(make([]byte, 0, m.FullDataSize), m.FullDataSize)
 	if err != nil {
-		return fmt.Errorf("failed to collect data shred: %w", err)
+		return fmt.Errorf("failed to reconstruct block: %w", err)
 	}
-	if full {
-		encoder, err := gtencoding.NewEncoder(group.TotalDataShreds, group.TotalRecoveryShreds)
-		if err != nil {
-			return fmt.Errorf("failed to create encoder: %w", err)
-		}
 
-		block, err := group.reconstructBlock(encoder)
-		if err != nil {
-			return fmt.Errorf("failed to reconstruct block: %w", err)
-		}
+	// Verify the block hash
+	h = p.blockHasher()
+	h.Write(block)
+	blockHash := h.Sum(nil)
 
-		if err := p.cb.ProcessBlock(shred.Height, shred.BlockHash, block); err != nil {
-			return fmt.Errorf("failed to process block: %w", err)
-		}
-
-		p.deleteGroup(shred.GroupID)
-		// then mark the block as completed at time.Now()
-		p.setCompleted(shred.BlockHash)
+	if !bytes.Equal(blockHash, m.BlockHash) {
+		return fmt.Errorf("block hash mismatch: got %x want %x", blockHash, m.BlockHash)
 	}
+
+	if err := p.cb.ProcessBlock(m.Height, m.BlockHash, block); err != nil {
+		return fmt.Errorf("failed to process block: %w", err)
+	}
+
+	p.deleteGroup(m.GroupID)
+	// then mark the block as completed at time.Now()
+	p.setCompleted(m.BlockHash)
+
 	return nil
 }
 
@@ -149,7 +178,7 @@ func (p *Processor) cleanupStaleGroups(now time.Time) {
 	for id, group := range p.groups {
 		for _, hash := range deleteHashes {
 			// Check if group is associated with a completed block
-			if string(group.BlockHash) == hash {
+			if string(group.Metadata.BlockHash) == hash {
 				deleteGroups = append(deleteGroups, id)
 			}
 		}
@@ -174,22 +203,17 @@ func (p *Processor) cleanupStaleGroups(now time.Time) {
 // initGroup creates a new group and adds the first shred to it.
 func (p *Processor) initGroup(shred *gturbine.Shred) error {
 	now := time.Now()
-	group := &ShredGroup{
-		DataShreds:          make([]*gturbine.Shred, shred.TotalDataShreds),
-		RecoveryShreds:      make([]*gturbine.Shred, shred.TotalRecoveryShreds),
-		TotalDataShreds:     shred.TotalDataShreds,
-		TotalRecoveryShreds: shred.TotalRecoveryShreds,
-		GroupID:             shred.GroupID,
-		BlockHash:           shred.BlockHash,
-		Height:              shred.Height,
-		OriginalSize:        shred.FullDataSize,
-	}
 
-	group.DataShreds[shred.Index] = shred
+	m := shred.Metadata
+
+	rcons, err := gereedsolomon.NewReconstructor(m.TotalDataShreds, m.TotalRecoveryShreds, len(shred.Data))
+	if err != nil {
+		return fmt.Errorf("failed to create reconstructor: %w", err)
+	}
 
 	p.groupsMu.Lock()
 
-	if _, ok := p.groups[shred.GroupID]; ok {
+	if _, ok := p.groups[shred.Metadata.GroupID]; ok {
 		// If a group already exists, return early to avoid overwriting
 		p.groupsMu.Unlock()
 
@@ -199,16 +223,21 @@ func (p *Processor) initGroup(shred *gturbine.Shred) error {
 
 	defer p.groupsMu.Unlock()
 
-	p.groups[shred.GroupID] = &ShredGroupWithTimestamp{
-		ShredGroup: group,
-		Timestamp:  now,
+	group := &ReconstructorWithTimestamp{
+		Reconstructor: rcons,
+		Metadata:      m,
+		Timestamp:     now,
 	}
+
+	group.Reconstructor.ReconstructData(nil, shred.Index, shred.Data)
+
+	p.groups[m.GroupID] = group
 
 	return nil
 }
 
 // getGroup returns the group with the given ID, if it exists.
-func (p *Processor) getGroup(groupID string) (*ShredGroupWithTimestamp, bool) {
+func (p *Processor) getGroup(groupID string) (*ReconstructorWithTimestamp, bool) {
 	p.groupsMu.RLock()
 	defer p.groupsMu.RUnlock()
 	group, ok := p.groups[groupID]

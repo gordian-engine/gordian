@@ -3,6 +3,7 @@ package gturbine_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"sync"
@@ -66,7 +67,8 @@ func newTestNode(t *testing.T, basePort int) *testNode {
 
 	cb := &testBlockHandler{}
 
-	processor := gtshred.NewProcessor(cb, time.Minute)
+	hasher := sha256.New
+	processor := gtshred.NewProcessor(cb, hasher, hasher, time.Minute)
 	go processor.RunBackgroundCleanup(context.Background())
 
 	shredHandler := &testShredHandler{}
@@ -108,13 +110,13 @@ func TestBlockPropagation(t *testing.T) {
 	const testHeight = 12345
 
 	// Node 1: Shred the block
-	shredGroup, err := gtshred.NewShredGroup(originalBlock, testHeight, 16, 4, 1024)
+	shredGroup, err := gtshred.ShredBlock(originalBlock, sha256.New, testHeight, 16, 4)
 	if err != nil {
 		t.Fatalf("Failed to shred block: %v", err)
 	}
 
 	// Node 1: Encode and send shreds to Node 2
-	for i, shred := range append(shredGroup.DataShreds, shredGroup.RecoveryShreds...) {
+	for i, shred := range shredGroup.Shreds {
 		encodedShred, err := node1.codec.Encode(shred)
 		if err != nil {
 			t.Fatalf("Failed to encode shred: %v", err)
@@ -162,13 +164,13 @@ func TestPartialBlockReconstruction(t *testing.T) {
 	const testHeight = 54321
 
 	// Create shreds
-	shredGroup, err := gtshred.NewShredGroup(originalBlock, testHeight, 16, 4, 1024)
+	shredGroup, err := gtshred.ShredBlock(originalBlock, sha256.New, testHeight, 16, 4)
 	if err != nil {
 		t.Fatalf("Failed to shred block: %v", err)
 	}
 
 	// Send only minimum required shreds
-	minShreds := append(shredGroup.DataShreds[:12], shredGroup.RecoveryShreds...)
+	minShreds := append(shredGroup.Shreds[:12], shredGroup.Shreds[16:]...)
 	for i, shred := range minShreds {
 		encodedShred, err := node1.codec.Encode(shred)
 		if err != nil {

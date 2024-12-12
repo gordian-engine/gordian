@@ -12,15 +12,14 @@ import (
 
 // TestShred represents a reusable test shred configuration
 type TestShred struct {
-	size     int
-	dataType gturbine.ShredType
+	size int
 }
 
-var testConfigs = []TestShred{
-	{64, gturbine.DataShred},          // Minimum size
-	{1024, gturbine.DataShred},        // 1KB
-	{64 * 1024, gturbine.DataShred},   // 64KB
-	{1024 * 1024, gturbine.DataShred}, // 1MB
+var testConfigs = []int{
+	64,          // Minimum size
+	1024,        // 1KB
+	64 * 1024,   // 64KB
+	1024 * 1024, // 1MB
 }
 
 // BenchmarkBinaryCodec runs comprehensive benchmarks for the binary codec
@@ -51,34 +50,36 @@ func BenchmarkBinaryCodecParallel(b *testing.B) {
 }
 
 // Helper to create consistent benchmark names
-func benchName(op string, cfg TestShred) string {
-	return fmt.Sprintf("%s/%dB", op, cfg.size)
+func benchName(op string, size int) string {
+	return fmt.Sprintf("%s/%dB", op, size)
 }
 
 // Helper to create a test shred
-func createTestShred(cfg TestShred) *gturbine.Shred {
-	data := make([]byte, cfg.size)
+func createTestShred(size int) *gturbine.Shred {
+	data := make([]byte, size)
 	rand.Read(data)
 
 	return &gturbine.Shred{
-		Type:                cfg.dataType,
-		FullDataSize:        cfg.size,
-		BlockHash:           bytes.Repeat([]byte{0xFF}, blockHashSize), // Fixed pattern for consistent benchmarking
-		GroupID:             uuid.New().String(),
-		Height:              1,
-		Index:               0,
-		TotalDataShreds:     16,
-		TotalRecoveryShreds: 4,
-		Data:                data,
+		Metadata: &gturbine.ShredMetadata{
+			FullDataSize:        size,
+			BlockHash:           bytes.Repeat([]byte{0xFF}, blockHashSize), // Fixed pattern for consistent benchmarking
+			GroupID:             uuid.New().String(),
+			Height:              1,
+			TotalDataShreds:     16,
+			TotalRecoveryShreds: 4,
+		},
+		Index: 0,
+		Data:  data,
+		Hash:  bytes.Repeat([]byte{0xFF}, blockHashSize), // Fixed pattern for consistent benchmarking,
 	}
 }
 
-func benchmarkEncode(b *testing.B, cfg TestShred) {
+func benchmarkEncode(b *testing.B, size int) {
 	codec := NewBinaryShardCodec()
-	shred := createTestShred(cfg)
+	shred := createTestShred(size)
 
 	b.ResetTimer()
-	b.SetBytes(int64(cfg.size + prefixSize))
+	b.SetBytes(int64(size + prefixSize))
 
 	for i := 0; i < b.N; i++ {
 		_, err := codec.Encode(shred)
@@ -88,16 +89,16 @@ func benchmarkEncode(b *testing.B, cfg TestShred) {
 	}
 }
 
-func benchmarkDecode(b *testing.B, cfg TestShred) {
+func benchmarkDecode(b *testing.B, size int) {
 	codec := NewBinaryShardCodec()
-	shred := createTestShred(cfg)
+	shred := createTestShred(size)
 	encoded, err := codec.Encode(shred)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
-	b.SetBytes(int64(cfg.size + prefixSize))
+	b.SetBytes(int64(size + prefixSize))
 
 	for i := 0; i < b.N; i++ {
 		_, err := codec.Decode(encoded)
@@ -107,12 +108,12 @@ func benchmarkDecode(b *testing.B, cfg TestShred) {
 	}
 }
 
-func benchmarkRoundTrip(b *testing.B, cfg TestShred) {
+func benchmarkRoundTrip(b *testing.B, size int) {
 	codec := NewBinaryShardCodec()
-	shred := createTestShred(cfg)
+	shred := createTestShred(size)
 
 	b.ResetTimer()
-	b.SetBytes(int64(cfg.size + prefixSize))
+	b.SetBytes(int64(size + prefixSize))
 
 	for i := 0; i < b.N; i++ {
 		encoded, err := codec.Encode(shred)
@@ -126,12 +127,12 @@ func benchmarkRoundTrip(b *testing.B, cfg TestShred) {
 	}
 }
 
-func benchmarkEncodeParallel(b *testing.B, cfg TestShred) {
+func benchmarkEncodeParallel(b *testing.B, size int) {
 	codec := NewBinaryShardCodec()
-	shred := createTestShred(cfg)
+	shred := createTestShred(size)
 
 	b.ResetTimer()
-	b.SetBytes(int64(cfg.size + prefixSize))
+	b.SetBytes(int64(size + prefixSize))
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -143,16 +144,16 @@ func benchmarkEncodeParallel(b *testing.B, cfg TestShred) {
 	})
 }
 
-func benchmarkDecodeParallel(b *testing.B, cfg TestShred) {
+func benchmarkDecodeParallel(b *testing.B, size int) {
 	codec := NewBinaryShardCodec()
-	shred := createTestShred(cfg)
+	shred := createTestShred(size)
 	encoded, err := codec.Encode(shred)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
-	b.SetBytes(int64(cfg.size + prefixSize))
+	b.SetBytes(int64(size + prefixSize))
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
