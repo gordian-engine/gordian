@@ -15,14 +15,14 @@ type Encoder struct {
 
 // NewEncoder returns a new Encoder.
 // The options within the given reedsolomon.Encoder determine the number of shards.
-func NewEncoder(dataShreds, parityShreds int) (*Encoder, error) {
+func NewEncoder(dataShreds, parityShreds int, opts ...reedsolomon.Option) (*Encoder, error) {
 	if dataShreds <= 0 {
 		return nil, fmt.Errorf("data shreds must be > 0")
 	}
 	if parityShreds <= 0 {
 		return nil, fmt.Errorf("parity shreds must be > 0")
 	}
-	rs, err := reedsolomon.New(dataShreds, parityShreds)
+	rs, err := reedsolomon.New(dataShreds, parityShreds, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create reed-solomon encoder: %w", err)
 	}

@@ -28,14 +28,14 @@ type Reconstructor struct {
 // NewReconstructor returns a new Reconstructor.
 // The options within the given reedsolomon.Encoder determine the number of shards.
 // The shardSize and totalDataSize must be discovered out of band;
-func NewReconstructor(dataShards, parityShards, shardSize int) (*Reconstructor, error) {
+func NewReconstructor(dataShards, parityShards, shardSize int, opts ...reedsolomon.Option) (*Reconstructor, error) {
 	if dataShards <= 0 {
 		return nil, fmt.Errorf("data shards must be > 0")
 	}
 	if parityShards <= 0 {
 		return nil, fmt.Errorf("parity shards must be > 0")
 	}
-	rs, err := reedsolomon.New(dataShards, parityShards)
+	rs, err := reedsolomon.New(dataShards, parityShards, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create reed-solomon reconstructor: %w", err)
 	}
