@@ -15,8 +15,24 @@ type Encoder struct {
 
 // NewEncoder returns a new Encoder.
 // The options within the given reedsolomon.Encoder determine the number of shards.
-func NewEncoder(rs reedsolomon.Encoder) Encoder {
-	return Encoder{rs: rs}
+func NewEncoder(dataShreds, parityShreds int, opts ...reedsolomon.Option) (*Encoder, error) {
+	if dataShreds <= 0 {
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with dataShreds < 0, got %d",
+			dataShreds,
+		))
+	}
+	if parityShreds <= 0 {
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with parityShreds < 0, got %d",
+			parityShreds,
+		))
+	}
+	rs, err := reedsolomon.New(dataShreds, parityShreds, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create reed-solomon encoder: %w", err)
+	}
+	return &Encoder{rs: rs}, nil
 }
 
 // Encode satisfies [gerasure.Encoder].

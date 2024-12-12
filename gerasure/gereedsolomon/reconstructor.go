@@ -28,7 +28,24 @@ type Reconstructor struct {
 // NewReconstructor returns a new Reconstructor.
 // The options within the given reedsolomon.Encoder determine the number of shards.
 // The shardSize and totalDataSize must be discovered out of band;
-func NewReconstructor(rs reedsolomon.Encoder, shardSize int) *Reconstructor {
+func NewReconstructor(dataShards, parityShards, shardSize int, opts ...reedsolomon.Option) (*Reconstructor, error) {
+	if dataShards <= 0 {
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with dataShreds < 0, got %d",
+			dataShards,
+		))
+	}
+	if parityShards <= 0 {
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with parityShreds < 0, got %d",
+			parityShards,
+		))
+	}
+	rs, err := reedsolomon.New(dataShards, parityShards, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create reed-solomon reconstructor: %w", err)
+	}
+
 	// All reedsolomon.Encoder instances are guaranteed to satisfy reedsolomon.Extensions.
 	// Calling AllocAligned is supposed to result in better throughput
 	// when actually encoding and decoding.
@@ -47,7 +64,7 @@ func NewReconstructor(rs reedsolomon.Encoder, shardSize int) *Reconstructor {
 		allShards: allShards,
 
 		shardSize: shardSize,
-	}
+	}, nil
 }
 
 // ReconstructData satisfies [gerasure.Reconstructor].
