@@ -17,10 +17,16 @@ type Encoder struct {
 // The options within the given reedsolomon.Encoder determine the number of shards.
 func NewEncoder(dataShreds, parityShreds int, opts ...reedsolomon.Option) (*Encoder, error) {
 	if dataShreds <= 0 {
-		return nil, fmt.Errorf("data shreds must be > 0")
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with dataShreds < 0, got %d",
+			dataShreds,
+		))
 	}
 	if parityShreds <= 0 {
-		return nil, fmt.Errorf("parity shreds must be > 0")
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with parityShreds < 0, got %d",
+			parityShreds,
+		))
 	}
 	rs, err := reedsolomon.New(dataShreds, parityShreds, opts...)
 	if err != nil {
@@ -31,7 +37,7 @@ func NewEncoder(dataShreds, parityShreds int, opts ...reedsolomon.Option) (*Enco
 
 // Encode satisfies [gerasure.Encoder].
 // Callers should assume that the Encoder takes ownership of the given data slice.
-func (e *Encoder) Encode(_ context.Context, data []byte) ([][]byte, error) {
+func (e Encoder) Encode(_ context.Context, data []byte) ([][]byte, error) {
 	// From the original data, produce new subslices for the data shards and parity shards.
 	allShards, err := e.rs.Split(data)
 	if err != nil {

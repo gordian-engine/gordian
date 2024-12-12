@@ -30,10 +30,16 @@ type Reconstructor struct {
 // The shardSize and totalDataSize must be discovered out of band;
 func NewReconstructor(dataShards, parityShards, shardSize int, opts ...reedsolomon.Option) (*Reconstructor, error) {
 	if dataShards <= 0 {
-		return nil, fmt.Errorf("data shards must be > 0")
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with dataShreds < 0, got %d",
+			dataShards,
+		))
 	}
 	if parityShards <= 0 {
-		return nil, fmt.Errorf("parity shards must be > 0")
+		panic(fmt.Errorf(
+			"BUG: attempted to create reed solomon encoder with parityShreds < 0, got %d",
+			parityShards,
+		))
 	}
 	rs, err := reedsolomon.New(dataShards, parityShards, opts...)
 	if err != nil {
