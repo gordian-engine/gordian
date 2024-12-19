@@ -9,13 +9,13 @@ import (
 )
 
 // DumpStringIDTree is a shorthand for DumpTree when the tree has string IDs.
-func DumpStringIDTree(t *gmerkle.MerkleTree[string]) string {
+func DumpStringIDTree(t *gmerkle.Tree[string]) string {
 	return DumpTree(t, func(id string) string { return id })
 }
 
 // DumpTree returns a crude string showing the structure of the Merkle tree t.
 // This output is only meant for debugging purposes, and it is not guaranteed to be stable.
-func DumpTree[I comparable](t *gmerkle.MerkleTree[I], idFormatter func(I) string) string {
+func DumpTree[I comparable](t *gmerkle.Tree[I], idFormatter func(I) string) string {
 	var buf bytes.Buffer
 	rootDepth := -1
 

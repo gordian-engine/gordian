@@ -6,11 +6,11 @@ import (
 	"github.com/bits-and-blooms/bitset"
 )
 
-// MerkleScheme specifies the details on producing a merkle tree from an ordered collection of leaves.
+// Scheme specifies the details on producing a merkle tree from an ordered collection of leaves.
 // Type parameter L is the leaf data, and I is the ID type of the nodes.
 // The ID type will often be a byte slice representing a cryptographic hash,
 // but in the case of public key aggregation it could be a public key.
-type MerkleScheme[L any, I comparable] interface {
+type Scheme[L any, I comparable] interface {
 	// How many children each branch must have
 	// (excepting the rightmost branch in a row, which will have at least 1 element
 	// but possibly less than BranchFactor).
@@ -36,7 +36,7 @@ type MerkleScheme[L any, I comparable] interface {
 	LeafID(idx int, leafData L) (I, error)
 }
 
-// MerkleTree is the primary Merkle tree used in Gordian.
+// Tree is the primary Merkle tree used in Gordian.
 // Compared to other possible implementations,
 // features of this implementation include:
 //   - Rather than representing branches as "hashes", they are "IDs" of the type parameter I.
@@ -52,8 +52,8 @@ type MerkleScheme[L any, I comparable] interface {
 //     at indices 5-8.
 //   - After calculating the leaf IDs, the tree holds no reference to the leaf values.
 //   - While a branching factor of 2 is suggested,
-//     other sizes may be specified through the [MerkleScheme].
-type MerkleTree[I comparable] struct {
+//     other sizes may be specified through the [Scheme].
+type Tree[I comparable] struct {
 	// Branch factor.
 	m int
 
@@ -66,7 +66,7 @@ type MerkleTree[I comparable] struct {
 }
 
 // RootID returns the ID of the root branch of the tree.
-func (t *MerkleTree[I]) RootID() I {
+func (t *Tree[I]) RootID() I {
 	return t.branches[len(t.branches)-1][0].ID
 }
 
@@ -76,7 +76,7 @@ func (t *MerkleTree[I]) RootID() I {
 // If a match is found, leafIdxStart is the starting index into the original slice of leaf data,
 // and n is how many elements are represented by the matching branch.
 // If no match is found, Lookup returns -1, 0.
-func (t *MerkleTree[I]) Lookup(id I) (leafIdxStart, n int) {
+func (t *Tree[I]) Lookup(id I) (leafIdxStart, n int) {
 	branchSpan := 1
 	for ri, row := range t.branches {
 		if ri > 0 {
@@ -99,7 +99,7 @@ func (t *MerkleTree[I]) Lookup(id I) (leafIdxStart, n int) {
 }
 
 // BitSetToIDs returns branch IDs in t that map to leaves at the indices indicated in b.
-// In many use cases of MerkleTree, the branch IDs are nothing more than arbitrary identifiers of collections of leaves.
+// In many use cases of Tree, the branch IDs are nothing more than arbitrary identifiers of collections of leaves.
 // For those, the simple bitset will be a sufficient and more condensed representation of the leaves' presence.
 // For example, you may use bitset 0b1111 (the 4 least significant bits) to represent which leaves are used,
 // and you may transmit [sig0, sig1, sig2, sig3] with the understanding that those map
@@ -116,10 +116,10 @@ func (t *MerkleTree[I]) Lookup(id I) (leafIdxStart, n int) {
 // the signatures for the first 4 values.
 // Depending on how expensive it is to re-calculate an aggregated public key,
 // you may want to track the tree's IDs and their corresponding keys in some persistent storage.
-func (t *MerkleTree[I]) BitSetToIDs(b *bitset.BitSet) []I {
+func (t *Tree[I]) BitSetToIDs(b *bitset.BitSet) []I {
 	var out []I
 
-	// The bitset package expectsx uint values everywhere.
+	// The bitset package expects uint values everywhere.
 	// Convert these values to uint once up front, for readability when we need them later.
 	m := uint(t.m)
 	nLeaves := uint(t.nLeaves)
@@ -200,13 +200,13 @@ func (t *MerkleTree[I]) BitSetToIDs(b *bitset.BitSet) []I {
 	return out
 }
 
-// TreeVisitFunc is the callback passed to [MerkleTree.WalkFromRoot].
+// TreeVisitFunc is the callback passed to [Tree.WalkFromRoot].
 // If it returns stop=true, traversal will stop and the callback will not be called again.
 type TreeVisitFunc[I comparable] func(id I, depth, rowIdx int, childBranchIDs []I, leafIndex, nLeaves int) (stop bool)
 
 // WalkFromRootB starts at the root branch of the tree
 // and traverses breadth-first, calling fn on each branch.
-func (t *MerkleTree[I]) WalkFromRootB(fn TreeVisitFunc[I]) {
+func (t *Tree[I]) WalkFromRootB(fn TreeVisitFunc[I]) {
 	rootRow := t.branches[len(t.branches)-1]
 	if len(rootRow) != 1 {
 		panic(fmt.Errorf("BUG: invalid tree; root row had %d branches", len(rootRow)))
@@ -265,7 +265,7 @@ func (t *MerkleTree[I]) WalkFromRootB(fn TreeVisitFunc[I]) {
 
 // WalkFromRootD starts at the root branch of the tree
 // and traverses depth-first, calling fn on each branch.
-func (t *MerkleTree[I]) WalkFromRootD(fn TreeVisitFunc[I]) {
+func (t *Tree[I]) WalkFromRootD(fn TreeVisitFunc[I]) {
 	rootRow := t.branches[len(t.branches)-1]
 	if len(rootRow) != 1 {
 		panic(fmt.Errorf("BUG: invalid tree; root row had %d branches", len(rootRow)))
@@ -293,7 +293,7 @@ func (t *MerkleTree[I]) WalkFromRootD(fn TreeVisitFunc[I]) {
 	}
 }
 
-func (t *MerkleTree[I]) walkD(depth, rowIdx int, fn TreeVisitFunc[I]) (stop bool) {
+func (t *Tree[I]) walkD(depth, rowIdx int, fn TreeVisitFunc[I]) (stop bool) {
 	b := t.branches[depth][rowIdx]
 	if depth == 0 {
 		// Just emit the current branch.
@@ -340,7 +340,7 @@ func (t *MerkleTree[I]) walkD(depth, rowIdx int, fn TreeVisitFunc[I]) (stop bool
 
 // childIndexRange returns the two integers to use for slicing the branches underneath
 // the branch at parentDepth, parentRowIdx.
-func (t *MerkleTree[I]) childIndexRange(parentDepth, parentRowIdx int) (start, end int) {
+func (t *Tree[I]) childIndexRange(parentDepth, parentRowIdx int) (start, end int) {
 	if parentDepth == 0 {
 		panic(fmt.Errorf("BUG: childIndexRange should not be called with parentDepth=0"))
 	}
@@ -363,8 +363,8 @@ type branch[I comparable] struct {
 	Index int
 }
 
-// NewMerkleTree returns a new Merkle tree based on the given scheme and leaf data.
-func NewMerkleTree[L any, I comparable](scheme MerkleScheme[L, I], leafData []L) (*MerkleTree[I], error) {
+// NewTree returns a new Merkle tree based on the given scheme and leaf data.
+func NewTree[L any, I comparable](scheme Scheme[L, I], leafData []L) (*Tree[I], error) {
 	m := int(scheme.BranchFactor()) // m as in "m-ary tree".
 	if m < 2 {
 		return nil, fmt.Errorf("branch factor must be at least 2 (got %d)", m)
@@ -447,7 +447,7 @@ func NewMerkleTree[L any, I comparable](scheme MerkleScheme[L, I], leafData []L)
 		}
 	}
 
-	return &MerkleTree[I]{
+	return &Tree[I]{
 		m:        m,
 		nLeaves:  len(leafData),
 		branches: rows,

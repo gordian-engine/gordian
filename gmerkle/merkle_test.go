@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Very simple implementation of MerkleScheme.
+// Very simple implementation of Scheme.
 type sha256Scheme struct {
 	M uint8 // Branch factor.
 
@@ -56,7 +56,7 @@ func (s sha256Scheme) BranchID(depth, rowIdx int, childIDs [][sha256.Size]byte) 
 	return out, nil
 }
 
-func TestMerkleTree_RootID(t *testing.T) {
+func TestTree_RootID(t *testing.T) {
 	t.Run("complete first depth, binary tree", func(t *testing.T) {
 		leaves := []string{"This", "is", "a", "test."}
 
@@ -84,7 +84,7 @@ func TestMerkleTree_RootID(t *testing.T) {
 		root := sha256.Sum256(in) // sha256( sha256(sha256("This") + sha256("is")) + sha256(sha256("a") + sha256("test.")) )
 
 		scheme := sha256Scheme{M: 2}
-		tree, err := gmerkle.NewMerkleTree[string, [sha256.Size]byte](scheme, leaves)
+		tree, err := gmerkle.NewTree(scheme, leaves)
 		require.NoError(t, err)
 
 		require.Equal(t, root, tree.RootID())
@@ -109,7 +109,7 @@ func TestMerkleTree_RootID(t *testing.T) {
 		root := sha256.Sum256(in) // sha256( sha256(sha256("only") + sha256("three")) + sha256("leaves") )
 
 		scheme := sha256Scheme{M: 2}
-		tree, err := gmerkle.NewMerkleTree[string, [sha256.Size]byte](scheme, leaves)
+		tree, err := gmerkle.NewTree(scheme, leaves)
 		require.NoError(t, err)
 
 		require.Equal(t, root, tree.RootID())
@@ -130,7 +130,7 @@ func TestMerkleTree_RootID(t *testing.T) {
 		root := sha256.Sum256(in)    // sha256(sha256("exactly") + sha256("three") + sha256("leaves"))
 
 		scheme := sha256Scheme{M: 3}
-		tree, err := gmerkle.NewMerkleTree[string, [sha256.Size]byte](scheme, leaves)
+		tree, err := gmerkle.NewTree(scheme, leaves)
 		require.NoError(t, err)
 
 		require.Equal(t, root, tree.RootID())
@@ -150,7 +150,7 @@ func TestMerkleTree_RootID(t *testing.T) {
 		root := sha256.Sum256(in)    // sha256(sha256("just") + sha256("two"))
 
 		scheme := sha256Scheme{M: 3}
-		tree, err := gmerkle.NewMerkleTree[string, [sha256.Size]byte](scheme, leaves)
+		tree, err := gmerkle.NewTree(scheme, leaves)
 		require.NoError(t, err)
 
 		require.Equal(t, root, tree.RootID())
@@ -190,7 +190,7 @@ func TestMerkleTree_RootID(t *testing.T) {
 		root := sha256.Sum256(in) // sha256( sha256(1-3) + sha256(4-6) + sha256(7-9) )
 
 		scheme := sha256Scheme{M: 3}
-		tree, err := gmerkle.NewMerkleTree[string, [sha256.Size]byte](scheme, leaves)
+		tree, err := gmerkle.NewTree(scheme, leaves)
 		require.NoError(t, err)
 
 		require.Equal(t, root, tree.RootID())
@@ -220,7 +220,7 @@ func TestMerkleTree_RootID(t *testing.T) {
 		root := sha256.Sum256(in)
 
 		scheme := sha256Scheme{M: 3, PadRightmostBranches: true}
-		tree, err := gmerkle.NewMerkleTree[string, [sha256.Size]byte](scheme, leaves)
+		tree, err := gmerkle.NewTree(scheme, leaves)
 		require.NoError(t, err)
 
 		require.Equal(t, root, tree.RootID())
@@ -249,7 +249,7 @@ func TestMerkleTree_RootID(t *testing.T) {
 		root := sha256.Sum256(in)
 
 		scheme := sha256Scheme{M: 2, HashPosition: true}
-		tree, err := gmerkle.NewMerkleTree[string, [sha256.Size]byte](scheme, leaves)
+		tree, err := gmerkle.NewTree(scheme, leaves)
 		require.NoError(t, err)
 
 		require.Equal(t, root, tree.RootID())
@@ -271,11 +271,11 @@ func (stringConcatScheme) BranchID(_, _ int, childIDs []string) (string, error) 
 	return childIDs[0] + childIDs[1], nil
 }
 
-func TestMerkleTree_Lookup(t *testing.T) {
+func TestTree_Lookup(t *testing.T) {
 	t.Run("complete first row", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4", "5", "6", "7"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		for _, tc := range []struct {
@@ -319,7 +319,7 @@ func TestMerkleTree_Lookup(t *testing.T) {
 	t.Run("incomplete first row", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4", "5", "6"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		for _, tc := range []struct {
@@ -381,11 +381,11 @@ func (v *visitor) Visit(id string, depth, rowIdx int, childBranchIDs []string, l
 	return false
 }
 
-func TestMerkleTree_WalkFromRootB(t *testing.T) {
+func TestTree_WalkFromRootB(t *testing.T) {
 	t.Run("full, balanced, binary tree", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4", "5", "6", "7"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		var v visitor
@@ -471,7 +471,7 @@ func TestMerkleTree_WalkFromRootB(t *testing.T) {
 	t.Run("tree with orphan", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		var v visitor
@@ -542,7 +542,7 @@ func TestMerkleTree_WalkFromRootB(t *testing.T) {
 	t.Run("single element tree", func(t *testing.T) {
 		leaves := []string{"alone"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		var v visitor
@@ -561,11 +561,11 @@ func TestMerkleTree_WalkFromRootB(t *testing.T) {
 	})
 }
 
-func TestMerkleTree_WalkFromRootD(t *testing.T) {
+func TestTree_WalkFromRootD(t *testing.T) {
 	t.Run("full, balanced, binary tree", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4", "5", "6", "7"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		var v visitor
@@ -712,7 +712,7 @@ func TestMerkleTree_WalkFromRootD(t *testing.T) {
 	t.Run("tree with orphan", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		var v visitor
@@ -805,7 +805,7 @@ func TestMerkleTree_WalkFromRootD(t *testing.T) {
 	t.Run("single element tree", func(t *testing.T) {
 		leaves := []string{"alone"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		var v visitor
@@ -824,11 +824,11 @@ func TestMerkleTree_WalkFromRootD(t *testing.T) {
 	})
 }
 
-func TestMerkleTree_BitSetToIDs(t *testing.T) {
+func TestTree_BitSetToIDs(t *testing.T) {
 	t.Run("balanced tree", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4", "5", "6", "7"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		for _, tc := range []struct {
@@ -873,7 +873,7 @@ func TestMerkleTree_BitSetToIDs(t *testing.T) {
 	t.Run("unbalanced tree", func(t *testing.T) {
 		leaves := []string{"0", "1", "2", "3", "4"}
 
-		tree, err := gmerkle.NewMerkleTree[string, string](stringConcatScheme{}, leaves)
+		tree, err := gmerkle.NewTree(stringConcatScheme{}, leaves)
 		require.NoError(t, err)
 
 		for _, tc := range []struct {

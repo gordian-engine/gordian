@@ -76,8 +76,12 @@ type CommonMessageSignatureProof interface {
 	// but not a proof scheme, and you need to make a complicated operation.
 	Derive() CommonMessageSignatureProof
 
-	// SignatureBitSet returns a bit set indicating which of the candidate keys
+	// SignatureBitSet returns the underlying bit set indicating which of the candidate keys
 	// have signatures included in this proof.
+	//
+	// The caller must not modify the bit set,
+	// and using the bit set after another call to a CommonMessageSignatureProof method
+	// risks causing another data race.
 	//
 	// In the case of a SignatureProof that involves aggregating signatures,
 	// the count of set bits may be greater than the number of signatures.
