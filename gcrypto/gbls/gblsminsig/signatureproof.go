@@ -9,6 +9,7 @@ import (
 
 	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/gcrypto/gbls/gblsminsig/internal/sigtree"
 	"github.com/gordian-engine/gordian/gmerkle"
 	blst "github.com/supranational/blst/bindings/go"
 )
@@ -18,6 +19,8 @@ type SignatureProof struct {
 
 	keys    []PubKey
 	keyTree *gmerkle.Tree[PubKey]
+
+	sigTree sigtree.Tree
 
 	// string(pubkey bytes) -> index in keys
 	keyIdxs map[string]int
@@ -46,11 +49,21 @@ func NewSignatureProof(msg []byte, trustedKeys []PubKey, pubKeyHash string) (Sig
 		keyIdxs[string(k.PubKeyBytes())] = i
 	}
 
+	sigTree := sigtree.New(func(yield func(blst.P2Affine) bool) {
+		for _, key := range trustedKeys {
+			if !yield(blst.P2Affine(key)) {
+				return
+			}
+		}
+	}, len(trustedKeys))
+
 	return SignatureProof{
 		msg: msg,
 
 		keys:    trustedKeys,
 		keyTree: keyTree,
+
+		sigTree: sigTree,
 
 		keyIdxs: keyIdxs,
 
@@ -297,6 +310,7 @@ func (p SignatureProof) Clone() gcrypto.CommonMessageSignatureProof {
 		msg:     bytes.Clone(p.msg),
 		keys:    slices.Clone(p.keys),
 		keyTree: p.keyTree, // TODO: this needs to be cloned
+		sigTree: p.sigTree, // TODO: this needs to be cloned
 
 		keyIdxs: maps.Clone(p.keyIdxs),
 
@@ -314,6 +328,7 @@ func (p SignatureProof) Derive() gcrypto.CommonMessageSignatureProof {
 		keys: slices.Clone(p.keys),
 
 		keyTree: p.keyTree, // TODO: this needs to be cloned
+		sigTree: p.sigTree, // TODO: this needs to be cloned and cleared
 
 		keyIdxs: maps.Clone(p.keyIdxs),
 
