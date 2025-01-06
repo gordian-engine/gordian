@@ -40,6 +40,10 @@ func TestTree_indexing(t *testing.T) {
 
 		tree := sigtree.New(keysSeq(2), 2)
 
+		// Tree layout:
+		//   0 1
+		//    2
+
 		requireKeyAtIndex(t, tree, 0, testPubKeys[0])
 		requireKeyAtIndex(t, tree, 1, testPubKeys[1])
 
@@ -53,10 +57,54 @@ func TestTree_indexing(t *testing.T) {
 		require.Equal(t, -1, tree.Index(blst.P2Affine(testPubKeys[5])))
 	})
 
+	t.Run("3 keys", func(t *testing.T) {
+		t.Parallel()
+
+		tree := sigtree.New(keysSeq(3), 3)
+
+		// Tree layout:
+		//   0 1 2 (3)
+		//    4   (5)
+		//      6
+		// Element 3 is padding, and element 5 is effectively aliased to 2.
+
+		requireKeyAtIndex(t, tree, 0, testPubKeys[0])
+		requireKeyAtIndex(t, tree, 1, testPubKeys[1])
+		requireKeyAtIndex(t, tree, 2, testPubKeys[2])
+
+		// Padding elements.
+		// requireKeyAtIndex works for the first blank key,
+		// but for later padded blank keys,
+		// we cannot look up the key value.
+		requireKeyAtIndex(t, tree, 3, gblsminsig.PubKey{})
+		requirePaddingMergedKeyAtIndex(t, tree, 5, testPubKeys[2])
+
+		agg01 := new(blst.P2).Add(
+			(*blst.P2Affine)(&testPubKeys[0]),
+		).Add(
+			(*blst.P2Affine)(&testPubKeys[1]),
+		).ToAffine()
+		requireP2AtIndex(t, tree, 4, *agg01)
+
+		agg012 := new(blst.P2).Add(
+			agg01,
+		).Add(
+			(*blst.P2Affine)(&testPubKeys[2]),
+		).ToAffine()
+		requireP2AtIndex(t, tree, 6, *agg012)
+
+		require.Equal(t, -1, tree.Index(blst.P2Affine(testPubKeys[5])))
+	})
+
 	t.Run("4 keys", func(t *testing.T) {
 		t.Parallel()
 
 		tree := sigtree.New(keysSeq(4), 4)
+
+		// Tree layout:
+		//   0 1 2 3
+		//    4   5
+		//      6
 
 		requireKeyAtIndex(t, tree, 0, testPubKeys[0])
 		requireKeyAtIndex(t, tree, 1, testPubKeys[1])
@@ -193,6 +241,42 @@ func TestTree_AddSignature_cascadesUpward(t *testing.T) {
 	require.True(t, gotSig.Equals(expRootSig))
 }
 
+func TestTree_AddSignature_withPadding(t *testing.T) {
+	t.Parallel()
+
+	tree := sigtree.New(keysSeq(3), 3)
+
+	// Tree layout:
+	//   0 1 2 (3)
+	//    4   (5)
+	//      6
+	// Element 3 is padding, and element 5 is effectively aliased to 2.
+
+	requireKeyAtIndex(t, tree, 0, testPubKeys[0])
+	requireKeyAtIndex(t, tree, 1, testPubKeys[1])
+	requireKeyAtIndex(t, tree, 2, testPubKeys[2])
+
+	ctx := context.Background()
+	msg := []byte("hello")
+
+	sig2Bytes, err := testSigners[2].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig2 := new(blst.P1Affine)
+	sig2 = sig2.Uncompress(sig2Bytes)
+	tree.AddSignature(2, *sig2)
+
+	// Getting the direct signature should still work with padding, of course.
+	_, gotSig, ok := tree.Get(2)
+	require.True(t, ok)
+	require.True(t, gotSig.Equals(sig2))
+
+	// Index 5 is aggregation of index 2 with nothing at index 3,
+	// so index 5 should be present and should be the same as 2.
+	_, gotSig, ok = tree.Get(5)
+	require.True(t, ok)
+	require.True(t, gotSig.Equals(sig2))
+}
+
 func keysSeq(n int) iter.Seq[blst.P2Affine] {
 	return func(yield func(blst.P2Affine) bool) {
 		for _, pk := range testPubKeys[:n] {
@@ -217,4 +301,20 @@ func requireP2AtIndex(t *testing.T, tree sigtree.Tree, expIdx int, expP2 blst.P2
 	k, _, ok := tree.Get(expIdx)
 	require.True(t, ok)
 	require.True(t, expP2.Equals(&k))
+}
+
+func requirePaddingMergedKeyAtIndex(t *testing.T, tree sigtree.Tree, expIdx int, expKey gblsminsig.PubKey) {
+	t.Helper()
+
+	k, _, ok := tree.Get(expIdx)
+	require.True(t, ok)
+	require.True(t, k.Equals((*blst.P2Affine)(&expKey)))
+}
+
+func requireP2PaddingAtIndex(t *testing.T, tree sigtree.Tree, expIdx int) {
+	t.Helper()
+
+	k, _, ok := tree.Get(expIdx)
+	require.True(t, ok)
+	require.True(t, new(blst.P2Affine).Equals(&k))
 }
