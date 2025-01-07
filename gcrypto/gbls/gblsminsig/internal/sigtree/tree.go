@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/bits"
 
+	"github.com/bits-and-blooms/bitset"
 	blst "github.com/supranational/blst/bindings/go"
 )
 
@@ -14,6 +15,8 @@ import (
 type Tree struct {
 	keys []blst.P2Affine
 	sigs []blst.P1Affine
+
+	sigBits *bitset.BitSet
 
 	// Number of unaggregated keys.
 	nKeys int
@@ -42,6 +45,10 @@ func New(keys iter.Seq[blst.P2Affine], nKeys int) Tree {
 	t := Tree{
 		keys: make([]blst.P2Affine, nNodes),
 		sigs: make([]blst.P1Affine, nNodes),
+
+		// We already knew it fits in a uint16,
+		// so uint(nKeys) is safe.
+		sigBits: bitset.New(uint(nKeys)),
 
 		nKeys: nKeys,
 	}
@@ -117,12 +124,16 @@ func (t Tree) Get(idx int) (key blst.P2Affine, sig blst.P1Affine, ok bool) {
 // the parent signature will be aggregated automatically,
 // cascading up as many layers as required.
 func (t Tree) AddSignature(idx int, sig blst.P1Affine) {
+	addedSigBits := false
+
 AGAIN:
 	t.sigs[idx] = sig
 
 	if idx == len(t.sigs)-1 {
 		// We just wrote the root signature.
 		// No parents or neighbors to check.
+		// But we do need to ensure every bit is set.
+		t.sigBits.SetAll()
 		return
 	}
 
@@ -136,12 +147,28 @@ AGAIN:
 
 	// Calculate our current layer first.
 	layerStart := 0
+	var nLeaves uint = 1
 	for idx >= layerStart+layerWidth {
 		layerStart += layerWidth
 		layerWidth >>= 1
+		nLeaves <<= 1
 	}
 
+	// The offset in the current layer.
 	offset := idx - layerStart
+
+	// Now set the signature bit(s).
+	// We only need to do this on the first loop;
+	// discovered aggregations will not set any unset bits.
+	if !addedSigBits {
+		startLeaf := uint(offset) * nLeaves
+		end := min(startLeaf+nLeaves, uint(t.nKeys))
+		for i := uint(startLeaf); i < end; i++ {
+			t.sigBits.Set(i)
+		}
+
+		addedSigBits = true
+	}
 
 	parentIdx := layerStart + layerWidth + offset/2
 	if t.sigs[parentIdx] != (blst.P1Affine{}) {
@@ -191,6 +218,10 @@ AGAIN:
 // This is useful for reusing a tree if no keys have changed.
 func (t Tree) ClearSignatures() {
 	clear(t.sigs)
+}
+
+func (t Tree) SignatureBitSet(dst *bitset.BitSet) {
+	t.sigBits.CopyFull(dst)
 }
 
 func aggregateKeys(a, b blst.P2Affine) blst.P2Affine {

@@ -5,6 +5,7 @@ import (
 	"iter"
 	"testing"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto/gbls/gblsminsig"
 	"github.com/gordian-engine/gordian/gcrypto/gbls/gblsminsig/internal/sigtree"
 	"github.com/stretchr/testify/require"
@@ -153,7 +154,16 @@ func TestTree_AddSignature(t *testing.T) {
 	sig1 = sig1.Uncompress(sig1Bytes)
 
 	tree.AddSignature(0, *sig0)
+	var bs bitset.BitSet
+	tree.SignatureBitSet(&bs)
+	require.Equal(t, uint(1), bs.Count())
+	require.True(t, bs.Test(0))
+
 	tree.AddSignature(1, *sig1)
+	tree.SignatureBitSet(&bs)
+	require.Equal(t, uint(2), bs.Count())
+	require.True(t, bs.Test(0))
+	require.True(t, bs.Test(1))
 
 	_, gotSig, ok := tree.Get(2)
 	require.True(t, ok)
@@ -190,6 +200,12 @@ func TestTree_AddSignature_root(t *testing.T) {
 	require.True(t, ok)
 
 	require.True(t, aggSig.Equals(&gotSig))
+
+	var bs bitset.BitSet
+	tree.SignatureBitSet(&bs)
+	require.Equal(t, uint(2), bs.Count())
+	require.True(t, bs.Test(0))
+	require.True(t, bs.Test(1))
 }
 
 func TestTree_AddSignature_cascadesUpward(t *testing.T) {
@@ -239,6 +255,14 @@ func TestTree_AddSignature_cascadesUpward(t *testing.T) {
 	_, gotSig, ok := tree.Get(6)
 	require.True(t, ok)
 	require.True(t, gotSig.Equals(expRootSig))
+
+	var bs bitset.BitSet
+	tree.SignatureBitSet(&bs)
+	require.Equal(t, uint(4), bs.Count())
+	require.True(t, bs.Test(0))
+	require.True(t, bs.Test(1))
+	require.True(t, bs.Test(2))
+	require.True(t, bs.Test(3))
 }
 
 func TestTree_AddSignature_withPadding(t *testing.T) {
@@ -275,6 +299,12 @@ func TestTree_AddSignature_withPadding(t *testing.T) {
 	_, gotSig, ok = tree.Get(5)
 	require.True(t, ok)
 	require.True(t, gotSig.Equals(sig2))
+
+	// And since we've only added 2, that should still be the only set bit.
+	var bs bitset.BitSet
+	tree.SignatureBitSet(&bs)
+	require.Equal(t, uint(1), bs.Count())
+	require.True(t, bs.Test(2))
 }
 
 func keysSeq(n int) iter.Seq[blst.P2Affine] {
