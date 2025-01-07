@@ -5,7 +5,6 @@ import (
 	"iter"
 	"testing"
 
-	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto/gbls/gblsminsig"
 	"github.com/gordian-engine/gordian/gcrypto/gbls/gblsminsig/internal/sigtree"
 	"github.com/stretchr/testify/require"
@@ -154,16 +153,13 @@ func TestTree_AddSignature(t *testing.T) {
 	sig1 = sig1.Uncompress(sig1Bytes)
 
 	tree.AddSignature(0, *sig0)
-	var bs bitset.BitSet
-	tree.SignatureBitSet(&bs)
-	require.Equal(t, uint(1), bs.Count())
-	require.True(t, bs.Test(0))
+	require.Equal(t, uint(1), tree.SigBits.Count())
+	require.True(t, tree.SigBits.Test(0))
 
 	tree.AddSignature(1, *sig1)
-	tree.SignatureBitSet(&bs)
-	require.Equal(t, uint(2), bs.Count())
-	require.True(t, bs.Test(0))
-	require.True(t, bs.Test(1))
+	require.Equal(t, uint(2), tree.SigBits.Count())
+	require.True(t, tree.SigBits.Test(0))
+	require.True(t, tree.SigBits.Test(1))
 
 	_, gotSig, ok := tree.Get(2)
 	require.True(t, ok)
@@ -201,11 +197,9 @@ func TestTree_AddSignature_root(t *testing.T) {
 
 	require.True(t, aggSig.Equals(&gotSig))
 
-	var bs bitset.BitSet
-	tree.SignatureBitSet(&bs)
-	require.Equal(t, uint(2), bs.Count())
-	require.True(t, bs.Test(0))
-	require.True(t, bs.Test(1))
+	require.Equal(t, uint(2), tree.SigBits.Count())
+	require.True(t, tree.SigBits.Test(0))
+	require.True(t, tree.SigBits.Test(1))
 }
 
 func TestTree_AddSignature_cascadesUpward(t *testing.T) {
@@ -256,13 +250,11 @@ func TestTree_AddSignature_cascadesUpward(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, gotSig.Equals(expRootSig))
 
-	var bs bitset.BitSet
-	tree.SignatureBitSet(&bs)
-	require.Equal(t, uint(4), bs.Count())
-	require.True(t, bs.Test(0))
-	require.True(t, bs.Test(1))
-	require.True(t, bs.Test(2))
-	require.True(t, bs.Test(3))
+	require.Equal(t, uint(4), tree.SigBits.Count())
+	require.True(t, tree.SigBits.Test(0))
+	require.True(t, tree.SigBits.Test(1))
+	require.True(t, tree.SigBits.Test(2))
+	require.True(t, tree.SigBits.Test(3))
 }
 
 func TestTree_AddSignature_withPadding(t *testing.T) {
@@ -301,10 +293,62 @@ func TestTree_AddSignature_withPadding(t *testing.T) {
 	require.True(t, gotSig.Equals(sig2))
 
 	// And since we've only added 2, that should still be the only set bit.
-	var bs bitset.BitSet
-	tree.SignatureBitSet(&bs)
-	require.Equal(t, uint(1), bs.Count())
-	require.True(t, bs.Test(2))
+	require.Equal(t, uint(1), tree.SigBits.Count())
+	require.True(t, tree.SigBits.Test(2))
+}
+
+func TestTree_SparseIndices(t *testing.T) {
+	t.Parallel()
+
+	tree := sigtree.New(keysSeq(4), 4)
+
+	ctx := context.Background()
+	msg := []byte("hello")
+
+	// Tree layout:
+	//   0 1 2 3
+	//    4   5
+	//      6
+
+	sig0Bytes, err := testSigners[0].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig0 := new(blst.P1Affine)
+	sig0 = sig0.Uncompress(sig0Bytes)
+	tree.AddSignature(0, *sig0)
+
+	// Just 0, is the only reported index.
+	ids := tree.SparseIndices(nil)
+	require.Equal(t, []int{0}, ids)
+
+	sig1Bytes, err := testSigners[1].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig1 := new(blst.P1Affine)
+	sig1 = sig1.Uncompress(sig1Bytes)
+	tree.AddSignature(1, *sig1)
+
+	// Adding 1, aggregates into index 4.
+	ids = tree.SparseIndices(ids[:0])
+	require.Equal(t, []int{4}, ids)
+
+	sig2Bytes, err := testSigners[2].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig2 := new(blst.P1Affine)
+	sig2 = sig2.Uncompress(sig2Bytes)
+	tree.AddSignature(2, *sig2)
+
+	// Adding 2 is a new standalone.
+	ids = tree.SparseIndices(ids[:0])
+	require.Equal(t, []int{4, 2}, ids)
+
+	sig3Bytes, err := testSigners[3].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig3 := new(blst.P1Affine)
+	sig3 = sig3.Uncompress(sig3Bytes)
+	tree.AddSignature(3, *sig3)
+
+	// Finally, adding 3 goes to the root.
+	ids = tree.SparseIndices(ids[:0])
+	require.Equal(t, []int{6}, ids)
 }
 
 func keysSeq(n int) iter.Seq[blst.P2Affine] {

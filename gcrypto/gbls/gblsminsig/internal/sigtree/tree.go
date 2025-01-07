@@ -5,6 +5,7 @@ import (
 	"iter"
 	"math"
 	"math/bits"
+	"slices"
 
 	"github.com/bits-and-blooms/bitset"
 	blst "github.com/supranational/blst/bindings/go"
@@ -16,7 +17,9 @@ type Tree struct {
 	keys []blst.P2Affine
 	sigs []blst.P1Affine
 
-	sigBits *bitset.BitSet
+	// The bitset indicating what signatures are present.
+	// This is exported so that the SignatureProof can read it.
+	SigBits *bitset.BitSet
 
 	// Number of unaggregated keys.
 	nKeys int
@@ -48,7 +51,7 @@ func New(keys iter.Seq[blst.P2Affine], nKeys int) Tree {
 
 		// We already knew it fits in a uint16,
 		// so uint(nKeys) is safe.
-		sigBits: bitset.New(uint(nKeys)),
+		SigBits: bitset.New(uint(nKeys)),
 
 		nKeys: nKeys,
 	}
@@ -94,8 +97,8 @@ func (t Tree) Index(k blst.P2Affine) int {
 	// This is doing a linear search for now.
 	// Unclear if it's worth optimizing.
 	// We could maintain a separate list of indexes
-	// that represents the keys sorted lexicographically (less memory),
-	// or we could use a map (more memory but simpler).
+	// that represents the keys sorted lexicographically (less memory but with binary search),
+	// or we could use a map (more memory for keys but simpler lookup).
 	for i, tk := range t.keys {
 		if tk.Equals(&k) {
 			return i
@@ -133,7 +136,7 @@ AGAIN:
 		// We just wrote the root signature.
 		// No parents or neighbors to check.
 		// But we do need to ensure every bit is set.
-		t.sigBits.SetAll()
+		t.SigBits.SetAll()
 		return
 	}
 
@@ -164,7 +167,7 @@ AGAIN:
 		startLeaf := uint(offset) * nLeaves
 		end := min(startLeaf+nLeaves, uint(t.nKeys))
 		for i := uint(startLeaf); i < end; i++ {
-			t.sigBits.Set(i)
+			t.SigBits.Set(i)
 		}
 
 		addedSigBits = true
@@ -174,8 +177,15 @@ AGAIN:
 	if t.sigs[parentIdx] != (blst.P1Affine{}) {
 		// Parent already has a signature,
 		// so no work left to do.
-		// (We could technically populate the neighbor via subtraction here,
-		// but that currently doesn't seem necessary.)
+		//
+		// We could technically populate the neighbor via subtraction here,
+		// but that currently doesn't seem necessary.
+		// If we did populate the neighbor, then we save work in verifying the signature
+		// should we ever receive it by itself later.
+		// Alternatively, we could expand the tree API
+		// so that we could cheaply and lazily check if the key is calculable.
+		// Presumably subtracting one signature from another
+		// is cheaper than verifying a signature.
 		return
 	}
 
@@ -214,14 +224,97 @@ AGAIN:
 	goto AGAIN
 }
 
+func (t Tree) SparseIndices(dst []int) []int {
+	if rootSig := t.sigs[len(t.sigs)-1]; rootSig != (blst.P1Affine{}) {
+		// Special case where we have the root signature,
+		// so we don't need to traverse anything.
+		return append(dst, len(t.sigs)-1)
+	}
+
+	curRowStart := len(t.sigs) - 3
+	curRowWidth := 2
+
+	// Track indices that we don't need to check,
+	// due to an ancestor having already been included in the output.
+	var skipCheck []bool
+	if t.nKeys&(t.nKeys-1) == 0 {
+		// Already a power of two, so just use that value directly.
+		skipCheck = make([]bool, t.nKeys)
+	} else {
+		skipCheck = make([]bool, 1<<(bits.Len16(uint16(t.nKeys))))
+	}
+
+	// Intermediate layers (not root and not leaves).
+	for curRowStart > 0 {
+		for i := curRowStart; i < curRowStart+curRowWidth; i++ {
+			if skipCheck[i-curRowStart] {
+				// We already included an ancestor of this index.
+				continue
+			}
+
+			// Do we have a signature for this node?
+			if t.sigs[i] == (blst.P1Affine{}) {
+				continue
+			}
+
+			// We do have a signature, and an ancestor didn't cover it.
+			dst = append(dst, i)
+			skipCheck[i-curRowStart] = true
+		}
+
+		// "Double" the skip check.
+		for i := curRowWidth - 1; i >= 0; i-- {
+			skipCheck[2*i+1] = skipCheck[i]
+			skipCheck[2*i] = skipCheck[i]
+		}
+
+		curRowWidth *= 2
+		curRowStart -= curRowWidth
+	}
+
+	for i := range t.nKeys {
+		if skipCheck[i] {
+			continue
+		}
+		if t.sigs[i] == (blst.P1Affine{}) {
+			continue
+		}
+		dst = append(dst, i)
+	}
+
+	return dst
+}
+
 // ClearSignatures zeros every signature in the tree.
 // This is useful for reusing a tree if no keys have changed.
 func (t Tree) ClearSignatures() {
 	clear(t.sigs)
 }
 
-func (t Tree) SignatureBitSet(dst *bitset.BitSet) {
-	t.sigBits.CopyFull(dst)
+func (t Tree) Clone() Tree {
+	return Tree{
+		// Keys are immutable,
+		// sigs are not.
+		keys: t.keys,
+		sigs: slices.Clone(t.sigs),
+
+		SigBits: t.SigBits.Clone(),
+
+		nKeys: t.nKeys,
+	}
+}
+
+func (t Tree) Derive() Tree {
+	return Tree{
+		// Keys are immutable.
+		keys: t.keys,
+
+		sigs: make([]blst.P1Affine, len(t.keys)),
+
+		SigBits: bitset.New(uint(t.nKeys)),
+
+		nKeys: t.nKeys,
+	}
 }
 
 func aggregateKeys(a, b blst.P2Affine) blst.P2Affine {
