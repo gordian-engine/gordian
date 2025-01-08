@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
@@ -40,8 +41,9 @@ func newVoteDistribution(proofs map[string]gcrypto.CommonMessageSignatureProof, 
 	// TODO: ensure we don't double count a validator,
 	// if one public key is present in multiple votes somehow.
 
+	var bs bitset.BitSet
 	for blockHash, proof := range proofs {
-		bs := proof.SignatureBitSet()
+		proof.SignatureBitSet(&bs)
 		for i, ok := bs.NextSet(0); ok && int(i) < len(vals); i, ok = bs.NextSet(i + 1) {
 			pow := vals[int(i)].Power
 			d.BlockVotePower[string(blockHash)] += pow

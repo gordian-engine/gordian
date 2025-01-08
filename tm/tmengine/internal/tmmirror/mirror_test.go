@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
@@ -1062,7 +1063,9 @@ func TestMirror_pastInitialHeight(t *testing.T) {
 		// And we should have all 4 signatures for the proposed header in precommit.
 		require.Len(t, vv.PrecommitProofs, 1)
 		np := vv.PrecommitProofs[string(ph.Header.Hash)]
-		require.Equal(t, uint(4), np.SignatureBitSet().Count())
+		var bs bitset.BitSet
+		np.SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 	})
 
 	for _, vt := range voteTypes {
@@ -1105,13 +1108,16 @@ func TestMirror_pastInitialHeight(t *testing.T) {
 
 			// New Committing view sent on output channel.
 			cv := gtest.ReceiveSoon(t, mfx.GossipStrategyOut).Committing
-			require.Equal(t, expVoteCount, voter.ProofsFromView(cv.RoundView)[ph1].SignatureBitSet().Count())
+			var bs bitset.BitSet
+			voter.ProofsFromView(cv.RoundView)[ph1].SignatureBitSet(&bs)
+			require.Equal(t, expVoteCount, bs.Count())
 
 			// Round store matches too.
 			_, prevotes, precommits, err := mfx.Cfg.RoundStore.LoadRoundState(ctx, 1, 0)
 			require.NoError(t, err)
 			votes := voter.FullProofsFromRoundStateMaps(1, 0, mfx.Fx.ValSet(), prevotes, precommits)
-			require.Equal(t, expVoteCount, votes[ph1].SignatureBitSet().Count())
+			votes[ph1].SignatureBitSet(&bs)
+			require.Equal(t, expVoteCount, bs.Count())
 		})
 	}
 
@@ -1158,13 +1164,18 @@ func TestMirror_pastInitialHeight(t *testing.T) {
 
 		// The precommits in the commit view, at height 1, now have all 4 signatures.
 		commitProof := vv.PrecommitProofs[string(ph1Hash)]
-		require.Equal(t, uint(4), commitProof.SignatureBitSet().Count())
+		var bs bitset.BitSet
+		commitProof.SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 
 		// And the update is available on the commit view channel.
 		cv := gtest.ReceiveSoon(t, mfx.GossipStrategyOut).Committing
 		require.Greater(t, cv.Version, initCV.Version)
-		require.Equal(t, uint(4), cv.PrecommitProofs[string(ph1Hash)].SignatureBitSet().Count())
-		require.Equal(t, uint(3), initCV.PrecommitProofs[string(ph1Hash)].SignatureBitSet().Count())
+		cv.PrecommitProofs[string(ph1Hash)].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
+
+		initCV.PrecommitProofs[string(ph1Hash)].SignatureBitSet(&bs)
+		require.Equal(t, uint(3), bs.Count())
 	})
 }
 
@@ -1873,13 +1884,16 @@ func TestMirror_nextRound(t *testing.T) {
 			require.Equal(t, uint64(1), nrrv.Height)
 			require.Equal(t, uint32(1), nrrv.Round)
 			proofs := voter.ProofsFromView(nrrv.RoundView)
-			require.Equal(t, uint(1), proofs[string(ph11.Header.Hash)].SignatureBitSet().Count())
+			var bs bitset.BitSet
+			proofs[string(ph11.Header.Hash)].SignatureBitSet(&bs)
+			require.Equal(t, uint(1), bs.Count())
 
 			// And so does the round store.
 			_, prevotes, precommits, err := mfx.Cfg.RoundStore.LoadRoundState(ctx, 1, 1)
 			require.NoError(t, err)
 			votes := voter.FullProofsFromRoundStateMaps(1, 1, mfx.Fx.ValSet(), prevotes, precommits)
-			require.Equal(t, uint(1), votes[string(ph11.Header.Hash)].SignatureBitSet().Count())
+			votes[string(ph11.Header.Hash)].SignatureBitSet(&bs)
+			require.Equal(t, uint(1), bs.Count())
 
 			// Now if we exceed the minority vote for that header on 1/1...
 			res = voter.HandleProofs(ctx, 1, 1, map[string][]int{string(ph11.Header.Hash): {0, 1}}) // 2/4 validators.
@@ -2193,7 +2207,9 @@ func TestMirror_stateMachineActions(t *testing.T) {
 
 		// The mirror repeats the vote back to the state machine.
 		smv = gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-		require.Equal(t, uint(1), smv.PrevoteProofs[phHash].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		smv.PrevoteProofs[phHash].SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
 
 		// Now the mirror receives the remainder of the prevotes over the network.
 		voteMap := map[string][]int{
@@ -2211,7 +2227,8 @@ func TestMirror_stateMachineActions(t *testing.T) {
 
 		// The state machine sees the 100% prevote update.
 		smv = gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-		require.Equal(t, uint(4), smv.PrevoteProofs[phHash].SignatureBitSet().Count())
+		smv.PrevoteProofs[phHash].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 
 		// Now the mirror receives everyone else's precommit over the network.
 		sparsePrecommitProofMap := mfx.Fx.SparsePrecommitProofMap(ctx, 1, 0, voteMap)
@@ -2225,14 +2242,16 @@ func TestMirror_stateMachineActions(t *testing.T) {
 
 		// The state machine sees the committing update.
 		smv = gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-		require.Equal(t, uint(3), smv.PrecommitProofs[phHash].SignatureBitSet().Count())
+		smv.PrecommitProofs[phHash].SignatureBitSet(&bs)
+		require.Equal(t, uint(3), bs.Count())
 
 		// And as a sanity check, the gossip strategy output indicates that 1/0 is now in committing.
 		gso := gtest.ReceiveSoon(t, mfx.GossipStrategyOut)
 		require.NotNil(t, gso.Committing)
 		require.Equal(t, uint64(1), gso.Committing.Height)
 		require.Zero(t, gso.Committing.Round)
-		require.Equal(t, uint(3), gso.Committing.PrecommitProofs[phHash].SignatureBitSet().Count())
+		gso.Committing.PrecommitProofs[phHash].SignatureBitSet(&bs)
+		require.Equal(t, uint(3), bs.Count())
 		require.NotNil(t, gso.Voting)
 		require.Equal(t, uint64(2), gso.Voting.Height)
 		require.Zero(t, gso.Voting.Round)
@@ -2254,7 +2273,8 @@ func TestMirror_stateMachineActions(t *testing.T) {
 		require.NotNil(t, gso.Committing)
 		require.Equal(t, uint64(1), gso.Committing.Height)
 		require.Zero(t, gso.Committing.Round)
-		require.Equal(t, uint(4), gso.Committing.PrecommitProofs[phHash].SignatureBitSet().Count())
+		gso.Committing.PrecommitProofs[phHash].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 	})
 
 	t.Run("state machine precommit handled when it arrives into orphaned round view", func(t *testing.T) {
@@ -2299,7 +2319,9 @@ func TestMirror_stateMachineActions(t *testing.T) {
 
 		// The mirror repeats the vote back to the state machine.
 		smv := gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-		require.Equal(t, uint(1), smv.PrevoteProofs[""].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		smv.PrevoteProofs[""].SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
 
 		// Now the mirror receives the remainder of the prevotes over the network.
 		voteMap := map[string][]int{
@@ -2317,7 +2339,8 @@ func TestMirror_stateMachineActions(t *testing.T) {
 
 		// The state machine sees the 100% prevote update.
 		smv = gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-		require.Equal(t, uint(4), smv.PrevoteProofs[""].SignatureBitSet().Count())
+		smv.PrevoteProofs[""].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 
 		// Now the mirror receives everyone else's precommit over the network.
 		sparsePrecommitProofMap := mfx.Fx.SparsePrecommitProofMap(ctx, 1, 0, voteMap)
@@ -2359,7 +2382,8 @@ func TestMirror_stateMachineActions(t *testing.T) {
 		// If that changes in the future, then we will need to either add a synchronizatoin point
 		// or handle the first read being either a 3 or a 4.
 		smv = gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-		require.Equal(t, uint(3), smv.PrecommitProofs[""].SignatureBitSet().Count())
+		smv.PrecommitProofs[""].SignatureBitSet(&bs)
+		require.Equal(t, uint(3), bs.Count())
 	})
 }
 
@@ -2494,8 +2518,11 @@ func TestMirror_stateMachineJumpAhead(t *testing.T) {
 		vrv := gtest.ReceiveSoon(t, re.Response).VRV
 		require.Equal(t, uint64(1), vrv.Height)
 		require.Equal(t, uint32(1), vrv.Round)
-		require.Equal(t, uint(3), vrv.PrevoteProofs[""].SignatureBitSet().Count())
-		require.Equal(t, uint(1), vrv.PrecommitProofs[""].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		vrv.PrevoteProofs[""].SignatureBitSet(&bs)
+		require.Equal(t, uint(3), bs.Count())
+		vrv.PrecommitProofs[""].SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
 	})
 
 	t.Run("minority precommits", func(t *testing.T) {
@@ -2547,7 +2574,9 @@ func TestMirror_stateMachineJumpAhead(t *testing.T) {
 		require.Equal(t, uint64(1), j.Height)
 		require.Equal(t, uint32(1), j.Round)
 		require.Empty(t, j.PrevoteProofs[""])
-		require.Equal(t, uint(2), j.PrecommitProofs[""].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		j.PrecommitProofs[""].SignatureBitSet(&bs)
+		require.Equal(t, uint(2), bs.Count())
 	})
 
 	t.Run("when there is no current VRV to include", func(t *testing.T) {
@@ -2785,7 +2814,9 @@ func TestMirror_nilCommitSentToGossipStrategy(t *testing.T) {
 
 	// The mirror repeats the vote back to the state machine.
 	smv := gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-	require.Equal(t, uint(1), smv.PrevoteProofs[""].SignatureBitSet().Count())
+	var bs bitset.BitSet
+	smv.PrevoteProofs[""].SignatureBitSet(&bs)
+	require.Equal(t, uint(1), bs.Count())
 
 	// Now the mirror receives the remainder of the prevotes over the network.
 	voteMap := map[string][]int{
@@ -2812,11 +2843,13 @@ func TestMirror_nilCommitSentToGossipStrategy(t *testing.T) {
 	// This is only 60% of the votes, so the mirror still reports voting on 1/0.
 	gso := gtest.ReceiveSoon(t, mfx.GossipStrategyOut)
 	require.NotNil(t, gso.Voting)
-	require.Equal(t, uint(3), gso.Voting.PrecommitProofs[""].SignatureBitSet().Count())
+	gso.Voting.PrecommitProofs[""].SignatureBitSet(&bs)
+	require.Equal(t, uint(3), bs.Count())
 
 	// Same thing reported to the state machine.
 	smv = gtest.ReceiveSoon(t, mfx.StateMachineRoundViewOut).VRV
-	require.Equal(t, uint(3), smv.PrecommitProofs[""].SignatureBitSet().Count())
+	smv.PrecommitProofs[""].SignatureBitSet(&bs)
+	require.Equal(t, uint(3), bs.Count())
 
 	// Now, the state machine reports its nil precommit,
 	// which is sufficient to push the round past the precommit threshold.
@@ -2840,7 +2873,8 @@ func TestMirror_nilCommitSentToGossipStrategy(t *testing.T) {
 
 	// And the NilVotedRound field contains the 4/5 known precommits.
 	require.NotNil(t, gso.NilVotedRound)
-	require.Equal(t, uint(4), gso.NilVotedRound.PrecommitProofs[""].SignatureBitSet().Count())
+	gso.NilVotedRound.PrecommitProofs[""].SignatureBitSet(&bs)
+	require.Equal(t, uint(4), bs.Count())
 
 	// Finally, new information leading to another GossipStrategyOut update
 	// will cause the NilVotedRound field to not be set.
@@ -2927,7 +2961,9 @@ func TestMirror_replayedHeaders(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Len(t, fullPrecommits, 1)
-		require.Equal(t, uint(4), fullPrecommits[string(ph1.Header.Hash)].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		fullPrecommits[string(ph1.Header.Hash)].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 
 		// So, let's replay the next header too.
 		voteMap = map[string][]int{
@@ -3023,9 +3059,13 @@ func TestMirror_replayedHeaders(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Len(t, fullPrecommits, 3)
-		require.Equal(t, uint(1), fullPrecommits[""].SignatureBitSet().Count())
-		require.Equal(t, uint(1), fullPrecommits[string(ph1Bad.Header.Hash)].SignatureBitSet().Count())
-		require.Equal(t, uint(6), fullPrecommits[string(ph1Good.Header.Hash)].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		fullPrecommits[""].SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
+		fullPrecommits[string(ph1Bad.Header.Hash)].SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
+		fullPrecommits[string(ph1Good.Header.Hash)].SignatureBitSet(&bs)
+		require.Equal(t, uint(6), bs.Count())
 	})
 
 	t.Run("indicative error when replayed block has wrong height", func(t *testing.T) {
@@ -3385,7 +3425,9 @@ func TestMirror_stateMachineCatchup_lateInitialization(t *testing.T) {
 	require.True(t, rer.IsVRV())
 
 	committingHash := string(phs[receivedBlocks-2].Header.Hash) // -2 due to off by one on indexing.
-	require.Equal(t, uint(3), rer.VRV.RoundView.PrecommitProofs[committingHash].SignatureBitSet().Count())
+	var bs bitset.BitSet
+	rer.VRV.RoundView.PrecommitProofs[committingHash].SignatureBitSet(&bs)
+	require.Equal(t, uint(3), bs.Count())
 
 	// The state machine would probably submit its own vote at this point, but let's say it just goes ahead to the next round.
 	actionCh = make(chan tmeil.StateMachineRoundAction, 3)

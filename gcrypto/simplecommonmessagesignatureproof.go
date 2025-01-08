@@ -174,8 +174,8 @@ func (p SimpleCommonMessageSignatureProof) Derive() CommonMessageSignatureProof 
 	}
 }
 
-func (p SimpleCommonMessageSignatureProof) SignatureBitSet() *bitset.BitSet {
-	return p.bitset
+func (p SimpleCommonMessageSignatureProof) SignatureBitSet(dst *bitset.BitSet) {
+	p.bitset.CopyFull(dst)
 }
 
 func (p SimpleCommonMessageSignatureProof) AsSparse() SparseSignatureProof {
@@ -219,7 +219,7 @@ func (p SimpleCommonMessageSignatureProof) MergeSparse(s SparseSignatureProof) S
 	}
 
 	addedBS := bitset.New(uint(len(p.keys)))
-	bsBefore := p.SignatureBitSet().Clone()
+	bsBefore := p.bitset.Clone()
 
 	for _, sparseSig := range s.Signatures {
 		// Assuming the index can be represented in a 16 bit integer.
@@ -239,8 +239,7 @@ func (p SimpleCommonMessageSignatureProof) MergeSparse(s SparseSignatureProof) S
 
 		addedBS.Set(uint(n))
 	}
-	bs := p.SignatureBitSet()
-	if bs.Count() > bsBefore.Count() {
+	if p.bitset.Count() > bsBefore.Count() {
 		res.IncreasedSignatures = true
 	}
 

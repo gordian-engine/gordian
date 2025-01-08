@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/stretchr/testify/require"
 )
@@ -168,8 +169,11 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 			require.NoError(t, p2.AddSignature(helloSig4, edPubKey4))
 
 			// Preconditions.
-			require.Equal(t, uint(1), p1.SignatureBitSet().Count())
-			require.Equal(t, uint(3), p2.SignatureBitSet().Count())
+			var bs bitset.BitSet
+			p1.SignatureBitSet(&bs)
+			require.Equal(t, uint(1), bs.Count())
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(3), bs.Count())
 
 			res := p1.Merge(p2)
 			require.Equal(t, gcrypto.SignatureProofMergeResult{
@@ -178,8 +182,10 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 				WasStrictSuperset:   false,
 			}, res)
 
-			require.Equal(t, uint(4), p1.SignatureBitSet().Count())
-			require.Equal(t, uint(3), p2.SignatureBitSet().Count()) // p2 unaffected.
+			p1.SignatureBitSet(&bs)
+			require.Equal(t, uint(4), bs.Count())
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(3), bs.Count()) // p2 unaffected.
 		})
 
 		t.Run("no new signatures", func(t *testing.T) {
@@ -204,8 +210,11 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 				WasStrictSuperset:   false,
 			}, res)
 
-			require.Equal(t, uint(2), p1.SignatureBitSet().Count())
-			require.Equal(t, uint(1), p2.SignatureBitSet().Count())
+			var bs bitset.BitSet
+			p1.SignatureBitSet(&bs)
+			require.Equal(t, uint(2), bs.Count())
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(1), bs.Count())
 		})
 
 		t.Run("a new signature and partial overlap", func(t *testing.T) {
@@ -231,8 +240,11 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 				WasStrictSuperset:   false,
 			}, res)
 
-			require.Equal(t, uint(3), p1.SignatureBitSet().Count())
-			require.Equal(t, uint(2), p2.SignatureBitSet().Count())
+			var bs bitset.BitSet
+			p1.SignatureBitSet(&bs)
+			require.Equal(t, uint(3), bs.Count())
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(2), bs.Count())
 		})
 
 		t.Run("strict superset", func(t *testing.T) {
@@ -258,8 +270,11 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 				WasStrictSuperset:   true,
 			}, res)
 
-			require.Equal(t, uint(3), p1.SignatureBitSet().Count())
-			require.Equal(t, uint(3), p2.SignatureBitSet().Count())
+			var bs bitset.BitSet
+			p1.SignatureBitSet(&bs)
+			require.Equal(t, uint(3), bs.Count())
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(3), bs.Count())
 		})
 	})
 
@@ -275,22 +290,34 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 
 		t.Run("modifying original does not affect clone", func(t *testing.T) {
 			require.NoError(t, orig.AddSignature(helloSig1, edPubKey1))
-			require.Equal(t, uint(1), orig.SignatureBitSet().Count())
-			require.Zero(t, clone.SignatureBitSet().Count())
+			var bs bitset.BitSet
+			orig.SignatureBitSet(&bs)
+			require.Equal(t, uint(1), bs.Count())
+
+			clone.SignatureBitSet(&bs)
+			require.Zero(t, bs.Count())
 		})
 
 		t.Run("modifying clone does not affect original", func(t *testing.T) {
 			require.NoError(t, clone.AddSignature(helloSig2, edPubKey2))
-			require.Equal(t, uint(1), clone.SignatureBitSet().Count())
-			require.Zero(t, orig.SignatureBitSet().Intersection(clone.SignatureBitSet()).Count())
+			var origBS, cloneBS bitset.BitSet
+			orig.SignatureBitSet(&origBS)
+			require.Equal(t, uint(1), origBS.Count())
+
+			clone.SignatureBitSet(&cloneBS)
+			require.Zero(t, origBS.Intersection(&cloneBS).Count())
 		})
 
 		t.Run("new clone matches updated state", func(t *testing.T) {
 			// We've added sig 1 to orig, so the new clone should have it.
 			clone := orig.Clone()
 
-			require.Equal(t, uint(1), clone.SignatureBitSet().Count())
-			require.True(t, clone.SignatureBitSet().Test(0))
+			var bs bitset.BitSet
+			orig.SignatureBitSet(&bs)
+			require.Equal(t, uint(1), bs.Count())
+
+			clone.SignatureBitSet(&bs)
+			require.True(t, bs.Test(0))
 		})
 	})
 
@@ -301,12 +328,15 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 		require.NoError(t, err)
 
 		// Starts at zero.
-		require.Zero(t, p.SignatureBitSet().Count())
+		var bs bitset.BitSet
+		p.SignatureBitSet(&bs)
+		require.Zero(t, bs.Count())
 
 		require.NoError(t, p.AddSignature(helloSig1, edPubKey1))
 
-		require.Equal(t, uint(1), p.SignatureBitSet().Count())
-		require.True(t, p.SignatureBitSet().Test(0))
+		p.SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
+		require.True(t, bs.Test(0))
 	})
 
 	t.Run("AsSparse", func(t *testing.T) {
@@ -376,8 +406,10 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 			require.True(t, res.IncreasedSignatures)
 			require.True(t, res.WasStrictSuperset)
 
-			require.Equal(t, uint(1), p2.SignatureBitSet().Count())
-			require.True(t, p2.SignatureBitSet().Test(0))
+			var bs bitset.BitSet
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(1), bs.Count())
+			require.True(t, bs.Test(0))
 		})
 
 		t.Run("two elements", func(t *testing.T) {
@@ -398,9 +430,11 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 			require.True(t, res.IncreasedSignatures)
 			require.True(t, res.WasStrictSuperset)
 
-			require.Equal(t, uint(2), p2.SignatureBitSet().Count())
-			require.True(t, p2.SignatureBitSet().Test(0))
-			require.True(t, p2.SignatureBitSet().Test(1))
+			var bs bitset.BitSet
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(2), bs.Count())
+			require.True(t, bs.Test(0))
+			require.True(t, bs.Test(1))
 		})
 
 		t.Run("merge all new signatures, but not a strict superset", func(t *testing.T) {
@@ -423,10 +457,12 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 			require.True(t, res.IncreasedSignatures)
 			require.False(t, res.WasStrictSuperset)
 
-			require.Equal(t, uint(3), p2.SignatureBitSet().Count())
-			require.True(t, p2.SignatureBitSet().Test(0))
-			require.True(t, p2.SignatureBitSet().Test(1))
-			require.True(t, p2.SignatureBitSet().Test(2))
+			var bs bitset.BitSet
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(3), bs.Count())
+			require.True(t, bs.Test(0))
+			require.True(t, bs.Test(1))
+			require.True(t, bs.Test(2))
 		})
 
 		t.Run("merging a subset does not mark increased signatures", func(t *testing.T) {
@@ -473,7 +509,9 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 			require.False(t, res.IncreasedSignatures)
 			require.False(t, res.WasStrictSuperset)
 
-			require.Equal(t, uint(0), p2.SignatureBitSet().Count())
+			var bs bitset.BitSet
+			p2.SignatureBitSet(&bs)
+			require.Equal(t, uint(0), bs.Count())
 		})
 
 		t.Run("modified sparse signatures", func(t *testing.T) {
@@ -503,9 +541,11 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 				require.True(t, res.IncreasedSignatures)
 				require.True(t, res.WasStrictSuperset)
 
-				require.Equal(t, uint(2), p2.SignatureBitSet().Count())
-				require.True(t, p2.SignatureBitSet().Test(0))
-				require.True(t, p2.SignatureBitSet().Test(1))
+				var bs bitset.BitSet
+				p2.SignatureBitSet(&bs)
+				require.Equal(t, uint(2), bs.Count())
+				require.True(t, bs.Test(0))
+				require.True(t, bs.Test(1))
 			})
 
 			t.Run("unrecognized signature in bounds is ignored", func(t *testing.T) {
@@ -533,8 +573,10 @@ func TestCommonMessageSignatureProofCompliance_Ed25519(
 				require.True(t, res.IncreasedSignatures)
 				require.True(t, res.WasStrictSuperset)
 
-				require.Equal(t, uint(1), p2.SignatureBitSet().Count())
-				require.True(t, p2.SignatureBitSet().Test(0))
+				var bs bitset.BitSet
+				p2.SignatureBitSet(&bs)
+				require.Equal(t, uint(1), bs.Count())
+				require.True(t, bs.Test(0))
 			})
 		})
 	})

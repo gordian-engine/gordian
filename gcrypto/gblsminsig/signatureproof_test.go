@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto/gblsminsig"
 	"github.com/stretchr/testify/require"
 )
@@ -102,7 +103,8 @@ func TestSignatureProof_MergeSparse_disjoint(t *testing.T) {
 	require.True(t, res.IncreasedSignatures)
 	require.False(t, res.WasStrictSuperset)
 
-	bs0 := proof0.SignatureBitSet()
+	var bs0 bitset.BitSet
+	proof0.SignatureBitSet(&bs0)
 	require.Equal(t, uint(2), bs0.Count())
 	require.True(t, bs0.Test(0))
 	require.True(t, bs0.Test(2))

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
 )
 
@@ -69,8 +70,9 @@ func (vs *VoteSummary) SetPrevotePowers(vals []Validator, prevotes map[string]gc
 
 	var maxHash string
 	var maxPow uint64
+	var bs bitset.BitSet
 	for blockHash, proof := range prevotes {
-		bs := proof.SignatureBitSet()
+		proof.SignatureBitSet(&bs)
 		var blockPow uint64
 		for i, ok := bs.NextSet(0); ok && int(i) < len(vals); i, ok = bs.NextSet(i + 1) {
 			valPow := vals[int(i)].Power
@@ -97,8 +99,9 @@ func (vs *VoteSummary) SetPrecommitPowers(vals []Validator, precommits map[strin
 
 	var maxHash string
 	var maxPow uint64
+	var bs bitset.BitSet
 	for blockHash, proof := range precommits {
-		bs := proof.SignatureBitSet()
+		proof.SignatureBitSet(&bs)
 		var blockPow uint64
 		for i, ok := bs.NextSet(0); ok && int(i) < len(vals); i, ok = bs.NextSet(i + 1) {
 			valPow := vals[int(i)].Power

@@ -76,16 +76,17 @@ type CommonMessageSignatureProof interface {
 	// but not a proof scheme, and you need to make a complicated operation.
 	Derive() CommonMessageSignatureProof
 
-	// SignatureBitSet returns the underlying bit set indicating which of the candidate keys
-	// have signatures included in this proof.
-	//
-	// The caller must not modify the bit set,
-	// and using the bit set after another call to a CommonMessageSignatureProof method
-	// risks causing another data race.
+	// SignatureBitSet writes the proof's underlying bit set
+	// (indicating which of the candidate keys have signatures included in this proof)
+	// to the given destination bit set.
 	//
 	// In the case of a SignatureProof that involves aggregating signatures,
-	// the count of set bits may be greater than the number of signatures.
-	SignatureBitSet() *bitset.BitSet
+	// the count of set bits may be greater than the number of signatures
+	// that would be returned from the AsSparse method.
+	//
+	// By having the caller provide the bit set,
+	// the caller controls allocations for the bitset.
+	SignatureBitSet(*bitset.BitSet)
 
 	// AsSparse returns a sparse version of the proof,
 	// suitable for transmitting over the network.

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gwatchdog"
 	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
@@ -152,8 +153,10 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 		vrv = *(gtest.ReceiveSoon(t, efx.GossipStrategy.Updates).Voting)
 		require.Len(t, vrv.PrevoteProofs, 1) // Nil prevote automatically set, plus prevoted block.
 		proof := vrv.PrevoteProofs[blockHash]
-		require.Equal(t, uint(1), proof.SignatureBitSet().Count())
-		require.True(t, proof.SignatureBitSet().Test(0))
+		var bs bitset.BitSet
+		proof.SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
+		require.True(t, bs.Test(0))
 	})
 
 	t.Run("state machine decides precommit when rest of prevotes arrive", func(t *testing.T) {
@@ -185,11 +188,13 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 		// It still has the proposed header and prevotes.
 		require.Len(t, vrv.ProposedHeaders, 1)
 		require.Len(t, vrv.PrevoteProofs, 1)
-		require.Equal(t, uint(4), vrv.PrevoteProofs[blockHash].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		vrv.PrevoteProofs[blockHash].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 
 		// And it has the new single precommit.
 		require.Len(t, vrv.PrecommitProofs, 1)
-		bs := vrv.PrecommitProofs[blockHash].SignatureBitSet()
+		vrv.PrecommitProofs[blockHash].SignatureBitSet(&bs)
 		require.Equal(t, uint(1), bs.Count())
 		require.True(t, bs.Test(0))
 	})
@@ -523,8 +528,10 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 		require.Equal(t, []tmconsensus.ProposedHeader{ph103, ph100}, u.Voting.ProposedHeaders)
 
 		proof103 := u.Voting.PrevoteProofs[blockHash103]
-		require.Equal(t, uint(1), proof103.SignatureBitSet().Count())
-		require.True(t, proof103.SignatureBitSet().Test(3))
+		var bs bitset.BitSet
+		proof103.SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
+		require.True(t, bs.Test(3))
 		require.Equal(t, efx.Fx.Vals()[3].Power, u.Voting.VoteSummary.TotalPrevotePower)
 
 		require.Nil(t, u.Committing)
@@ -542,10 +549,13 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 		require.Zero(t, u.Voting.Round)
 
 		proof103 := u.Voting.PrevoteProofs[blockHash103]
-		require.Equal(t, uint(1), proof103.SignatureBitSet().Count())
+		var bs bitset.BitSet
+		proof103.SignatureBitSet(&bs)
+		require.Equal(t, uint(1), bs.Count())
 
 		proof100 := u.Voting.PrevoteProofs[blockHash100]
-		require.True(t, proof100.SignatureBitSet().Test(0))
+		proof100.SignatureBitSet(&bs)
+		require.True(t, bs.Test(0))
 		require.Equal(t, efx.Fx.Vals()[3].Power+efx.Fx.Vals()[0].Power, u.Voting.VoteSummary.TotalPrevotePower)
 
 		require.Nil(t, u.Committing)
@@ -586,12 +596,15 @@ func TestEngine_plumbing_GossipStrategy(t *testing.T) {
 		require.Zero(t, u.Voting.Round)
 
 		prevote103 := u.Voting.PrevoteProofs[blockHash103]
-		require.Equal(t, uint(3), prevote103.SignatureBitSet().Count())
+		var bs bitset.BitSet
+		prevote103.SignatureBitSet(&bs)
+		require.Equal(t, uint(3), bs.Count())
 
 		precommit103 := u.Voting.PrecommitProofs[blockHash103]
-		require.Equal(t, uint(2), precommit103.SignatureBitSet().Count())
-		require.True(t, precommit103.SignatureBitSet().Test(0))
-		require.True(t, precommit103.SignatureBitSet().Test(3))
+		precommit103.SignatureBitSet(&bs)
+		require.Equal(t, uint(2), bs.Count())
+		require.True(t, bs.Test(0))
+		require.True(t, bs.Test(3))
 		require.Equal(t, efx.Fx.Vals()[3].Power+efx.Fx.Vals()[0].Power, u.Voting.VoteSummary.TotalPrecommitPower)
 	})
 
@@ -752,7 +765,9 @@ func TestEngine_plumbing_ReplayedHeaders(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		require.Equal(t, uint(4), fullPrecommits[string(ph1.Header.Hash)].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		fullPrecommits[string(ph1.Header.Hash)].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 
 		// The state machine should be finalizing 1/0.
 		finReq := gtest.ReceiveSoon(t, efx.FinalizeBlockRequests)
@@ -847,7 +862,9 @@ func TestEngine_plumbing_ReplayedHeaders(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		require.Equal(t, uint(4), fullPrecommits[string(ph1.Header.Hash)].SignatureBitSet().Count())
+		var bs bitset.BitSet
+		fullPrecommits[string(ph1.Header.Hash)].SignatureBitSet(&bs)
+		require.Equal(t, uint(4), bs.Count())
 
 		// The state machine should be finalizing 1/1.
 		finReq := gtest.ReceiveSoon(t, efx.FinalizeBlockRequests)

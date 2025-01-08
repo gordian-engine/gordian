@@ -316,8 +316,6 @@ func (p SignatureProof) Derive() gcrypto.CommonMessageSignatureProof {
 	}
 }
 
-func (p SignatureProof) SignatureBitSet() *bitset.BitSet {
-	var bs bitset.BitSet
-	p.sigTree.SigBits.CopyFull(&bs)
-	return &bs
+func (p SignatureProof) SignatureBitSet(dst *bitset.BitSet) {
+	p.sigTree.SigBits.CopyFull(dst)
 }

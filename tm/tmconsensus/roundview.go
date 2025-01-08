@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
 )
 
@@ -120,13 +121,15 @@ func (v RoundView) LogValue() slog.Value {
 		pbHashes[i] = fmt.Sprintf("%x", ph)
 	}
 
+	var bs bitset.BitSet
 	prevoteAttrs := make([]slog.Attr, 0, len(v.PrevoteProofs))
 	for hash, proof := range v.PrevoteProofs {
 		key := fmt.Sprintf("%x", hash)
 		if key == "" {
 			key = "<nil>"
 		}
-		prevoteAttrs = append(prevoteAttrs, slog.String(key, proof.SignatureBitSet().String()))
+		proof.SignatureBitSet(&bs)
+		prevoteAttrs = append(prevoteAttrs, slog.String(key, bs.String()))
 	}
 	sortSlogAttrsByKey(prevoteAttrs)
 
@@ -136,7 +139,8 @@ func (v RoundView) LogValue() slog.Value {
 		if key == "" {
 			key = "<nil>"
 		}
-		precommitAttrs = append(precommitAttrs, slog.String(key, proof.SignatureBitSet().String()))
+		proof.SignatureBitSet(&bs)
+		precommitAttrs = append(precommitAttrs, slog.String(key, bs.String()))
 	}
 	sortSlogAttrsByKey(precommitAttrs)
 

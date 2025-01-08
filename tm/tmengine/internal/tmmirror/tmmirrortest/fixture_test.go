@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror"
 	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror/internal/tmi"
 	"github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror/tmmirrortest"
@@ -52,7 +53,9 @@ func TestFixture_CommitInitialHeight(t *testing.T) {
 			precommitProof := fullPrecommits[string(ph.Header.Hash)]
 			require.NotNil(t, precommitProof)
 
-			require.Equal(t, uint(nVals), precommitProof.SignatureBitSet().Count())
+			var bs bitset.BitSet
+			precommitProof.SignatureBitSet(&bs)
+			require.Equal(t, uint(nVals), bs.Count())
 
 			// The mirror store has the right height and round.
 			nhr, err := tmi.NetworkHeightRoundFromStore(mfx.Cfg.Store.NetworkHeightRound(ctx))

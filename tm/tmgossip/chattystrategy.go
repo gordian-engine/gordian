@@ -248,12 +248,15 @@ func (s *ChattyStrategy) broadcastUpdatesOnly(ctx context.Context, prev, cur tmc
 	// to determine if we need to broadcast updates for those.
 
 	prevPrevoteBitset := bitset.New(0)
+	var bs bitset.BitSet
 	for _, p := range prev.PrevoteProofs {
-		prevPrevoteBitset.InPlaceUnion(p.SignatureBitSet())
+		p.SignatureBitSet(&bs)
+		prevPrevoteBitset.InPlaceUnion(&bs)
 	}
 	curPrevoteBitset := bitset.New(0)
 	for _, p := range cur.PrevoteProofs {
-		curPrevoteBitset.InPlaceUnion(p.SignatureBitSet())
+		p.SignatureBitSet(&bs)
+		curPrevoteBitset.InPlaceUnion(&bs)
 	}
 	if curPrevoteBitset.Count() != prevPrevoteBitset.Count() {
 		if !s.broadcastPrevotes(ctx, cur) {
@@ -263,11 +266,13 @@ func (s *ChattyStrategy) broadcastUpdatesOnly(ctx context.Context, prev, cur tmc
 
 	prevPrecommitBitset := bitset.New(0)
 	for _, p := range prev.PrecommitProofs {
-		prevPrecommitBitset.InPlaceUnion(p.SignatureBitSet())
+		p.SignatureBitSet(&bs)
+		prevPrecommitBitset.InPlaceUnion(&bs)
 	}
 	curPrecommitBitset := bitset.New(0)
 	for _, p := range cur.PrecommitProofs {
-		curPrecommitBitset.InPlaceUnion(p.SignatureBitSet())
+		p.SignatureBitSet(&bs)
+		curPrecommitBitset.InPlaceUnion(&bs)
 	}
 	if curPrecommitBitset.Count() != prevPrecommitBitset.Count() {
 		if !s.broadcastPrecommits(ctx, cur) {

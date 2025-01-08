@@ -11,6 +11,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gassert"
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/gwatchdog"
@@ -1746,7 +1747,8 @@ func (k *Kernel) handleReplayedHeader(
 	// Now ensure we have majority vote power,
 	// otherwise the replay cannot proceed.
 	var blockPow uint64
-	bs := tempProofs[string(header.Hash)].SignatureBitSet()
+	var bs bitset.BitSet
+	tempProofs[string(header.Hash)].SignatureBitSet(&bs)
 	for i, ok := bs.NextSet(0); ok && int(i) < len(header.ValidatorSet.Validators); i, ok = bs.NextSet(i + 1) {
 		blockPow += header.ValidatorSet.Validators[int(i)].Power
 	}
