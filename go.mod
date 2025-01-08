@@ -13,6 +13,7 @@ require (
 	github.com/neilotoole/slogt v1.1.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
+	github.com/supranational/blst v0.3.13
 	github.com/tv42/httpunix v0.0.0-20191220191345-2ba4b9c3382c
 	golang.org/x/crypto v0.27.0
 	golang.org/x/tools v0.22.0
