@@ -7,6 +7,7 @@ import (
 	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto/gblsminsig"
 	"github.com/stretchr/testify/require"
+	blst "github.com/supranational/blst/bindings/go"
 )
 
 var (
@@ -69,9 +70,40 @@ func TestSignatureProof_AsSparse(t *testing.T) {
 	require.Len(t, sp.Signatures, 1)
 	require.Equal(t, sig0, sp.Signatures[0].Sig)
 
-	// Not asserting anything about the sparse signature ID
-	// until we use the optimized encoding.
-	// See the unexported bitsetToSparseID function.
+	// The sparse signature's key ID is the little endian uint16
+	// corresponding to the index of the key in the tree.
+	require.Equal(t, []byte{0, 0}, sp.Signatures[0].KeyID)
+
+	// Now we can add a far-away signature with a more interesting ID.
+	sig15, err := testSigners[15].Sign(ctx, msg)
+	require.NoError(t, err)
+	require.NoError(t, proof.AddSignature(sig15, testPubKeys[15]))
+
+	sp = proof.AsSparse()
+	require.Equal(t, hash, sp.PubKeyHash)
+	require.Len(t, sp.Signatures, 2)
+	require.Equal(t, []byte{0, 0}, sp.Signatures[0].KeyID)
+	require.Equal(t, sig0, sp.Signatures[0].Sig)
+	require.Equal(t, []byte{0, 15}, sp.Signatures[1].KeyID)
+	require.Equal(t, sig15, sp.Signatures[1].Sig)
+
+	// And then if we aggregate in signature 14...
+	sig14, err := testSigners[14].Sign(ctx, msg)
+	require.NoError(t, err)
+	require.NoError(t, proof.AddSignature(sig14, testPubKeys[14]))
+
+	// Then the aggregated signature is first.
+	p15 := new(blst.P1Affine).Uncompress(sig15)
+	p14 := new(blst.P1Affine).Uncompress(sig14)
+	aggSig := new(blst.P1).Add(p14).Add(p15).ToAffine()
+
+	sp = proof.AsSparse()
+	require.Equal(t, hash, sp.PubKeyHash)
+	require.Len(t, sp.Signatures, 2)
+	require.Equal(t, []byte{0, 16 + 8 - 1}, sp.Signatures[0].KeyID)
+	require.Equal(t, aggSig.Compress(), sp.Signatures[0].Sig)
+	require.Equal(t, []byte{0, 0}, sp.Signatures[1].KeyID)
+	require.Equal(t, sig0, sp.Signatures[1].Sig)
 }
 
 func TestSignatureProof_MergeSparse_disjoint(t *testing.T) {
@@ -109,8 +141,6 @@ func TestSignatureProof_MergeSparse_disjoint(t *testing.T) {
 	require.True(t, bs0.Test(0))
 	require.True(t, bs0.Test(2))
 }
-
-// TODO: test for Merged sparse signature, once mergeable.
 
 func TestSignatureProof_HasSparseKeyID(t *testing.T) {
 	t.Parallel()

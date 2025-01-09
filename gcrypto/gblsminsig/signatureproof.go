@@ -225,7 +225,7 @@ func (p SignatureProof) MergeSparse(s gcrypto.SparseSignatureProof) gcrypto.Sign
 			continue
 		}
 
-		id := int(binary.LittleEndian.Uint16(ss.KeyID))
+		id := int(binary.BigEndian.Uint16(ss.KeyID))
 		haveKey, haveSig, ok := p.sigTree.Get(id)
 		if !ok {
 			res.AllValidSignatures = false
@@ -270,7 +270,7 @@ func (p SignatureProof) HasSparseKeyID(keyID []byte) (has, valid bool) {
 	if len(keyID) != 2 {
 		return false, false
 	}
-	id := int(binary.LittleEndian.Uint16(keyID))
+	id := int(binary.BigEndian.Uint16(keyID))
 	_, sig, ok := p.sigTree.Get(id)
 	if !ok {
 		return false, false
@@ -284,7 +284,7 @@ func (p SignatureProof) AsSparse() gcrypto.SparseSignatureProof {
 	for i, id := range ids {
 		_, sig, _ := p.sigTree.Get(id)
 		kid := [2]byte{}
-		binary.LittleEndian.PutUint16(kid[:], uint16(id))
+		binary.BigEndian.PutUint16(kid[:], uint16(id))
 		sparseSigs[i] = gcrypto.SparseSignature{
 			KeyID: kid[:],
 			Sig:   sig.Compress(),
