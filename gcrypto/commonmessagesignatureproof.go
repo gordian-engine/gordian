@@ -131,7 +131,10 @@ type CommonMessageSignatureProofScheme interface {
 	// New creates a new, empty proof.
 	New(msg []byte, candidateKeys []PubKey, pubKeyHash string) (CommonMessageSignatureProof, error)
 
-	// IsValidKeyID reports whether the given ID is valid given the set of public keys.
+	// IsValidKeyID reports whether the given sparse key ID is valid given the set of public keys.
+	//
+	// TODO: this should return a new type so that the cost of key aggregation
+	// can be amortized once instead of on every check.
 	IsValidKeyID(id []byte, keys []PubKey) bool
 }
 

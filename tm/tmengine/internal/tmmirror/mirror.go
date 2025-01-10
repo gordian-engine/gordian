@@ -232,7 +232,7 @@ RESTART:
 		return tmconsensus.HandleProposedHeaderSignerUnrecognized
 	case tmi.PHCheckNextHeight:
 		// Special case: we make an additional request to the kernel if the PH is for the next height.
-		m.backfillCommitForNextHeightPE(ctx, req.PH, *checkResp.VotingRoundView)
+		m.backfillCommitForNextHeightPE(ctx, req.PH)
 		goto RESTART // TODO: find a cleaner way to apply the proposed block after backfilling commit.
 	case tmi.PHCheckRoundTooOld:
 		return tmconsensus.HandleProposedHeaderRoundTooOld
@@ -349,7 +349,6 @@ RESTART:
 func (m *Mirror) backfillCommitForNextHeightPE(
 	ctx context.Context,
 	ph tmconsensus.ProposedHeader,
-	rv tmconsensus.RoundView,
 ) backfillCommitStatus {
 	defer trace.StartRegion(ctx, "backfillCommitForNextHeightPE").End()
 
@@ -372,7 +371,8 @@ func (m *Mirror) backfillCommitForNextHeightPE(
 func (m *Mirror) HandlePrevoteProofs(ctx context.Context, p tmconsensus.PrevoteSparseProof) tmconsensus.HandleVoteProofsResult {
 	defer trace.StartRegion(ctx, "HandlePrevoteProofs").End()
 
-	// NOTE: keep changes to this method synchronized with HandlePrecommitProofs.
+	// NOTE: keep changes to this method synchronized with handlePrecommitProofs --
+	// yes, the unexported version.
 
 	if len(p.Proofs) == 0 {
 		// Why was this even sent?
@@ -528,8 +528,14 @@ func (m *Mirror) HandlePrecommitProofs(ctx context.Context, p tmconsensus.Precom
 	return m.handlePrecommitProofs(ctx, p, "(*Mirror).HandlePrecommitProofs")
 }
 
+// handlePrecommitProofs is the main logic for accepting precommit proofs.
+// Unlike HandlePrevoteProofs, this is called from both
+// the exported HandlePrecommitProofs for handling incoming gossip messages,
+// but also from backfilling precommits due to seeing a valid proposed header
+// earlier than expected.
 func (m *Mirror) handlePrecommitProofs(ctx context.Context, p tmconsensus.PrecommitSparseProof, reason string) tmconsensus.HandleVoteProofsResult {
 	defer trace.StartRegion(ctx, "handlePrecommitProofs").End()
+
 	// NOTE: keep changes to this method synchronized with HandlePrevoteProofs.
 
 	if len(p.Proofs) == 0 {
@@ -552,6 +558,7 @@ func (m *Mirror) handlePrecommitProofs(ctx context.Context, p tmconsensus.Precom
 
 		Resp: make(chan tmi.ViewLookupResponse, 1),
 	}
+
 RETRY:
 	vlResp, ok := gchan.ReqResp(
 		ctx, m.log,
@@ -573,7 +580,7 @@ RETRY:
 		// Okay.
 	default:
 		panic(fmt.Errorf(
-			"TODO: handle prevotes for views other than committing, voting, or next round (got %s)",
+			"TODO: handle precommits for views other than committing, voting, or next round (got %s)",
 			vlResp.ID,
 		))
 	}
@@ -682,6 +689,9 @@ RETRY:
 // getSignaturesToAdd compares the current signature proofs with the incoming sparse proofs
 // and extracts only the subset of proofs that are absent from the current proofs.
 //
+// The higher-level mirror handles this, in a goroutine independent from the mirror kernel,
+// in order to minimize kernel load.
+//
 // This is part of HandlePrevoteProofs and HandlePrecommitProofs.
 func (m *Mirror) getSignaturesToAdd(
 	curProofs map[string]gcrypto.CommonMessageSignatureProof,
@@ -694,66 +704,54 @@ func (m *Mirror) getSignaturesToAdd(
 
 	for blockHash, signatures := range incomingSparseProofs {
 		fullProof := curProofs[blockHash]
-		if fullProof == nil && pubKeys == nil {
-			// We only consult pubKeys when fullProof is nil,
-			// and in a properly behaving honest network,
-			// fullProof will usually not be nil.
-			//
-			// This is going to allocate a bit every time we call it;
-			// possible optimization to actually only store these public keys once per validator set
-			// (even though we still limit it to at most one allocation
-			// per call to HandlePrevoteProofs or HandlePrecommitProofs).
-			pubKeys = tmconsensus.ValidatorsToPubKeys(valSet.Validators)
+		var sigsToAdd []gcrypto.SparseSignature
+
+		if fullProof == nil {
+			// We don't have a full proof to consult, so go through the scheme.
+			// We could probably pick an arbitrary full proof, if we have any, to check validity.
+			// But if we don't we have to use the scheme anyway.
+
+			if pubKeys == nil {
+				// Only do this allocation once.
+				pubKeys = tmconsensus.ValidatorsToPubKeys(valSet.Validators)
+			}
+
+			for _, sig := range signatures {
+				// TODO: this is the only time we need the pubkeys,
+				// and in the case of aggregated signatures,
+				// this can be considerably expensive.
+				// So, the CommonMessageSignatureProofScheme interface
+				// needs to change so that we can produce a key ID validator only once.
+				if !m.cmspScheme.IsValidKeyID(sig.KeyID, pubKeys) {
+					continue
+				}
+
+				sigsToAdd = append(sigsToAdd, sig)
+			}
+		} else {
+			// We have an existing full proof, so we can use that to validate the key ID.
+			for _, sig := range signatures {
+				has, valid := fullProof.HasSparseKeyID(sig.KeyID)
+				if valid && !has {
+					sigsToAdd = append(sigsToAdd, sig)
+				}
+			}
 		}
-		needToAdd := m.getNewSignatures(fullProof, signatures, pubKeys)
-		if len(needToAdd) == 0 {
-			// We already had those signatures.
+
+		if len(sigsToAdd) == 0 {
+			// We already had the provided signatures for this block hash,
+			// or there were unrecognized keys that we skipped.
 			continue
 		}
 
-		// Now we have a signature that needs to be added.
+		// Now we have at least one signature that needs to be added.
 		if toAdd == nil {
 			toAdd = make(map[string][]gcrypto.SparseSignature)
 		}
-		toAdd[blockHash] = needToAdd
+		toAdd[blockHash] = sigsToAdd
 	}
 
 	return toAdd
-}
-
-// getNewSignatures filters incomingProofs against the given fullProof,
-// returning only the signatures whose key ID is not present in fullProof.
-// pubKeys is only used to determine if the incoming key IDs are valid,
-// only when fullProof is nil.
-func (m *Mirror) getNewSignatures(
-	fullProof gcrypto.CommonMessageSignatureProof,
-	incomingProofs []gcrypto.SparseSignature,
-	pubKeys []gcrypto.PubKey,
-) []gcrypto.SparseSignature {
-	out := make([]gcrypto.SparseSignature, 0, len(incomingProofs))
-
-	if fullProof == nil {
-		// Falling back to only checking key ID validity via the scheme.
-		for _, p := range incomingProofs {
-			if valid := m.cmspScheme.IsValidKeyID(p.KeyID, pubKeys); !valid {
-				continue
-			}
-
-			// It is a valid key ID, so include it in the candidates to add.
-			out = append(out, p)
-		}
-
-		return out
-	}
-
-	// The full proof is available, so we can use that as the source of truth.
-	for _, p := range incomingProofs {
-		has, valid := fullProof.HasSparseKeyID(p.KeyID)
-		if valid && !has {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 // makeNewPrevoteProof returns a signature proof for the given height, round, and block hash.
