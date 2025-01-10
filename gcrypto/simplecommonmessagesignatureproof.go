@@ -13,7 +13,11 @@ import (
 // SimpleCommonMessageSignatureProofScheme is the scheme for a SimpleCommonMessageSignatureProof.
 var SimpleCommonMessageSignatureProofScheme CommonMessageSignatureProofScheme = LiteralCommonMessageSignatureProofScheme(
 	NewSimpleCommonMessageSignatureProof,
-	isValidSimpleCommonSignatureKeyID,
+	func(keys []PubKey) KeyIDChecker {
+		return beUint16KeyLenIDChecker{
+			nKeys: len(keys),
+		}
+	},
 )
 
 // SimpleCommonMessageSignatureProof is the simplest signature proof,
@@ -267,19 +271,19 @@ func (p SimpleCommonMessageSignatureProof) HasSparseKeyID(keyID []byte) (has, va
 	return has, true
 }
 
-func isValidSimpleCommonSignatureKeyID(id []byte, keys []PubKey) bool {
-	if len(id) != 2 {
-		// Invalid because the key IDs must be a big endian uint16.
+// beUint16KeyLenIDChecker validates whether a key ID formatted as a uint16
+// is within the range of the number of keys.
+type beUint16KeyLenIDChecker struct {
+	nKeys int
+}
+
+func (c beUint16KeyLenIDChecker) IsValid(keyID []byte) bool {
+	if len(keyID) != 2 {
 		return false
 	}
 
-	u := binary.BigEndian.Uint16(id)
+	u := binary.BigEndian.Uint16(keyID)
 	idx := int(u)
-	if idx < 0 || idx >= len(keys) {
-		// Key ID must be in range to be valid.
-		return false
-	}
 
-	// ID is in range so it is valid.
-	return true
+	return idx >= 0 && idx < c.nKeys
 }

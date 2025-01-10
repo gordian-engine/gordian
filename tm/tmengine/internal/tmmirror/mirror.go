@@ -700,7 +700,7 @@ func (m *Mirror) getSignaturesToAdd(
 ) map[string][]gcrypto.SparseSignature {
 	var toAdd map[string][]gcrypto.SparseSignature
 
-	var pubKeys []gcrypto.PubKey
+	var keyIDChecker gcrypto.KeyIDChecker
 
 	for blockHash, signatures := range incomingSparseProofs {
 		fullProof := curProofs[blockHash]
@@ -711,9 +711,10 @@ func (m *Mirror) getSignaturesToAdd(
 			// We could probably pick an arbitrary full proof, if we have any, to check validity.
 			// But if we don't we have to use the scheme anyway.
 
-			if pubKeys == nil {
+			if keyIDChecker == nil {
 				// Only do this allocation once.
-				pubKeys = tmconsensus.ValidatorsToPubKeys(valSet.Validators)
+				pubKeys := tmconsensus.ValidatorsToPubKeys(valSet.Validators)
+				keyIDChecker = m.cmspScheme.KeyIDChecker(pubKeys)
 			}
 
 			for _, sig := range signatures {
@@ -722,7 +723,7 @@ func (m *Mirror) getSignaturesToAdd(
 				// this can be considerably expensive.
 				// So, the CommonMessageSignatureProofScheme interface
 				// needs to change so that we can produce a key ID validator only once.
-				if !m.cmspScheme.IsValidKeyID(sig.KeyID, pubKeys) {
+				if !keyIDChecker.IsValid(sig.KeyID) {
 					continue
 				}
 

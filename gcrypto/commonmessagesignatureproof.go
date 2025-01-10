@@ -131,11 +131,20 @@ type CommonMessageSignatureProofScheme interface {
 	// New creates a new, empty proof.
 	New(msg []byte, candidateKeys []PubKey, pubKeyHash string) (CommonMessageSignatureProof, error)
 
-	// IsValidKeyID reports whether the given sparse key ID is valid given the set of public keys.
-	//
-	// TODO: this should return a new type so that the cost of key aggregation
-	// can be amortized once instead of on every check.
-	IsValidKeyID(id []byte, keys []PubKey) bool
+	// KeyIDChecker returns a KeyIDChecker that validates sparse signatures
+	// within the given set of public keys.
+	KeyIDChecker(keys []PubKey) KeyIDChecker
+}
+
+// KeyIDChecker reports whether a sparse signature's key ID
+// appears to be valid, given prior knowledge of the set of public keys.
+//
+// The level of accuracy of the KeyIDChecker is completely dependent
+// on the sparse signature implementation.
+// It is possible for a malicious network message to provide
+// correct key IDs with invalid signatures.
+type KeyIDChecker interface {
+	IsValid(keyID []byte) bool
 }
 
 // LiteralCommonMessageSignatureProofScheme returns a CommonMessageSignatureProofScheme
@@ -146,26 +155,26 @@ type CommonMessageSignatureProofScheme interface {
 // without writing extra boilerplate to produce a corresponding scheme.
 func LiteralCommonMessageSignatureProofScheme[P CommonMessageSignatureProof](
 	newFn func([]byte, []PubKey, string) (P, error),
-	isValidKeyIDFn func([]byte, []PubKey) bool,
+	keyIDCheckerFn func([]PubKey) KeyIDChecker,
 ) CommonMessageSignatureProofScheme {
 	return literalCommonMessageSignatureProofScheme{
 		newFn: func(msg []byte, candidateKeys []PubKey, pubKeyHash string) (CommonMessageSignatureProof, error) {
 			return newFn(msg, candidateKeys, pubKeyHash)
 		},
-		isValidKeyIDFn: isValidKeyIDFn,
+		keyIDCheckerFn: keyIDCheckerFn,
 	}
 }
 
 type literalCommonMessageSignatureProofScheme struct {
 	newFn func([]byte, []PubKey, string) (CommonMessageSignatureProof, error)
 
-	isValidKeyIDFn func([]byte, []PubKey) bool
+	keyIDCheckerFn func([]PubKey) KeyIDChecker
 }
 
 func (s literalCommonMessageSignatureProofScheme) New(msg []byte, candidateKeys []PubKey, pubKeyHash string) (CommonMessageSignatureProof, error) {
 	return s.newFn(msg, candidateKeys, pubKeyHash)
 }
 
-func (s literalCommonMessageSignatureProofScheme) IsValidKeyID(id []byte, keys []PubKey) bool {
-	return s.isValidKeyIDFn(id, keys)
+func (s literalCommonMessageSignatureProofScheme) KeyIDChecker(keys []PubKey) KeyIDChecker {
+	return s.keyIDCheckerFn(keys)
 }
