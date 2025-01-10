@@ -158,7 +158,7 @@ func (m *StateMachine) kernel(ctx context.Context) {
 				slog.Uint64("H", rlc.H), slog.Uint64("R", uint64(rlc.R)),
 				slog.Any("S", rlc.S),
 
-				slog.Any("PrevVRV", rlc.PrevVRV),
+				slog.Any("VRV", rlc.VRV),
 			),
 		)
 	}()
@@ -230,7 +230,7 @@ func (m *StateMachine) handleLiveEvent(
 			"State machine kernel quitting due to context cancellation in main loop (live events)",
 			"cause", context.Cause(ctx),
 			"height", rlc.H, "round", rlc.R, "step", rlc.S,
-			"vote_summary", rlc.PrevVRV.VoteSummary,
+			"vote_summary", rlc.VRV.VoteSummary,
 		)
 		return false
 
@@ -238,7 +238,7 @@ func (m *StateMachine) handleLiveEvent(
 		m.handleViewUpdate(ctx, rlc, v)
 
 	case p := <-rlc.ProposalCh:
-		if !m.recordProposedBlock(ctx, *rlc, p) {
+		if !m.recordProposedHeader(ctx, *rlc, p) {
 			return false
 		}
 
@@ -521,7 +521,7 @@ func (m *StateMachine) beginRoundLive(
 		if !m.beginCommit(ctx, rlc, initVRV) {
 			return false
 		}
-		rlc.PrevVRV = &initVRV
+		rlc.VRV = &initVRV
 		return true
 
 	default:
@@ -529,7 +529,7 @@ func (m *StateMachine) beginRoundLive(
 	}
 
 	rlc.S = curStep
-	rlc.PrevVRV = &initVRV
+	rlc.VRV = &initVRV
 
 	// Only attempt to start the timer if we have a live view.
 	m.startInitialTimer(ctx, rlc)
@@ -697,7 +697,7 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 			}
 
 			vrvClone := rer.VRV.Clone()
-			rlc.PrevVRV = &vrvClone
+			rlc.VRV = &vrvClone
 		}
 
 		// Overwrite the proposed blocks we present to the consensus strategy,
@@ -759,17 +759,17 @@ func (m *StateMachine) handleViewUpdate(
 		return
 	}
 
-	if vrv.Version <= rlc.PrevVRV.Version {
+	if vrv.Version <= rlc.VRV.Version {
 		m.log.Warn(
 			"Received non-increasing round view version; this is a likely bug",
 			"h", rlc.H, "r", rlc.R, "step", rlc.S,
-			"prev_version", rlc.PrevVRV.Version, "cur_version", vrv.Version,
+			"prev_version", rlc.VRV.Version, "cur_version", vrv.Version,
 		)
 
 		m.log.Info(
 			"STATE DUMP DUE TO STALE UPDATE BUG",
 			"h", rlc.H, "r", rlc.R, "step", rlc.S,
-			"prev_vrv", rlc.PrevVRV,
+			"vrv", rlc.VRV,
 			"new_vrv", vrv,
 		)
 
@@ -790,13 +790,13 @@ func (m *StateMachine) handleViewUpdate(
 		panic(fmt.Errorf("TODO: handle view update for step %q", rlc.S))
 	}
 
-	if vrv.Height == rlc.PrevVRV.Height && vrv.Round == rlc.PrevVRV.Round {
+	if vrv.Height == rlc.VRV.Height && vrv.Round == rlc.VRV.Round {
 		// If the view update caused a nil commit,
-		// the incoming vrv's height and round will differ from the set PrevVRV.
+		// the incoming vrv's height and round will differ from the set VRV.
 		// So we have to check this in order to avoid "moving backwards".
 
 		// Assuming it's okay to take ownership of vrv as opposed to copying in to our value.
-		rlc.PrevVRV = &vrv
+		rlc.VRV = &vrv
 	}
 
 	if v.JumpAheadRoundView != nil {
@@ -980,7 +980,7 @@ func (m *StateMachine) handleProposalViewUpdate(
 
 	// If we have only exceeded minority prevote power, we will continue waiting for proposed blocks.
 
-	if len(vrv.ProposedHeaders) > len(rlc.PrevVRV.ProposedHeaders) {
+	if len(vrv.ProposedHeaders) > len(rlc.VRV.ProposedHeaders) {
 		// At least one new proposed block.
 		// We are going to inform the consensus strategy (by way of the consensus manager)
 		// of the new proposed blocks,
@@ -997,7 +997,7 @@ func (m *StateMachine) handleProposalViewUpdate(
 		// Operate on clones to avoid mutating either of the canonical slices.
 
 		incoming := m.rejectMismatchedProposedHeaders(vrv.ProposedHeaders, rlc)
-		have := m.rejectMismatchedProposedHeaders(rlc.PrevVRV.ProposedHeaders, rlc)
+		have := m.rejectMismatchedProposedHeaders(rlc.VRV.ProposedHeaders, rlc)
 		// TODO: we could be more efficient than building up the have slice
 		// only to check its length.
 		if len(incoming) <= len(have) {
@@ -1270,8 +1270,8 @@ func (m *StateMachine) handleCommitWaitViewUpdate(
 		return
 	}
 
-	pbIdx := slices.IndexFunc(rlc.PrevVRV.ProposedHeaders, func(ph tmconsensus.ProposedHeader) bool {
-		return string(ph.Header.Hash) == rlc.PrevVRV.VoteSummary.MostVotedPrecommitHash
+	pbIdx := slices.IndexFunc(rlc.VRV.ProposedHeaders, func(ph tmconsensus.ProposedHeader) bool {
+		return string(ph.Header.Hash) == rlc.VRV.VoteSummary.MostVotedPrecommitHash
 	})
 	if pbIdx >= 0 {
 		// The previous VRV already had the proposed block,
@@ -1301,7 +1301,7 @@ func (m *StateMachine) handleCommitWaitViewUpdate(
 	)
 }
 
-func (m *StateMachine) recordProposedBlock(
+func (m *StateMachine) recordProposedHeader(
 	ctx context.Context,
 	rlc tsi.RoundLifecycle,
 	p tmconsensus.Proposal,
@@ -1314,7 +1314,7 @@ func (m *StateMachine) recordProposedBlock(
 
 			Height: h,
 
-			PrevCommitProof: rlc.PrevVRV.RoundView.PrevCommitProof,
+			PrevCommitProof: rlc.VRV.RoundView.PrevCommitProof,
 
 			ValidatorSet:     rlc.CurValSet,
 			NextValidatorSet: rlc.PrevFinNextValSet,
@@ -1458,7 +1458,7 @@ func (m *StateMachine) handleTimerElapsed(ctx context.Context, rlc *tsi.RoundLif
 			ctx, m.log,
 			m.cm.ChooseProposedBlockRequests, tsi.ChooseProposedBlockRequest{
 				// Exclude invalid proposed blocks.
-				PHs:    m.rejectMismatchedProposedHeaders(rlc.PrevVRV.ProposedHeaders, rlc),
+				PHs:    m.rejectMismatchedProposedHeaders(rlc.VRV.ProposedHeaders, rlc),
 				Result: rlc.PrevoteHashCh, // Is it ever possible this channel is nil?
 			},
 			"choosing proposed block following proposal timeout",
@@ -1483,8 +1483,8 @@ func (m *StateMachine) handleTimerElapsed(ctx context.Context, rlc *tsi.RoundLif
 		if !gchan.SendC(
 			ctx, m.log,
 			m.cm.DecidePrecommitRequests, tsi.DecidePrecommitRequest{
-				VS:     rlc.PrevVRV.VoteSummary.Clone(), // Clone under assumption to avoid data race.
-				Result: rlc.PrecommitHashCh,             // Is it ever possible this channel is nil?
+				VS:     rlc.VRV.VoteSummary.Clone(), // Clone under assumption to avoid data race.
+				Result: rlc.PrecommitHashCh,         // Is it ever possible this channel is nil?
 			},
 			"choosing precommit following prevote delay timeout",
 		) {
@@ -1556,7 +1556,7 @@ func (m *StateMachine) handleBlockDataArrival(ctx context.Context, rlc *tsi.Roun
 
 	// The height and round match, and we are able to prevote,
 	// so now we need to construct the consider block request.
-	okPHs := m.rejectMismatchedProposedHeaders(rlc.PrevVRV.ProposedHeaders, rlc)
+	okPHs := m.rejectMismatchedProposedHeaders(rlc.VRV.ProposedHeaders, rlc)
 	if len(okPHs) == 0 {
 		return true
 	}

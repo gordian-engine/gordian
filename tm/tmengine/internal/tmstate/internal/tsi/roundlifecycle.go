@@ -37,11 +37,10 @@ type RoundLifecycle struct {
 	// Used when proposing a block.
 	CurValSet tmconsensus.ValidatorSet
 
-	// PrevVRV is the most recently seen versioned round view.
-	// (It should probably just be renamed to VRV -- "previous" seems to imply earlier, not "just seen").
-	// A non-nil PrevVRV indicates that the round lifecycle is handling live votes.
+	// VRV is the most recently seen versioned round view.
+	// A non-nil VRV indicates that the round lifecycle is handling live votes.
 	// If nil, that indicates the round lifecycle is in replay mode.
-	PrevVRV             *tmconsensus.VersionedRoundView
+	VRV                 *tmconsensus.VersionedRoundView
 	PrevBlockHash       string // The previous block hash as reported by the mirror when entering a round.
 	PrevFinNextValSet   tmconsensus.ValidatorSet
 	PrevFinAppStateHash string
@@ -121,7 +120,7 @@ func (rlc *RoundLifecycle) MarkCatchingUp() {
 }
 
 func (rlc RoundLifecycle) IsReplaying() bool {
-	return rlc.PrevVRV == nil
+	return rlc.VRV == nil
 }
 
 // CycleFinalization moves the current round's finalization
