@@ -99,7 +99,7 @@ type CommittedHeader struct {
 	Proof  CommitProof
 }
 
-// ProposedBlock is the data sent by a proposer at the beginning of a round.
+// ProposedHeader is the data sent by a proposer at the beginning of a round.
 // This is the logical representation within the engine,
 // not necessarily an exact representation of the data sent across the network.
 type ProposedHeader struct {
@@ -136,7 +136,7 @@ type ProposedHeader struct {
 	Signature []byte
 }
 
-// Annotations are arbitrary data to associate with a [Block] or [ProposedBlock].
+// Annotations are arbitrary data to associate with a [Header] or [ProposedHeader].
 //
 // The Driver annotations are set by the driver
 // (that is, the low-level code providing the [ConsensusStrategy]).

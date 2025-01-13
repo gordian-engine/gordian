@@ -1320,6 +1320,8 @@ func (m *StateMachine) handleCommitWaitViewUpdate(
 	)
 }
 
+// recordProposedHeader constructs a ProposedHeader from a tmconsensus.Proposal,
+// and sends the proposed header to the mirror so that it propagates to the rest of the network.
 func (m *StateMachine) recordProposedHeader(
 	ctx context.Context,
 	rlc tsi.RoundLifecycle,

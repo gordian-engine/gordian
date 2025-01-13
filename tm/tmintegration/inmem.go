@@ -53,5 +53,5 @@ func (f InmemSchemeFactory) SignatureScheme(ctx context.Context, idx int) (tmcon
 }
 
 func (f InmemSchemeFactory) CommonMessageSignatureProofScheme(ctx context.Context, idx int) (gcrypto.CommonMessageSignatureProofScheme, error) {
-	return gcrypto.SimpleCommonMessageSignatureProofScheme, nil
+	return gcrypto.SimpleCommonMessageSignatureProofScheme{}, nil
 }

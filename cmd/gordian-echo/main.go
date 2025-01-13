@@ -358,7 +358,7 @@ func NewStandaloneMirrorCmd(log *slog.Logger) *cobra.Command {
 
 				tmengine.WithHashScheme(tmconsensustest.SimpleHashScheme{}),
 				tmengine.WithSignatureScheme(tmconsensustest.SimpleSignatureScheme{}),
-				tmengine.WithCommonMessageSignatureProofScheme(gcrypto.SimpleCommonMessageSignatureProofScheme),
+				tmengine.WithCommonMessageSignatureProofScheme(gcrypto.SimpleCommonMessageSignatureProofScheme{}),
 
 				tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
 					ChainID:             "gordiandemo-echo",
@@ -612,7 +612,7 @@ func runStateMachineV3(
 
 		tmengine.WithHashScheme(tmconsensustest.SimpleHashScheme{}),
 		tmengine.WithSignatureScheme(tmconsensustest.SimpleSignatureScheme{}),
-		tmengine.WithCommonMessageSignatureProofScheme(gcrypto.SimpleCommonMessageSignatureProofScheme),
+		tmengine.WithCommonMessageSignatureProofScheme(gcrypto.SimpleCommonMessageSignatureProofScheme{}),
 
 		tmengine.WithConsensusStrategy(cStrat),
 		tmengine.WithGossipStrategy(gs),
