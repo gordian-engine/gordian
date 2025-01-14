@@ -118,6 +118,8 @@ func TestStateMachine_initialization(t *testing.T) {
 		require.Empty(t, action.Precommit.Sig)
 
 		expPH := sfx.Fx.NextProposedHeader([]byte("foobar"), 0)
+		require.Empty(t, expPH.Header.PrevCommitProof.Proofs)
+		expPH.Header.PrevCommitProof.Proofs = nil
 		sfx.Fx.SignProposal(ctx, &expPH, 0)
 		require.Equal(t, expPH, action.PH)
 	})

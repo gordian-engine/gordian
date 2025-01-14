@@ -24,6 +24,11 @@ type Header struct {
 	// PrevCommitProof is the proof for the previous committed block,
 	// where there may be precommits for other blocks
 	// besides the committed one and nil.
+	//
+	// The consensus engine determines the format of this proof.
+	// Non-aggregating signatures will typically be a discrete set of signatures,
+	// but aggregating signatures will usually undergo a final aggregation,
+	// which is incompatible with the form used for consensus gossip.
 	PrevCommitProof CommitProof
 
 	// The validators for this block and the next block.

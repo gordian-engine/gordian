@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gordian-engine/gordian/gassert"
+	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/gwatchdog"
 	"github.com/gordian-engine/gordian/internal/gchan"
 	"github.com/gordian-engine/gordian/internal/glog"
@@ -28,6 +29,8 @@ type StateMachine struct {
 	signer tmconsensus.Signer
 
 	hashScheme tmconsensus.HashScheme
+
+	finalizer tsi.CommitProofFinalizer
 
 	genesis tmconsensus.Genesis
 
@@ -56,7 +59,9 @@ type StateMachine struct {
 type StateMachineConfig struct {
 	Signer tmconsensus.Signer
 
-	HashScheme tmconsensus.HashScheme
+	HashScheme                        tmconsensus.HashScheme
+	SignatureScheme                   tmconsensus.SignatureScheme
+	CommonMessageSignatureProofScheme gcrypto.CommonMessageSignatureProofScheme
 
 	Genesis tmconsensus.Genesis
 
@@ -89,6 +94,11 @@ func NewStateMachine(ctx context.Context, log *slog.Logger, cfg StateMachineConf
 		signer: cfg.Signer,
 
 		hashScheme: cfg.HashScheme,
+
+		finalizer: tsi.CommitProofFinalizer{
+			SigScheme:  cfg.SignatureScheme,
+			CMSPScheme: cfg.CommonMessageSignatureProofScheme,
+		},
 
 		genesis: cfg.Genesis,
 
@@ -1329,13 +1339,29 @@ func (m *StateMachine) recordProposedHeader(
 ) (ok bool) {
 	h, r := rlc.H, rlc.R
 
+	var commitProof tmconsensus.CommitProof
+
+	if h > m.genesis.InitialHeight {
+		// We need to make a finalized commit proof,
+		// so we start with the unfinalized version that the VRV contains.
+		pcp := rlc.VRV.RoundView.PrevCommitProof
+		prevValKeys := tmconsensus.ValidatorsToPubKeys(rlc.PrevValSet.Validators)
+		finalizedCommitProof, err := m.finalizer.Finalize(h-1, rlc.PrevBlockHash, pcp, prevValKeys)
+		if err != nil {
+			glog.HRE(m.log, h, r, err).Error("Failed to finalize commit proof")
+			return false
+		}
+
+		commitProof = finalizedCommitProof
+	}
+
 	ph := tmconsensus.ProposedHeader{
 		Header: tmconsensus.Header{
 			PrevBlockHash: []byte(rlc.PrevBlockHash),
 
 			Height: h,
 
-			PrevCommitProof: rlc.VRV.RoundView.PrevCommitProof,
+			PrevCommitProof: commitProof,
 
 			ValidatorSet:     rlc.CurValSet,
 			NextValidatorSet: rlc.PrevFinNextValSet,

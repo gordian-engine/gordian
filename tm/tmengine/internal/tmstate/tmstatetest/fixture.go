@@ -84,7 +84,9 @@ func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
 				SignatureScheme: fx.SignatureScheme,
 			},
 
-			HashScheme: fx.HashScheme,
+			HashScheme:                        fx.HashScheme,
+			SignatureScheme:                   fx.SignatureScheme,
+			CommonMessageSignatureProofScheme: fx.CommonMessageSignatureProofScheme,
 
 			Genesis: fx.DefaultGenesis(),
 

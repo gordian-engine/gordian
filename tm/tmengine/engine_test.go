@@ -129,6 +129,10 @@ func TestEngine_plumbing_ConsensusStrategy(t *testing.T) {
 		efx.Fx.RecalculateHash(&expPH.Header)
 
 		efx.Fx.SignProposal(ctx, &expPH, 0)
+
+		require.Empty(t, expPH.Header.PrevCommitProof.Proofs)
+		expPH.Header.PrevCommitProof.Proofs = nil
+
 		require.Equal(t, expPH, ph)
 	})
 
@@ -925,7 +929,6 @@ func TestEngine_wiring_validatorChanges(t *testing.T) {
 	// It has the same data ID that we supplied,
 	// and the previous commit proofs are empty since this is initial height.
 	require.Equal(t, "app_data_1", string(ph1.Header.DataID))
-	require.NotNil(t, ph1.Header.PrevCommitProof.Proofs)
 	require.Empty(t, ph1.Header.PrevCommitProof.Proofs)
 
 	consReq1 := gtest.ReceiveSoon(t, efx.ConsensusStrategy.ConsiderProposedBlocksRequests)
