@@ -32,10 +32,10 @@ type RoundLifecycle struct {
 	// in order to not spend unnecessary time waiting for a commit.
 	HeightCommitted chan struct{}
 
-	// The validators for this height.
-	// Derived from the previous block's NextValidators field.
-	// Used when proposing a block.
-	CurValSet tmconsensus.ValidatorSet
+	// The validators for this height and the previous height.
+	// Derived from the previous header's NextValidators and Validators fields.
+	// Both of these fields are used when proposing a block.
+	CurValSet, PrevValSet tmconsensus.ValidatorSet
 
 	// VRV is the most recently seen versioned round view.
 	// A non-nil VRV indicates that the round lifecycle is handling live votes.
@@ -128,8 +128,8 @@ func (rlc RoundLifecycle) IsReplaying() bool {
 func (rlc *RoundLifecycle) CycleFinalization() {
 	rlc.invariantCycleFinalization()
 
-	rlc.PrevFinNextValSet, rlc.CurValSet, rlc.FinalizedValSet =
-		rlc.FinalizedValSet, rlc.PrevFinNextValSet, tmconsensus.ValidatorSet{}
+	rlc.PrevFinNextValSet, rlc.PrevValSet, rlc.CurValSet, rlc.FinalizedValSet =
+		rlc.FinalizedValSet, rlc.CurValSet, rlc.PrevFinNextValSet, tmconsensus.ValidatorSet{}
 
 	rlc.PrevFinAppStateHash, rlc.FinalizedAppStateHash =
 		rlc.FinalizedAppStateHash, ""

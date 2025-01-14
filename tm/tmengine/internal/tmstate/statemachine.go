@@ -625,18 +625,37 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 	// we need the current validator set now to determine participation.
 	if isGenesis {
 		rlc.CurValSet = m.genesis.ValidatorSet
+		rlc.PrevValSet = m.genesis.ValidatorSet
 	} else {
 		// If we are past genesis,
 		// it should be safe to assume we have a finalization for two heights back.
 		_, _, rlc.CurValSet, _, err = m.fStore.LoadFinalizationByHeight(ctx, h-2)
 		if err != nil {
 			m.log.Error(
-				"Failed to load finalization for initial validator set",
+				"Failed to load finalization for current validator set",
 				"load_height", h-2,
 				"err", err,
 			)
 			return rlc, rer, false
 		}
+
+		if h-3 > m.genesis.InitialHeight {
+			// If the current validator set was declared at h-2,
+			// then the previous validator set must have been declared at h-3.
+			// If we don't have that finalization then we need to fall back to genesis.
+			_, _, rlc.PrevValSet, _, err = m.fStore.LoadFinalizationByHeight(ctx, h-3)
+			if err != nil {
+				m.log.Error(
+					"Failed to load finalization for previous validator set",
+					"load_height", h-3,
+					"err", err,
+				)
+				return rlc, rer, false
+			}
+		} else {
+			rlc.PrevValSet = m.genesis.ValidatorSet
+		}
+
 	}
 	if m.isParticipating(&rlc) {
 		initRE.Actions = make(chan tmeil.StateMachineRoundAction, 3)
