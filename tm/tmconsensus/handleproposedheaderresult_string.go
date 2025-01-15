@@ -13,17 +13,19 @@ func _() {
 	_ = x[HandleProposedHeaderSignerUnrecognized-3]
 	_ = x[HandleProposedHeaderBadBlockHash-4]
 	_ = x[HandleProposedHeaderBadSignature-5]
-	_ = x[HandleProposedHeaderBadPrevCommitProofPubKeyHash-6]
-	_ = x[HandleProposedHeaderBadPrevCommitProofSignature-7]
-	_ = x[HandleProposedHeaderBadPrevCommitVoteCount-8]
-	_ = x[HandleProposedHeaderRoundTooOld-9]
-	_ = x[HandleProposedHeaderRoundTooFarInFuture-10]
-	_ = x[HandleProposedHeaderInternalError-11]
+	_ = x[HandleProposedHeaderMissingProposerPubKey-6]
+	_ = x[HandleProposedHeaderBadPrevCommitProofPubKeyHash-7]
+	_ = x[HandleProposedHeaderBadPrevCommitProofSignature-8]
+	_ = x[HandleProposedHeaderBadPrevCommitProofDoubleSigned-9]
+	_ = x[HandleProposedHeaderBadPrevCommitVoteCount-10]
+	_ = x[HandleProposedHeaderRoundTooOld-11]
+	_ = x[HandleProposedHeaderRoundTooFarInFuture-12]
+	_ = x[HandleProposedHeaderInternalError-13]
 }
 
-const _HandleProposedHeaderResult_name = "AcceptedAlreadyStoredSignerUnrecognizedBadBlockHashBadSignatureBadPrevCommitProofPubKeyHashBadPrevCommitProofSignatureBadPrevCommitVoteCountRoundTooOldRoundTooFarInFutureInternalError"
+const _HandleProposedHeaderResult_name = "AcceptedAlreadyStoredSignerUnrecognizedBadBlockHashBadSignatureMissingProposerPubKeyBadPrevCommitProofPubKeyHashBadPrevCommitProofSignatureBadPrevCommitProofDoubleSignedBadPrevCommitVoteCountRoundTooOldRoundTooFarInFutureInternalError"
 
-var _HandleProposedHeaderResult_index = [...]uint8{0, 8, 21, 39, 51, 63, 91, 118, 140, 151, 170, 183}
+var _HandleProposedHeaderResult_index = [...]uint8{0, 8, 21, 39, 51, 63, 84, 112, 139, 169, 191, 202, 221, 234}
 
 func (i HandleProposedHeaderResult) String() string {
 	i -= 1

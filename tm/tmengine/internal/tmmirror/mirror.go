@@ -198,6 +198,11 @@ type NetworkHeightRound = tmi.NetworkHeightRound
 func (m *Mirror) HandleProposedHeader(ctx context.Context, ph tmconsensus.ProposedHeader) tmconsensus.HandleProposedHeaderResult {
 	defer trace.StartRegion(ctx, "HandleProposedHeader").End()
 
+	// Early checks that we can do without consulting the kernel.
+	if ph.ProposerPubKey == nil {
+		return tmconsensus.HandleProposedHeaderMissingProposerPubKey
+	}
+
 RESTART:
 	req := tmi.PHCheckRequest{
 		PH:   ph,
@@ -270,60 +275,64 @@ RESTART:
 		return tmconsensus.HandleProposedHeaderBadPrevCommitProofPubKeyHash
 	}
 
-	// Now confirm that every signature is valid.
-	// This approach is potentially expensive,
-	// and I don't like that it happens on an uncontrolled path.
-	// There are likely some optimizations we can make to only do this work once
-	// and cache the results.
-	rawProofs := make(map[string]gcrypto.CommonMessageSignatureProof, len(ph.Header.PrevCommitProof.Proofs))
-	pubKeys := tmconsensus.ValidatorsToPubKeys(checkResp.PrevValidatorSet.Validators)
-	for hash, sigs := range ph.Header.PrevCommitProof.Proofs {
-		// TODO: should we reject if len(sigs) == 0? Probably yes?
+	// The PrevCommitProof should be in a finalized form,
+	// so we need to use the CommonMessageSignatureProofScheme to validate it.
+	// But in order to do so, we need to convert the PrevCommitProof to the finalized form.
+	pcp := ph.Header.PrevCommitProof
+	mainHash := string(ph.Header.PrevBlockHash)
+	finProof := gcrypto.FinalizedCommonMessageSignatureProof{
+		Keys:       tmconsensus.ValidatorsToPubKeys(checkResp.PrevValidatorSet.Validators),
+		PubKeyHash: pcp.PubKeyHash,
 
-		vt := tmconsensus.VoteTarget{
-			Height: ph.Header.Height - 1,
+		MainSignatures: pcp.Proofs[mainHash],
+	}
 
-			// We just pull this from the incoming previous commit proof,
-			// as opposed to getting it from the kernel somehow,
-			// because it is part of the signature.
-			// If the round is wrong then the signatures will be invalid.
-			Round: ph.Header.PrevCommitProof.Round,
+	finProof.MainMessage, err = tmconsensus.PrecommitSignBytes(tmconsensus.VoteTarget{
+		Height:    ph.Header.Height - 1,
+		Round:     pcp.Round,
+		BlockHash: mainHash,
+	}, m.sigScheme)
+	if err != nil {
+		return tmconsensus.HandleProposedHeaderInternalError
+	}
 
-			BlockHash: hash,
-		}
-		msg, err := tmconsensus.PrecommitSignBytes(vt, m.sigScheme)
-		if err != nil {
-			m.log.Warn(
-				"Failed to build precommit sign bytes",
-				// TODO: what fields would add pertinent information here?
-				"err", err,
-			)
-			return tmconsensus.HandleProposedHeaderInternalError
-		}
-		proof, err := m.cmspScheme.New(msg, pubKeys, string(checkResp.PrevValidatorSet.PubKeyHash))
-		if err != nil {
-			m.log.Warn(
-				"Failed to build common message signature proof when handling proposed header",
-				// TODO: what fields would add pertinent information here?
-				"err", err,
-			)
-			return tmconsensus.HandleProposedHeaderInternalError
-		}
+	hashesBySignContent := make(map[string]string, len(pcp.Proofs))
+	hashesBySignContent[string(finProof.MainMessage)] = mainHash
 
-		sparseProof := gcrypto.SparseSignatureProof{
-			PubKeyHash: ph.Header.PrevCommitProof.PubKeyHash,
-			Signatures: sigs,
-		}
-		if res := proof.MergeSparse(sparseProof); !res.AllValidSignatures {
-			m.log.Warn(
-				"Failed to merge sparse proof",
-				"prev_pub_key_hash", glog.Hex(checkResp.PrevValidatorSet.PubKeyHash),
-				"incoming_pub_key_hash", glog.Hex(ph.Header.PrevCommitProof.PubKeyHash),
-			)
-			return tmconsensus.HandleProposedHeaderBadPrevCommitProofSignature
-		}
+	if len(pcp.Proofs) > 1 {
+		finProof.Rest = make(map[string][]gcrypto.SparseSignature, len(pcp.Proofs)-1)
+		// There were votes for other blocks, so set up the Rest field on finProof.
+		for blockHash, sigs := range pcp.Proofs {
+			if blockHash == mainHash {
+				// Already handled.
+				continue
+			}
 
-		rawProofs[hash] = proof
+			msg, err := tmconsensus.PrecommitSignBytes(tmconsensus.VoteTarget{
+				Height:    ph.Header.Height - 1,
+				Round:     pcp.Round,
+				BlockHash: blockHash,
+			}, m.sigScheme)
+			if err != nil {
+				return tmconsensus.HandleProposedHeaderInternalError
+			}
+
+			finProof.Rest[string(msg)] = sigs
+			hashesBySignContent[string(msg)] = blockHash
+		}
+	}
+
+	signBitsByHash, allSigsUnique := m.cmspScheme.ValidateFinalizedProof(
+		finProof, hashesBySignContent,
+	)
+
+	if !allSigsUnique {
+		return tmconsensus.HandleProposedHeaderBadPrevCommitProofDoubleSigned
+	}
+
+	if signBitsByHash == nil {
+		// Pretty sure, but not 100% sure, this is the right error to return here.
+		return tmconsensus.HandleProposedHeaderBadPrevCommitProofSignature
 	}
 
 	// TODO: confirm that we have majority voting power on the previous block hash.

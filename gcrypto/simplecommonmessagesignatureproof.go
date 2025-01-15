@@ -99,7 +99,19 @@ func (SimpleCommonMessageSignatureProofScheme) ValidateFinalizedProof(
 		out[hashesBySignContent[msg]] = &bs
 	}
 
-	// All the bits from rest were merged in, so we're done.
+	// Now we need to check whether there were any double signatures.
+	var all, scratch bitset.BitSet
+	for _, bs := range out {
+		all.CopyFull(&scratch)
+		scratch.InPlaceIntersection(bs)
+		if scratch.Any() {
+			return out, false
+		}
+
+		// No double signatures so far, so continue updating all the bits we've seen.
+		all.InPlaceUnion(bs)
+	}
+
 	return out, true
 }
 
