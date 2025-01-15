@@ -135,6 +135,12 @@ type CommonMessageSignatureProofScheme interface {
 	// within the given set of public keys.
 	KeyIDChecker(keys []PubKey) KeyIDChecker
 
+	// Whether the proofs from a finalized previous commit proof
+	// can be merged in to unfinalized precommit votes.
+	//
+	// For aggregated signatures, this will most likely be false.
+	CanMergeFinalizedProofs() bool
+
 	// Finalize produces a FinalizedCommonMessageSignatureProof.
 	// It is assumed that the CommonMessageSignatureProof values
 	// are all of the same underlying type,

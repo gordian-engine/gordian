@@ -24,6 +24,10 @@ func (SimpleCommonMessageSignatureProofScheme) KeyIDChecker(keys []PubKey) KeyID
 	return beUint16KeyLenIDChecker{nKeys: len(keys)}
 }
 
+func (SimpleCommonMessageSignatureProofScheme) CanMergeFinalizedProofs() bool {
+	return true
+}
+
 func (SimpleCommonMessageSignatureProofScheme) Finalize(
 	main CommonMessageSignatureProof, rest []CommonMessageSignatureProof,
 ) FinalizedCommonMessageSignatureProof {

@@ -450,38 +450,47 @@ func (k *Kernel) addProposedHeader(ctx context.Context, s *kState, ph tmconsensu
 	// which is guaranteed by the prior guard clause.
 	backfillVRV := &s.Committing
 
-	// TODO: this merging code should probably move to a function in gcrypto.
-	commitProofs := ph.Header.PrevCommitProof.Proofs
-	mergedAny := false
-	for blockHash, laterSigs := range commitProofs {
-		target := backfillVRV.PrecommitProofs[blockHash]
-		if target == nil {
-			panic("TODO: backfill unknown block precommit")
+	// For simple proofs, we should be able to merge any new precommits
+	// that we didn't have.
+	//
+	// TODO: for aggregating proofs, we need a way to store and retrieve
+	// the finalized proof;
+	// we cannot merge it into the unfinalized precommits,
+	// because we must assume it is in a form that may not be merged.
+	if k.cmspScheme.CanMergeFinalizedProofs() {
+		// TODO: this merging code should probably move to a function in gcrypto.
+		commitProofs := ph.Header.PrevCommitProof.Proofs
+		mergedAny := false
+		for blockHash, laterSigs := range commitProofs {
+			target := backfillVRV.PrecommitProofs[blockHash]
+			if target == nil {
+				panic("TODO: backfill unknown block precommit")
+			}
+
+			laterSparseCommit := gcrypto.SparseSignatureProof{
+				PubKeyHash: ph.Header.PrevCommitProof.PubKeyHash,
+				Signatures: laterSigs,
+			}
+
+			mergeRes := target.MergeSparse(laterSparseCommit)
+			mergedAny = mergedAny || mergeRes.IncreasedSignatures
 		}
 
-		laterSparseCommit := gcrypto.SparseSignatureProof{
-			PubKeyHash: ph.Header.PrevCommitProof.PubKeyHash,
-			Signatures: laterSigs,
+		if mergedAny {
+			// We've updated the previous precommits, so the round store needs updated.
+			if err := k.rStore.OverwriteRoundPrecommitProofs(
+				ctx,
+				ph.Header.Height-1, ph.Header.PrevCommitProof.Round, // TODO: Don't assume this matches the committing view.
+				mapToSparseSignatureCollection(backfillVRV.PrecommitProofs),
+			); err != nil {
+				glog.HRE(k.log, ph.Header.Height, ph.Round, err).Warn(
+					"Failed to save backfilled commit info to round store; this may cause issues upon restart",
+				)
+			}
+
+			// Also update the committing view.
+			s.MarkCommittingViewUpdated()
 		}
-
-		mergeRes := target.MergeSparse(laterSparseCommit)
-		mergedAny = mergedAny || mergeRes.IncreasedSignatures
-	}
-
-	if mergedAny {
-		// We've updated the previous precommits, so the round store needs updated.
-		if err := k.rStore.OverwriteRoundPrecommitProofs(
-			ctx,
-			ph.Header.Height-1, ph.Header.PrevCommitProof.Round, // TODO: Don't assume this matches the committing view.
-			mapToSparseSignatureCollection(backfillVRV.PrecommitProofs),
-		); err != nil {
-			glog.HRE(k.log, ph.Header.Height, ph.Round, err).Warn(
-				"Failed to save backfilled commit info to round store; this may cause issues upon restart",
-			)
-		}
-
-		// Also update the committing view.
-		s.MarkCommittingViewUpdated()
 	}
 
 	// Finally, since we know at this point we've added a new proposed block,
