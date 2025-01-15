@@ -52,8 +52,9 @@ func (SimpleCommonMessageSignatureProofScheme) Finalize(
 }
 
 func (SimpleCommonMessageSignatureProofScheme) ValidateFinalizedProof(
-	proof FinalizedCommonMessageSignatureProof, bits *bitset.BitSet,
-) bool {
+	proof FinalizedCommonMessageSignatureProof,
+	hashesBySignContent map[string]string,
+) (map[string]*bitset.BitSet, bool) {
 	// The main proof is unconditionally required.
 	tempProof, err := NewSimpleCommonMessageSignatureProof(proof.MainMessage, proof.Keys, proof.PubKeyHash)
 	if err != nil {
@@ -63,50 +64,43 @@ func (SimpleCommonMessageSignatureProofScheme) ValidateFinalizedProof(
 		//
 		// Unfortunately we are swallowing the error here.
 		// We could possibly change the scheme to accept a logger.
-		return false
+		return nil, false
 	}
 
 	if res := tempProof.MergeSparse(SparseSignatureProof{
 		PubKeyHash: proof.PubKeyHash,
 		Signatures: proof.MainSignatures,
 	}); !res.AllValidSignatures {
-		return false
+		return nil, false
 	}
 
-	// For the main proof, we can just write out the bits directly.
-	// (This destroys any existing data in bits, which is what we want.)
-	tempProof.SignatureBitSet(bits)
+	out := make(map[string]*bitset.BitSet, len(proof.Rest)+1)
 
-	// Avoid some work if there is nothing else to do.
-	if len(proof.Rest) == 0 {
-		return true
-	}
+	var bs bitset.BitSet
+	tempProof.SignatureBitSet(&bs)
+	out[hashesBySignContent[string(proof.MainMessage)]] = &bs
 
-	// Otherwise we are going to need hold bit sets for the remaining proofs.
-	var tempBits bitset.BitSet
 	for msg, sigs := range proof.Rest {
 		tempProof, err := NewSimpleCommonMessageSignatureProof([]byte(msg), proof.Keys, proof.PubKeyHash)
 		if err != nil {
 			// Same caveats as the main case.
-			return false
+			return nil, false
 		}
 
 		if res := tempProof.MergeSparse(SparseSignatureProof{
 			PubKeyHash: proof.PubKeyHash,
 			Signatures: sigs,
 		}); !res.AllValidSignatures {
-			return false
+			return nil, false
 		}
 
-		// Successful merge, so capture the signature bits first.
-		tempProof.SignatureBitSet(&tempBits)
-
-		// Then union the new bits with whatever else we have so far.
-		bits.InPlaceUnion(&tempBits)
+		var bs bitset.BitSet
+		tempProof.SignatureBitSet(&bs)
+		out[hashesBySignContent[msg]] = &bs
 	}
 
 	// All the bits from rest were merged in, so we're done.
-	return true
+	return out, true
 }
 
 // SimpleCommonMessageSignatureProof is the simplest signature proof,

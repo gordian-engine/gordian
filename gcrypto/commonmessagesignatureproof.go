@@ -142,13 +142,21 @@ type CommonMessageSignatureProofScheme interface {
 	// Implementations are expected to panic if those assumptions do not hold.
 	Finalize(primary CommonMessageSignatureProof, rest []CommonMessageSignatureProof) FinalizedCommonMessageSignatureProof
 
-	// ValidateFinalized reports whether all signatures in the proof are valid.
-	// The provided bit set will be written such that is has
-	// a set bit corresponding to each key represented in the signatures.
+	// ValidateFinalized returns a map whose keys are the block hashes that have signatures,
+	// and whose values are the bit sets representing the validators who signed for that hash.
 	//
-	// If the result is false, the bit set may be in an indeterminate state,
-	// and so the bit set's contents should be disregarded.
-	ValidateFinalizedProof(proof FinalizedCommonMessageSignatureProof, bits *bitset.BitSet) bool
+	// The FinalizedCommonMessageSignatureProof includes signing content,
+	// and the output is intended to be keyed by block hash,
+	// so the hashesBySignContent is the glue to get the output in the desired form.
+	//
+	// If there are any invalid signatures or other errors,
+	// allSignaturesUnique will be false and the map will be nil.
+	// If all the signatures were valid, the allSignaturesUnique return value
+	// will be true if every signature is unique,
+	// or false if any validator has double signed.
+	ValidateFinalizedProof(proof FinalizedCommonMessageSignatureProof, hashesBySignContent map[string]string) (
+		signBitsByHash map[string]*bitset.BitSet, allSignaturesUnique bool,
+	)
 }
 
 // KeyIDChecker reports whether a sparse signature's key ID
