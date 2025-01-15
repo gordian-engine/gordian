@@ -335,7 +335,25 @@ RESTART:
 		return tmconsensus.HandleProposedHeaderBadPrevCommitProofSignature
 	}
 
-	// TODO: confirm that we have majority voting power on the previous block hash.
+	if ph.Header.Height > m.initialHeight {
+		// Only confirm the vote power if we are beyond the genesis height,
+		// as the initial height does not have previous commit proofs.
+		var prevBlockVotePower, availableVotePower uint64
+		prevVals := checkResp.PrevValidatorSet.Validators
+		sigBits := signBitsByHash[string(ph.Header.PrevBlockHash)]
+		for i, v := range prevVals {
+			// If we already had the total vote power,
+			// we could break out of this loop as soon as we cross majority power.
+			availableVotePower += v.Power
+			if sigBits.Test(uint(i)) {
+				prevBlockVotePower += v.Power
+			}
+		}
+
+		if prevBlockVotePower < tmconsensus.ByzantineMajority(availableVotePower) {
+			return tmconsensus.HandleProposedHeaderBadPrevCommitVoteCount
+		}
+	}
 
 	// The hash matches and the proposed header was signed by a validator we know,
 	// so we can accept the message.

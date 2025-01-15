@@ -546,6 +546,56 @@ func TestMirror_HandleProposedHeader(t *testing.T) {
 		})
 	})
 
+	t.Run("rejected when there are insufficient votes in previous commit proof", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		mfx := tmmirrortest.NewFixture(ctx, t, 4)
+
+		m := mfx.NewMirror()
+		defer m.Wait()
+		defer cancel()
+
+		// Proposed header and 3/4 precommits at height 1.
+		ph1 := mfx.Fx.NextProposedHeader([]byte("app_data_1"), 0)
+		mfx.Fx.SignProposal(ctx, &ph1, 0)
+		require.Equal(t, tmconsensus.HandleProposedHeaderAccepted, m.HandleProposedHeader(ctx, ph1))
+		keyHash, _ := mfx.Fx.ValidatorHashes()
+		voteMap := map[string][]int{
+			string(ph1.Header.Hash): {0, 1, 2},
+		}
+		precommitProof := tmconsensus.PrecommitSparseProof{
+			Height:     1,
+			Round:      0,
+			PubKeyHash: keyHash,
+			Proofs:     mfx.Fx.SparsePrecommitProofMap(ctx, 1, 0, voteMap),
+		}
+		require.Equal(t, tmconsensus.HandleVoteProofsAccepted, m.HandlePrecommitProofs(ctx, precommitProof))
+
+		// Now the mirror is ready for the proposed header at height 2.
+		// So, if we set the previous commit proof to include a double signature for validator 3,
+		// the mirror should reject the proposed header on account of the double signature.
+
+		mfx.Fx.CommitBlock(
+			ph1.Header, []byte("app_state_height_1"), 0,
+			mfx.Fx.PrecommitProofMap(ctx, 1, 0, voteMap),
+		)
+		ph2 := mfx.Fx.NextProposedHeader([]byte("app_data_2"), 1)
+
+		// Clip off the first precommit for ph1,
+		// which will cause there to only be 50% votes present.
+		t.Logf("%#v", ph2.Header.PrevCommitProof.Proofs)
+		ph2.Header.PrevCommitProof.Proofs[string(ph1.Header.Hash)] =
+			ph2.Header.PrevCommitProof.Proofs[string(ph1.Header.Hash)][1:]
+
+		mfx.Fx.RecalculateHash(&ph2.Header)
+		mfx.Fx.SignProposal(ctx, &ph2, 0)
+
+		require.Equal(t, tmconsensus.HandleProposedHeaderBadPrevCommitVoteCount, m.HandleProposedHeader(ctx, ph2))
+	})
+
 	t.Run("rejected when there is a double signature", func(t *testing.T) {
 		t.Parallel()
 
@@ -578,6 +628,10 @@ func TestMirror_HandleProposedHeader(t *testing.T) {
 		// So, if we set the previous commit proof to include a double signature for validator 3,
 		// the mirror should reject the proposed header on account of the double signature.
 
+		mfx.Fx.CommitBlock(
+			ph1.Header, []byte("app_state_height_1"), 0,
+			mfx.Fx.PrecommitProofMap(ctx, 1, 0, voteMap),
+		)
 		ph2 := mfx.Fx.NextProposedHeader([]byte("app_data_2"), 1)
 		voteMap[""] = []int{3}
 		precommitProof = tmconsensus.PrecommitSparseProof{
