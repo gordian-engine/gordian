@@ -49,12 +49,16 @@ const (
 	// Signature verification on the proposed header failed.
 	HandleProposedHeaderBadSignature
 
+	// ProposerPubKey field was not populated.
+	HandleProposedHeaderMissingProposerPubKey
+
 	// Something was wrong with the header's PrevCommitProof.
 	// It could be a validator pub key mismatch,
 	// an invalid signature in the proof,
 	// or an incorrect amount of votes (e.g. less than majority for the committing block).
 	HandleProposedHeaderBadPrevCommitProofPubKeyHash
 	HandleProposedHeaderBadPrevCommitProofSignature
+	HandleProposedHeaderBadPrevCommitProofDoubleSigned
 	HandleProposedHeaderBadPrevCommitVoteCount
 
 	// Proposed block had older height or round than our current view of the world.

@@ -134,6 +134,35 @@ type CommonMessageSignatureProofScheme interface {
 	// KeyIDChecker returns a KeyIDChecker that validates sparse signatures
 	// within the given set of public keys.
 	KeyIDChecker(keys []PubKey) KeyIDChecker
+
+	// Whether the proofs from a finalized previous commit proof
+	// can be merged in to unfinalized precommit votes.
+	//
+	// For aggregated signatures, this will most likely be false.
+	CanMergeFinalizedProofs() bool
+
+	// Finalize produces a FinalizedCommonMessageSignatureProof.
+	// It is assumed that the CommonMessageSignatureProof values
+	// are all of the same underlying type,
+	// and that those proofs all consider the same set of public keys.
+	// Implementations are expected to panic if those assumptions do not hold.
+	Finalize(primary CommonMessageSignatureProof, rest []CommonMessageSignatureProof) FinalizedCommonMessageSignatureProof
+
+	// ValidateFinalized returns a map whose keys are the block hashes that have signatures,
+	// and whose values are the bit sets representing the validators who signed for that hash.
+	//
+	// The FinalizedCommonMessageSignatureProof includes signing content,
+	// and the output is intended to be keyed by block hash,
+	// so the hashesBySignContent is the glue to get the output in the desired form.
+	//
+	// If there are any invalid signatures or other errors,
+	// allSignaturesUnique will be false and the map will be nil.
+	// If all the signatures were valid, the allSignaturesUnique return value
+	// will be true if every signature is unique,
+	// or false if any validator has double signed.
+	ValidateFinalizedProof(proof FinalizedCommonMessageSignatureProof, hashesBySignContent map[string]string) (
+		signBitsByHash map[string]*bitset.BitSet, allSignaturesUnique bool,
+	)
 }
 
 // KeyIDChecker reports whether a sparse signature's key ID
@@ -147,34 +176,36 @@ type KeyIDChecker interface {
 	IsValid(keyID []byte) bool
 }
 
-// LiteralCommonMessageSignatureProofScheme returns a CommonMessageSignatureProofScheme
-// from a literal function with a strongly typed return values.
+// FinalizedCommonMessageSignatureProof is a transformation of a set of signatures
+// into a set that is expected to never be modified again.
 //
-// This allows signature proof authors to follow the more common pattern
-// of returning the concrete types in their constructor functions,
-// without writing extra boilerplate to produce a corresponding scheme.
-func LiteralCommonMessageSignatureProofScheme[P CommonMessageSignatureProof](
-	newFn func([]byte, []PubKey, string) (P, error),
-	keyIDCheckerFn func([]PubKey) KeyIDChecker,
-) CommonMessageSignatureProofScheme {
-	return literalCommonMessageSignatureProofScheme{
-		newFn: func(msg []byte, candidateKeys []PubKey, pubKeyHash string) (CommonMessageSignatureProof, error) {
-			return newFn(msg, candidateKeys, pubKeyHash)
-		},
-		keyIDCheckerFn: keyIDCheckerFn,
-	}
-}
+// For non-aggregating signatures this may be identical to the original set,
+// but for aggregating signatures this is expected to aggregate
+// the keys and signatures into a single value per messsage.
+//
+// The FinalizedMessage field and the keys in the Rest map
+// are the actual content signed.
+// Translating from the message content to block hashes
+// is outside the scope of this package.
+type FinalizedCommonMessageSignatureProof struct {
+	Keys       []PubKey
+	PubKeyHash string
 
-type literalCommonMessageSignatureProofScheme struct {
-	newFn func([]byte, []PubKey, string) (CommonMessageSignatureProof, error)
+	// The message that the supermajority signed.
+	// This is not the block hash, but the signing content.
+	MainMessage []byte
+	// The set of sparse signatures representing the supermajority.
+	// Because this is a finalized signature,
+	// the key IDs may not be in the same format as unfinalized signatures.
+	MainSignatures []SparseSignature
 
-	keyIDCheckerFn func([]PubKey) KeyIDChecker
-}
-
-func (s literalCommonMessageSignatureProofScheme) New(msg []byte, candidateKeys []PubKey, pubKeyHash string) (CommonMessageSignatureProof, error) {
-	return s.newFn(msg, candidateKeys, pubKeyHash)
-}
-
-func (s literalCommonMessageSignatureProofScheme) KeyIDChecker(keys []PubKey) KeyIDChecker {
-	return s.keyIDCheckerFn(keys)
+	// Any signatures that were not in the supermajority,
+	// for example if there were any votes for nil or a different block hash.
+	// As in the case of the supermajority voted block,
+	// the key IDs may be in a different format compared to the unfinalized signatures.
+	// Also matching the pattern of the finalized message,
+	// the keys in this map are the actual messages used to validate the signatures.
+	//
+	// Rest may be nil if there were no votes for anything other than the supermajority block.
+	Rest map[string][]SparseSignature
 }

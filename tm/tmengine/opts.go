@@ -108,6 +108,7 @@ func WithSignatureScheme(s tmconsensus.SignatureScheme) Opt {
 	return func(e *Engine, smc *tmstate.StateMachineConfig) error {
 		e.sigScheme = s
 		e.mCfg.SignatureScheme = s
+		smc.SignatureScheme = s
 		return nil
 	}
 }
@@ -129,6 +130,7 @@ func WithCommonMessageSignatureProofScheme(s gcrypto.CommonMessageSignatureProof
 	return func(e *Engine, smc *tmstate.StateMachineConfig) error {
 		e.cmspScheme = s
 		e.mCfg.CommonMessageSignatureProofScheme = s
+		smc.CommonMessageSignatureProofScheme = s
 		return nil
 	}
 }

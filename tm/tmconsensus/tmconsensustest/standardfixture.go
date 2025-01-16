@@ -54,7 +54,7 @@ func NewStandardFixture(numVals int) *StandardFixture {
 
 		SignatureScheme: SimpleSignatureScheme{},
 
-		CommonMessageSignatureProofScheme: gcrypto.SimpleCommonMessageSignatureProofScheme,
+		CommonMessageSignatureProofScheme: gcrypto.SimpleCommonMessageSignatureProofScheme{},
 
 		HashScheme: SimpleHashScheme{},
 

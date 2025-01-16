@@ -10,6 +10,6 @@ import (
 func TestSimpleCommonMessageSignatureProof(t *testing.T) {
 	gcryptotest.TestCommonMessageSignatureProofCompliance_Ed25519(
 		t,
-		gcrypto.SimpleCommonMessageSignatureProofScheme,
+		gcrypto.SimpleCommonMessageSignatureProofScheme{},
 	)
 }

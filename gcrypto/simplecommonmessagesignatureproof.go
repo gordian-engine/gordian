@@ -10,15 +10,114 @@ import (
 	"github.com/bits-and-blooms/bitset"
 )
 
-// SimpleCommonMessageSignatureProofScheme is the scheme for a SimpleCommonMessageSignatureProof.
-var SimpleCommonMessageSignatureProofScheme CommonMessageSignatureProofScheme = LiteralCommonMessageSignatureProofScheme(
-	NewSimpleCommonMessageSignatureProof,
-	func(keys []PubKey) KeyIDChecker {
-		return beUint16KeyLenIDChecker{
-			nKeys: len(keys),
+// SimpleCommonMessageSignatureProofScheme satisfies [CommonMessageSignatureProofScheme],
+// using any basic non-aggregating signature proof type such as ed25519.
+type SimpleCommonMessageSignatureProofScheme struct{}
+
+func (SimpleCommonMessageSignatureProofScheme) New(
+	msg []byte, candidateKeys []PubKey, pubKeyHash string,
+) (CommonMessageSignatureProof, error) {
+	return NewSimpleCommonMessageSignatureProof(msg, candidateKeys, pubKeyHash)
+}
+
+func (SimpleCommonMessageSignatureProofScheme) KeyIDChecker(keys []PubKey) KeyIDChecker {
+	return beUint16KeyLenIDChecker{nKeys: len(keys)}
+}
+
+func (SimpleCommonMessageSignatureProofScheme) CanMergeFinalizedProofs() bool {
+	return true
+}
+
+func (SimpleCommonMessageSignatureProofScheme) Finalize(
+	main CommonMessageSignatureProof, rest []CommonMessageSignatureProof,
+) FinalizedCommonMessageSignatureProof {
+	m := main.(SimpleCommonMessageSignatureProof)
+
+	f := FinalizedCommonMessageSignatureProof{
+		Keys:       m.keys,
+		PubKeyHash: m.keyHash,
+
+		MainMessage:    m.msg,
+		MainSignatures: m.AsSparse().Signatures,
+	}
+
+	if len(rest) == 0 {
+		// Don't allocate a map if there are no other signatures.
+		return f
+	}
+
+	f.Rest = make(map[string][]SparseSignature, len(rest))
+	for _, r := range rest {
+		p := r.(SimpleCommonMessageSignatureProof)
+		f.Rest[string(p.msg)] = p.AsSparse().Signatures
+	}
+
+	return f
+}
+
+func (SimpleCommonMessageSignatureProofScheme) ValidateFinalizedProof(
+	proof FinalizedCommonMessageSignatureProof,
+	hashesBySignContent map[string]string,
+) (map[string]*bitset.BitSet, bool) {
+	// The main proof is unconditionally required.
+	tempProof, err := NewSimpleCommonMessageSignatureProof(proof.MainMessage, proof.Keys, proof.PubKeyHash)
+	if err != nil {
+		// Right now it is impossible for the constructor to return an error,
+		// but we are going to keep that error as part of the return signature
+		// in case returning an error ever does become possible.
+		//
+		// Unfortunately we are swallowing the error here.
+		// We could possibly change the scheme to accept a logger.
+		return nil, false
+	}
+
+	if res := tempProof.MergeSparse(SparseSignatureProof{
+		PubKeyHash: proof.PubKeyHash,
+		Signatures: proof.MainSignatures,
+	}); !res.AllValidSignatures {
+		return nil, false
+	}
+
+	out := make(map[string]*bitset.BitSet, len(proof.Rest)+1)
+
+	var bs bitset.BitSet
+	tempProof.SignatureBitSet(&bs)
+	out[hashesBySignContent[string(proof.MainMessage)]] = &bs
+
+	for msg, sigs := range proof.Rest {
+		tempProof, err := NewSimpleCommonMessageSignatureProof([]byte(msg), proof.Keys, proof.PubKeyHash)
+		if err != nil {
+			// Same caveats as the main case.
+			return nil, false
 		}
-	},
-)
+
+		if res := tempProof.MergeSparse(SparseSignatureProof{
+			PubKeyHash: proof.PubKeyHash,
+			Signatures: sigs,
+		}); !res.AllValidSignatures {
+			return nil, false
+		}
+
+		var bs bitset.BitSet
+		tempProof.SignatureBitSet(&bs)
+		out[hashesBySignContent[msg]] = &bs
+	}
+
+	// Now we need to check whether there were any double signatures.
+	var all, scratch bitset.BitSet
+	for _, bs := range out {
+		all.CopyFull(&scratch)
+		scratch.InPlaceIntersection(bs)
+		if scratch.Any() {
+			return out, false
+		}
+
+		// No double signatures so far, so continue updating all the bits we've seen.
+		all.InPlaceUnion(bs)
+	}
+
+	return out, true
+}
 
 // SimpleCommonMessageSignatureProof is the simplest signature proof,
 // which only tracks pairs of signatures and public keys.

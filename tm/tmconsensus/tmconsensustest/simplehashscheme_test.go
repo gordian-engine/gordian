@@ -8,5 +8,5 @@ import (
 )
 
 func TestSimpleHashScheme(t *testing.T) {
-	tmconsensustest.TestHashSchemeCompliance(t, tmconsensustest.SimpleHashScheme{}, gcrypto.SimpleCommonMessageSignatureProofScheme, nil)
+	tmconsensustest.TestHashSchemeCompliance(t, tmconsensustest.SimpleHashScheme{}, gcrypto.SimpleCommonMessageSignatureProofScheme{}, nil)
 }

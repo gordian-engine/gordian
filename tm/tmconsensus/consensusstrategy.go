@@ -6,7 +6,7 @@ import (
 )
 
 // Proposal is the data an application needs to provide,
-// for the engine to compose a [ProposedBlock].
+// for the engine to compose a [ProposedHeader].
 type Proposal struct {
 	// The ID of the data inside the block.
 	// This value will be used to set [Block.DataID].
