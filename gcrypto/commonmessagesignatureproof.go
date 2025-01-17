@@ -146,7 +146,7 @@ type CommonMessageSignatureProofScheme interface {
 	// are all of the same underlying type,
 	// and that those proofs all consider the same set of public keys.
 	// Implementations are expected to panic if those assumptions do not hold.
-	Finalize(primary CommonMessageSignatureProof, rest []CommonMessageSignatureProof) FinalizedCommonMessageSignatureProof
+	Finalize(main CommonMessageSignatureProof, rest []CommonMessageSignatureProof) FinalizedCommonMessageSignatureProof
 
 	// ValidateFinalized returns a map whose keys are the block hashes that have signatures,
 	// and whose values are the bit sets representing the validators who signed for that hash.

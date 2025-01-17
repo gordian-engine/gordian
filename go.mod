@@ -3,7 +3,7 @@ module github.com/gordian-engine/gordian
 go 1.23.2
 
 require (
-	github.com/bits-and-blooms/bitset v1.13.0
+	github.com/bits-and-blooms/bitset v1.20.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20240428194347-eebcea082ee0
 	github.com/gorilla/mux v1.8.1
 	github.com/klauspost/reedsolomon v1.12.4
