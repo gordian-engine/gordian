@@ -351,6 +351,54 @@ func TestTree_SparseIndices(t *testing.T) {
 	require.Equal(t, []int{6}, ids)
 }
 
+func TestTree_Finalized(t *testing.T) {
+	t.Parallel()
+
+	tree := sigtree.New(keysSeq(4), 4)
+
+	ctx := context.Background()
+	msg := []byte("hello")
+
+	// Tree layout:
+	//   0 1 2 3
+	//    4   5
+	//      6
+
+	// Add signature 0.
+	sig0Bytes, err := testSigners[0].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig0 := new(blst.P1Affine)
+	sig0 = sig0.Uncompress(sig0Bytes)
+	tree.AddSignature(0, *sig0)
+
+	// Add signature 1.
+	sig1Bytes, err := testSigners[1].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig1 := new(blst.P1Affine)
+	sig1 = sig1.Uncompress(sig1Bytes)
+	tree.AddSignature(1, *sig1)
+
+	// Add signature 3.
+	sig3Bytes, err := testSigners[3].Sign(ctx, msg)
+	require.NoError(t, err)
+	sig3 := new(blst.P1Affine)
+	sig3 = sig3.Uncompress(sig3Bytes)
+	tree.AddSignature(3, *sig3)
+
+	expKey := new(blst.P2).
+		Add((*blst.P2Affine)(&testPubKeys[0])).
+		Add((*blst.P2Affine)(&testPubKeys[1])).
+		Add((*blst.P2Affine)(&testPubKeys[3])).
+		ToAffine()
+	expSig := new(blst.P1).
+		Add(sig0).Add(sig1).Add(sig3).
+		ToAffine()
+
+	finKey, finSig := tree.Finalized()
+	require.True(t, expKey.Equals(&finKey))
+	require.True(t, expSig.Equals(&finSig))
+}
+
 func keysSeq(n int) iter.Seq[blst.P2Affine] {
 	return func(yield func(blst.P2Affine) bool) {
 		for _, pk := range testPubKeys[:n] {

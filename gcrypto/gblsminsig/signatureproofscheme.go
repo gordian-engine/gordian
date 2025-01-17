@@ -52,28 +52,44 @@ func (SignatureProofScheme) Finalize(
 ) gcrypto.FinalizedCommonMessageSignatureProof {
 	m := main.(SignatureProof)
 
-	// TODO: m.AsSparse does unnecessary work;
-	// we could add an unexported method specifically for this use case.
-	mainSigs := m.AsSparse().Signatures
-	_ = mainSigs
-
 	pubKeys := make([]gcrypto.PubKey, m.sigTree.NUnaggregatedKeys())
 	for i := range pubKeys {
 		k, _, _ := m.sigTree.Get(i)
 		pubKeys[i] = (*PubKey)(&k)
 	}
 
+	// Get the bit set representing the validators who voted for the committing block.
 	var bs bitset.BitSet
 	m.SignatureBitSet(&bs)
 
+	// Now get the combination index for that set of validators.
 	var mainIndex big.Int
 	getMainCombinationIndex(len(pubKeys), &bs, &mainIndex)
+
+	// Rely on integer division to simplify going from bits to whole bytes.
+	mainIndexByteSize := (mainIndex.BitLen() + 7) / 8
+
+	mainKeyID := make([]byte, 2+mainIndexByteSize)
+	binary.BigEndian.PutUint16(mainKeyID[:2], uint16(bs.Count()))
+	_ = mainIndex.FillBytes(mainKeyID[2:]) // Discard result since we pre-sized.
+
+	// TODO: if we aren't using the key here,
+	// then there should probably be a separate method
+	// to only get the finally aggregated signature.
+	_, mainSig := m.sigTree.Finalized()
 
 	f := gcrypto.FinalizedCommonMessageSignatureProof{
 		Keys:       pubKeys,
 		PubKeyHash: m.keyHash,
 
 		MainMessage: m.msg,
+
+		MainSignatures: []gcrypto.SparseSignature{
+			{
+				KeyID: mainKeyID,
+				Sig:   mainSig.Compress(),
+			},
+		},
 	}
 
 	if len(rest) == 0 {

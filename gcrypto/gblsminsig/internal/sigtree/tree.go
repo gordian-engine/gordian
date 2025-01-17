@@ -272,6 +272,7 @@ func (t Tree) SparseIndices(dst []int) []int {
 		curRowStart -= curRowWidth
 	}
 
+	// Finally, we are on the leaf row.
 	for i := range t.nKeys {
 		if skipCheck[i] {
 			continue
@@ -283,6 +284,81 @@ func (t Tree) SparseIndices(dst []int) []int {
 	}
 
 	return dst
+}
+
+// Finalized returns the aggregation of all the present signatures,
+// and the single aggregated key belonging to that aggregated signature.
+// It does not mutate the tree.
+func (t Tree) Finalized() (blst.P2Affine, blst.P1Affine) {
+	// We will follow the same structure as in SparseIndices,
+	// but we won't share that code since that produces a data structure we don't need.
+
+	if rootSig := t.sigs[len(t.sigs)-1]; rootSig != (blst.P1Affine{}) {
+		// We have the root signature, so we don't need to traverse anything.
+		return t.keys[len(t.keys)-1], t.sigs[len(t.sigs)-1]
+	}
+
+	accKey := new(blst.P2)
+	accSig := new(blst.P1)
+
+	curRowStart := len(t.sigs) - 3
+	curRowWidth := 2
+
+	// Track indices that we don't need to check,
+	// due to an ancestor having already been included in the output.
+	var skipCheck []bool
+	if t.nKeys&(t.nKeys-1) == 0 {
+		// Already a power of two, so just use that value directly.
+		skipCheck = make([]bool, t.nKeys)
+	} else {
+		skipCheck = make([]bool, 1<<(bits.Len16(uint16(t.nKeys))))
+	}
+
+	for curRowStart > 0 {
+		for i := curRowStart; i < curRowStart+curRowWidth; i++ {
+			if skipCheck[i-curRowStart] {
+				// We already included an ancestor of this index.
+				continue
+			}
+
+			// Do we have a signature for this node?
+			if t.sigs[i] == (blst.P1Affine{}) {
+				continue
+			}
+
+			// We do have a signature, and an ancestor didn't cover it.
+			// So aggregate the representative key and signature.
+			accKey = accKey.Add(&t.keys[i])
+			accSig = accSig.Add(&t.sigs[i])
+			skipCheck[i-curRowStart] = true
+		}
+
+		// "Double" the skip check.
+		for i := curRowWidth - 1; i >= 0; i-- {
+			skipCheck[2*i+1] = skipCheck[i]
+			skipCheck[2*i] = skipCheck[i]
+		}
+
+		curRowWidth *= 2
+		curRowStart -= curRowWidth
+	}
+
+	// Finally, we are on the leaf row.
+	for i := range t.nKeys {
+		if skipCheck[i] {
+			continue
+		}
+		if t.sigs[i] == (blst.P1Affine{}) {
+			continue
+		}
+
+		accKey = accKey.Add(&t.keys[i])
+		accSig = accSig.Add(&t.sigs[i])
+	}
+
+	keyAff := accKey.ToAffine()
+	sigAff := accSig.ToAffine()
+	return *keyAff, *sigAff
 }
 
 // ClearSignatures zeros every signature in the tree.
