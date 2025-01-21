@@ -9,6 +9,7 @@ import (
 
 	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
+	blst "github.com/supranational/blst/bindings/go"
 )
 
 type SignatureProofScheme struct{}
@@ -128,6 +129,76 @@ func getMainCombinationIndex(nKeys int, bs *bitset.BitSet, out *big.Int) {
 		prev = i
 		k--
 	}
+}
+
+func (SignatureProofScheme) ValidateFinalizedProof(
+	proof gcrypto.FinalizedCommonMessageSignatureProof,
+	hashesBySignContent map[string]string,
+) (
+	signBitsByHash map[string]*bitset.BitSet, allSignaturesUnique bool,
+) {
+	nKeys := len(proof.Keys)
+	keys := make([]*PubKey, nKeys)
+	for i, k := range proof.Keys {
+		// We are often using PubKey values,
+		// but we actually use a slice of pointers in Finalize,
+		// so follow that here.
+		keys[i] = k.(*PubKey)
+	}
+
+	// There is surely a better way we can use an existing sigTree for this.
+	// But for now, we are going to decode the combination index
+	// from the singular signature proof for the main block,
+	// in order to get the bit set of the main keys present;
+	// then we aggregate that set of main keys,
+	// so that we can verify the given signature.
+
+	if len(proof.MainSignatures) != 1 {
+		// We expect exactly one main signature.
+		return nil, false
+	}
+
+	mainKeyID := proof.MainSignatures[0].KeyID
+	if len(mainKeyID) < 3 {
+		// We need exactly two bytes for k,
+		// and at least one byte for the combination index.
+		return nil, false
+	}
+
+	k := int(binary.BigEndian.Uint16(mainKeyID[:2]))
+
+	var combIndex big.Int
+	combIndex.SetBytes(mainKeyID[2:])
+
+	var keyBS bitset.BitSet
+	indexToMainCombination(nKeys, k, &combIndex, &keyBS)
+
+	aggMainKey := new(blst.P2)
+	for u, ok := keyBS.NextSet(0); ok && int(u) < nKeys; u, ok = keyBS.NextSet(u + 1) {
+		i := int(u)
+		aggMainKey = aggMainKey.Add((*blst.P2Affine)(keys[i]))
+	}
+
+	finalizedMainKey := (*PubKey)(aggMainKey.ToAffine())
+	if !finalizedMainKey.Verify(proof.MainMessage, proof.MainSignatures[0].Sig) {
+		return nil, false
+	}
+
+	// Since the main proof checked out,
+	// optimistically size the outgoing map.
+	signBitsByHash = make(map[string]*bitset.BitSet, 1+len(proof.Rest))
+	mainHash, ok := hashesBySignContent[string(proof.MainMessage)]
+	if !ok {
+		panic(fmt.Errorf(
+			"BUG: missing main hash for sign content %x",
+			proof.MainMessage,
+		))
+	}
+	signBitsByHash[mainHash] = keyBS.Clone()
+
+	// TODO: handle all of proof.Rest.
+
+	return signBitsByHash, true
 }
 
 func indexToMainCombination(nKeys int, k int, combIndex *big.Int, out *bitset.BitSet) {

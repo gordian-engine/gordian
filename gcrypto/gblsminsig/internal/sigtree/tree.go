@@ -224,11 +224,13 @@ AGAIN:
 	goto AGAIN
 }
 
-func (t Tree) SparseIndices(dst []int) []int {
+func (t Tree) walkFromRoot(
+	handle func(isRoot bool, idx int, key blst.P2Affine, sig blst.P1Affine),
+) {
 	if rootSig := t.sigs[len(t.sigs)-1]; rootSig != (blst.P1Affine{}) {
-		// Special case where we have the root signature,
-		// so we don't need to traverse anything.
-		return append(dst, len(t.sigs)-1)
+		// When we have the root signature, we don't need to traverse anything.
+		handle(true, len(t.sigs)-1, t.keys[len(t.keys)-1], t.sigs[len(t.sigs)-1])
+		return
 	}
 
 	curRowStart := len(t.sigs) - 3
@@ -258,7 +260,7 @@ func (t Tree) SparseIndices(dst []int) []int {
 			}
 
 			// We do have a signature, and an ancestor didn't cover it.
-			dst = append(dst, i)
+			handle(false, i, t.keys[i], t.sigs[i])
 			skipCheck[i-curRowStart] = true
 		}
 
@@ -280,10 +282,25 @@ func (t Tree) SparseIndices(dst []int) []int {
 		if t.sigs[i] == (blst.P1Affine{}) {
 			continue
 		}
-		dst = append(dst, i)
+		handle(false, i, t.keys[i], t.sigs[i])
 	}
+}
 
+func (t Tree) SparseIndices(dst []int) []int {
+	t.walkFromRoot(func(_ bool, i int, _ blst.P2Affine, _ blst.P1Affine) {
+		dst = append(dst, i)
+	})
 	return dst
+}
+
+func (t Tree) FinalizedKey() (blst.P2Affine) {
+	accKey := new(blst.P2)
+	t.walkFromRoot(func(_ bool, _ int, k blst.P2Affine, _ blst.P1Affine) {
+		accKey.Add(&k)
+	})
+
+	aff := accKey.ToAffine()
+	return *aff
 }
 
 // Finalized returns the aggregation of all the present signatures,
