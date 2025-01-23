@@ -57,7 +57,7 @@ func TestMainCombinationRoundTrip(t *testing.T) {
 			t.Parallel()
 
 			var combIndex big.Int
-			getMainCombinationIndex(n, &bs, &combIndex)
+			getCombinationIndex(n, &bs, &combIndex)
 			t.Logf("combination index: %s", combIndex.String())
 
 			var got bitset.BitSet

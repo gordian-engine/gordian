@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/bits"
+	"slices"
 
 	"github.com/bits-and-blooms/bitset"
 	"github.com/gordian-engine/gordian/gcrypto"
@@ -60,19 +61,25 @@ func (SignatureProofScheme) Finalize(
 	}
 
 	// Get the bit set representing the validators who voted for the committing block.
-	var bs bitset.BitSet
-	m.SignatureBitSet(&bs)
+	// We reuse proofBits later in this function with the "rest" signatures.
+	var proofBits bitset.BitSet
+	m.SignatureBitSet(&proofBits)
 
 	// Now get the combination index for that set of validators.
-	var mainIndex big.Int
-	getMainCombinationIndex(len(pubKeys), &bs, &mainIndex)
+	// We reuse combIndex later too.
+	var combIndex big.Int
+	getCombinationIndex(len(pubKeys), &proofBits, &combIndex)
 
 	// Rely on integer division to simplify going from bits to whole bytes.
-	mainIndexByteSize := (mainIndex.BitLen() + 7) / 8
+	// Note that if the combIndex is zero
+	// (i.e. everyone voted for the committing block)
+	// that the bit length will be zero,
+	// and therefore no bytes will be used in populating the combination index.
+	mainIndexByteSize := (combIndex.BitLen() + 7) / 8
 
 	mainKeyID := make([]byte, 2+mainIndexByteSize)
-	binary.BigEndian.PutUint16(mainKeyID[:2], uint16(bs.Count()))
-	_ = mainIndex.FillBytes(mainKeyID[2:]) // Discard result since we pre-sized.
+	binary.BigEndian.PutUint16(mainKeyID[:2], uint16(proofBits.Count()))
+	_ = combIndex.FillBytes(mainKeyID[2:]) // Discard result since we pre-sized.
 
 	// TODO: if we aren't using the key here,
 	// then there should probably be a separate method
@@ -94,20 +101,72 @@ func (SignatureProofScheme) Finalize(
 	}
 
 	if len(rest) == 0 {
-		// Don't allocate a map if there are no other signatures.
+		// Don't allocate a map or do any other work
+		// if there are no other signatures.
 		return f
 	}
 
+	reducedKeys, projections := createReducedKeyUniverse(pubKeys, &proofBits)
+
 	f.Rest = make(map[string][]gcrypto.SparseSignature, len(rest))
-	for _, r := range rest {
+
+	var reducedBS bitset.BitSet
+
+	for _, r := range rest { // TODO: this iteration order needs to be deterministic.
 		p := r.(SignatureProof)
-		f.Rest[string(p.msg)] = p.AsSparse().Signatures
+
+		// proofBits was a scratch variable from earlier.
+		// After this call, proofBits holds the indices of the original keys
+		// represented in the current proof.
+		p.SignatureBitSet(&proofBits)
+
+		// Create bitset in reduced universe, reusing the reducedBS bit set.
+		reducedBS.ClearAll()
+		for u, ok := proofBits.NextSet(0); ok; u, ok = proofBits.NextSet(u + 1) {
+			idx, found := projections.FindReducedIndex(int(u))
+			if found {
+				reducedBS.Set(uint(idx))
+			} else {
+				// Since we are finalizing a proof that should already be validated,
+				// panicking here is appropriate.
+				// Anything wrong with the proofs should have been detected much earlier.
+				panic(fmt.Errorf(
+					"BUG: proof that signed %x said it represented original key at index %d, but that index was not part of the projection",
+					p.msg, u,
+				))
+			}
+		}
+
+		getCombinationIndex(len(reducedKeys), &reducedBS, &combIndex)
+
+		// Create key ID using same format as main.
+		// Rely on integer division to simplify going from bits to whole bytes.
+		// Again, if combIndex is zero, indexByteSize will be zero too.
+		indexByteSize := (combIndex.BitLen() + 7) / 8
+		restKeyID := make([]byte, 2+indexByteSize)
+		binary.BigEndian.PutUint16(restKeyID[:2], uint16(reducedBS.Count()))
+		_ = combIndex.FillBytes(restKeyID[2:]) // Discard result since we pre-sized.
+
+		// TODO: like above, we are generating and discarding the aggregated key.
+		_, restSig := p.sigTree.Finalized()
+
+		f.Rest[string(p.msg)] = []gcrypto.SparseSignature{
+			{
+				KeyID: restKeyID,
+				Sig:   restSig.Compress(),
+			},
+		}
 	}
 
 	return f
 }
 
-func getMainCombinationIndex(nKeys int, bs *bitset.BitSet, out *big.Int) {
+// getCombinationIndex writes the combination index to the out argument.
+// nKeys is the count of the input set of keys,
+// and bs indicates which indices in the input set are to be represented.
+// The out argument is an argument, not a return value,
+// so that we can reuse the underlying slices.
+func getCombinationIndex(nKeys int, bs *bitset.BitSet, out *big.Int) {
 	k := int(bs.Count())
 
 	out.SetUint64(0)
@@ -129,6 +188,61 @@ func getMainCombinationIndex(nKeys int, bs *bitset.BitSet, out *big.Int) {
 		prev = i
 		k--
 	}
+}
+
+// createReducedKeyUniverse accepts the original set of keys
+// and a bit set indicating which keys have already been used;
+// and it returns a new slice of the remaining keys,
+// and an originalProjection (which is a list of the indices
+// into the original keys).
+//
+// This function operates on slices of gcrypto.PubKey
+// because we are already dealing with a slice of that type in [(SignatureProofScheme).Finalize].
+func createReducedKeyUniverse(originalKeys []gcrypto.PubKey, usedKeysBitSet *bitset.BitSet) (
+	reducedKeys []gcrypto.PubKey,
+	p originalProjection,
+) {
+	sz := len(originalKeys) - int(usedKeysBitSet.Count())
+	reducedKeys = make([]gcrypto.PubKey, 0, sz)
+	p = make(originalProjection, 0, sz)
+
+	for i, k := range originalKeys {
+		if usedKeysBitSet.Test(uint(i)) {
+			continue
+		}
+
+		// The original key was not used, so add it to the reduced set.
+		p = append(p, i)
+		reducedKeys = append(reducedKeys, k)
+	}
+	return reducedKeys, p
+}
+
+// originalProjection is an ordered collection of original indices
+// to maintain a projection into the original set of public keys,
+// based on a reduced key set.
+//
+// For example, if there were ten original keys indexed 0-9,
+// and then the reduced key set took 0-5, and 8,
+// then the remaining slice would be [6, 7, 9].
+// The indices into the slice are the "reduced indices",
+// meaning the reduced index 0 corresponds to original index 6,
+// and reduced indices 1 and 2 correspond to original indices 7 and 9.
+type originalProjection []int
+
+// FindReducedIndex accepts the index within the original set,
+// and returns the value of the reduced index
+// and a boolean indicating whether the value was found.
+//
+// For example, if the projection contains [3, 5, 7]
+// then that indicates your reduced set of keys map to the original keys
+// at indices 3, 5, and 7.
+// In that case, FindReducedIndex(4) would return (-1, false)
+// because there is no reduced index for original index 4.
+// But FindReducedIndex(7) would return (2, true)
+// because the reduced set at index 2 maps to the original key at index 7.
+func (p originalProjection) FindReducedIndex(originalIdx int) (int, bool) {
+	return slices.BinarySearch(p, int(originalIdx))
 }
 
 func (SignatureProofScheme) ValidateFinalizedProof(
@@ -159,22 +273,26 @@ func (SignatureProofScheme) ValidateFinalizedProof(
 	}
 
 	mainKeyID := proof.MainSignatures[0].KeyID
-	if len(mainKeyID) < 3 {
-		// We need exactly two bytes for k,
-		// and at least one byte for the combination index.
+	if len(mainKeyID) < 2 {
+		// We need exactly two bytes for k.
+		// If the combination index was zero, there will be no bytes used.
 		return nil, false
 	}
 
 	k := int(binary.BigEndian.Uint16(mainKeyID[:2]))
+	if k > nKeys {
+		// Invalid/corrupted key.
+		return nil, false
+	}
 
 	var combIndex big.Int
 	combIndex.SetBytes(mainKeyID[2:])
 
-	var keyBS bitset.BitSet
-	indexToMainCombination(nKeys, k, &combIndex, &keyBS)
+	var usedKeyBits bitset.BitSet
+	indexToMainCombination(nKeys, k, &combIndex, &usedKeyBits)
 
 	aggMainKey := new(blst.P2)
-	for u, ok := keyBS.NextSet(0); ok && int(u) < nKeys; u, ok = keyBS.NextSet(u + 1) {
+	for u, ok := usedKeyBits.NextSet(0); ok && int(u) < nKeys; u, ok = usedKeyBits.NextSet(u + 1) {
 		i := int(u)
 		aggMainKey = aggMainKey.Add((*blst.P2Affine)(keys[i]))
 	}
@@ -194,9 +312,93 @@ func (SignatureProofScheme) ValidateFinalizedProof(
 			proof.MainMessage,
 		))
 	}
-	signBitsByHash[mainHash] = keyBS.Clone()
+	signBitsByHash[mainHash] = usedKeyBits.Clone()
 
-	// TODO: handle all of proof.Rest.
+	// Now we are on to validating the rest of the signatures.
+	// First we have to reduce the universe of keys to decode the rest.
+	reducedKeys, projections := createReducedKeyUniverse(proof.Keys, &usedKeyBits)
+
+	// Variables to reuse in the upcoming loop.
+	var (
+		// The bits into the reduced set of keys,
+		// that the current proof represents.
+		reducedProofBits bitset.BitSet
+
+		// The bits into the original set of keys,
+		// that the current proof represents.
+		originalProjectionBits bitset.BitSet
+	)
+
+	for msgContent, sigs := range proof.Rest { // TODO: deterministic ordering of this
+		if len(sigs) != 1 {
+			// Each rest entry should have exactly one signature,
+			// if it was finalized through the same scheme.
+			return nil, false
+		}
+
+		sig := sigs[0]
+		if len(sig.KeyID) < 2 {
+			// We need exactly two bytes for k.
+			// If the combination index was zero, there will be no bytes used.
+			return nil, false
+		}
+
+		k := int(binary.BigEndian.Uint16(sig.KeyID[:2]))
+
+		// Reusing combIndex from outside loop.
+		combIndex.SetBytes(sig.KeyID[2:])
+
+		// Determine the bits for this proof.
+		indexToMainCombination(len(reducedKeys), k, &combIndex, &reducedProofBits)
+
+		// Project back to original universe and check for duplicates.
+		for u, ok := reducedProofBits.NextSet(0); ok; u, ok = reducedProofBits.NextSet(u + 1) {
+			// Find the original index for this reduced index.
+			pIdx := int(u)
+			if pIdx >= len(projections) {
+				panic(errors.New("BUG: lost original index"))
+			}
+			oIdx := uint(projections[pIdx])
+
+			if usedKeyBits.Test(oIdx) {
+				// Duplicate signature.
+				return signBitsByHash, false
+			}
+
+			// Mark the index of the original key as used for this proof.
+			originalProjectionBits.Set(oIdx)
+
+			// That bit is used now, so just set it while we're here.
+			usedKeyBits.Set(oIdx)
+		}
+
+		// Aggregate the keys by using indices into the original set.
+		aggKey := new(blst.P2)
+		for u, ok := originalProjectionBits.NextSet(0); ok; u, ok = originalProjectionBits.NextSet(u + 1) {
+			i := int(u)
+			aggKey = aggKey.Add((*blst.P2Affine)(keys[i]))
+		}
+
+		// And verify that the signature matches the aggregated key.
+		finalizedKey := (*PubKey)(aggKey.ToAffine())
+		if !finalizedKey.Verify([]byte(msgContent), sig.Sig) {
+			return nil, false
+		}
+
+		// It was valid, so add it to the output.
+		hash, ok := hashesBySignContent[msgContent]
+		if !ok {
+			panic(fmt.Errorf("BUG: missing hash for sign content %x", msgContent))
+		}
+
+		// We always clone this because we know the size to use now
+		// and we are reusing the local value anyway.
+		signBitsByHash[hash] = originalProjectionBits.Clone()
+
+		// The used key bits were updated in the projection loop.
+		// Update our reduced keys and projections.
+		reducedKeys, projections = createReducedKeyUniverse(proof.Keys, &usedKeyBits)
+	}
 
 	return signBitsByHash, true
 }
@@ -237,7 +439,7 @@ func indexToMainCombination(nKeys int, k int, combIndex *big.Int, out *bitset.Bi
 
 func binomialCoefficient(n, k int, out *big.Int) {
 	if k > n {
-		panic(fmt.Errorf("BUG: k(%d) > n(%d)", k, n))
+		panic(fmt.Errorf("BUG: k(%d) > n(%d): caller needs to prevent this case", k, n))
 	}
 
 	if k == 0 || k == n {

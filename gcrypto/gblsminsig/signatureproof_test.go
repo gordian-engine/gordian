@@ -11,7 +11,7 @@ import (
 )
 
 // TODO: this is copied in sigtree_test.go too.
-// Extract a gblsminsig package instead.
+// Extract a gblsminsigtest package instead.
 var (
 	testSigners [16]gblsminsig.Signer
 	testPubKeys [16]gblsminsig.PubKey
