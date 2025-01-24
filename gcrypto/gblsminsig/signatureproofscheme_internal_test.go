@@ -57,11 +57,11 @@ func TestMainCombinationRoundTrip(t *testing.T) {
 			t.Parallel()
 
 			var combIndex big.Int
-			getCombinationIndex(n, &bs, &combIndex)
+			calculateCombinationIndex(n, &bs, &combIndex)
 			t.Logf("combination index: %s", combIndex.String())
 
 			var got bitset.BitSet
-			indexToMainCombination(n, int(k), &combIndex, &got)
+			decodeCombinationIndex(n, int(k), &combIndex, &got)
 
 			// Equal has some ostensibly odd semantics, so dump the string if equality fails.
 			require.Truef(t, got.Equal(&bs), "got bitset %s, differed from original bitset %s", got.String(), bs.String())
