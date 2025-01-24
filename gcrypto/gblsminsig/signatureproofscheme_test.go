@@ -12,7 +12,7 @@ import (
 	blst "github.com/supranational/blst/bindings/go"
 )
 
-func TestFinalize_mainOnly_roundTrip(t *testing.T) {
+func TestFinalize_partialMainOnly_roundTrip(t *testing.T) {
 	t.Parallel()
 
 	s := gblsminsig.SignatureProofScheme{}
@@ -90,12 +90,12 @@ func TestFinalize_mainOnly_roundTrip(t *testing.T) {
 
 	// If we modify the key combination, then the calculated key will differ,
 	// so validation should fail.
-	finCopy := fin
+	finCopy := gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
 	finCopy.MainSignatures[0].KeyID = bytes.Clone(fin.MainSignatures[0].KeyID)
 	finCopy.MainSignatures[0].KeyID[2]++
 
 	signBits, unique = s.ValidateFinalizedProof(
-		fin,
+		finCopy,
 		map[string]string{
 			string(fin.MainMessage): string(msg),
 		},
@@ -105,12 +105,12 @@ func TestFinalize_mainOnly_roundTrip(t *testing.T) {
 	require.Nil(t, signBits)
 
 	// Likewise, if we modify the signature, validation also fails.
-	finCopy = fin
+	finCopy = gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
 	finCopy.MainSignatures[0].Sig = bytes.Clone(fin.MainSignatures[0].Sig)
 	finCopy.MainSignatures[0].Sig[0]++
 
 	signBits, unique = s.ValidateFinalizedProof(
-		fin,
+		finCopy,
 		map[string]string{
 			string(fin.MainMessage): string(msg),
 		},
@@ -120,7 +120,113 @@ func TestFinalize_mainOnly_roundTrip(t *testing.T) {
 	require.Nil(t, signBits)
 }
 
-func TestFinalize_singleRest_roundTrip(t *testing.T) {
+func TestFinalize_fullMain_roundTrip(t *testing.T) {
+	t.Parallel()
+
+	s := gblsminsig.SignatureProofScheme{}
+
+	msg := []byte("main message")
+	proof, err := s.New(
+		msg,
+		testPubKeys[:4],
+		"ignored_hash",
+	)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	sig0, err := testSigners[0].Sign(ctx, msg)
+	require.NoError(t, err)
+
+	sig1, err := testSigners[1].Sign(ctx, msg)
+	require.NoError(t, err)
+
+	sig2, err := testSigners[2].Sign(ctx, msg)
+	require.NoError(t, err)
+
+	sig3, err := testSigners[3].Sign(ctx, msg)
+	require.NoError(t, err)
+
+	require.NoError(t, proof.AddSignature(sig0, testPubKeys[0]))
+	require.NoError(t, proof.AddSignature(sig1, testPubKeys[1]))
+	require.NoError(t, proof.AddSignature(sig2, testPubKeys[2]))
+	require.NoError(t, proof.AddSignature(sig3, testPubKeys[3]))
+
+	fin := s.Finalize(proof, nil)
+
+	require.Len(t, fin.Keys, 4)
+	require.Equal(t, "ignored_hash", fin.PubKeyHash)
+
+	require.Equal(t, msg, fin.MainMessage)
+	require.Len(t, fin.MainSignatures, 1)
+
+	// Rest is nil if all present votes were in favor of the block.
+	require.Nil(t, fin.Rest)
+
+	// Aggregate the key manually and make sure it matches.
+	aggP2 := new(blst.P2).Add(
+		(*blst.P2Affine)(&testPubKeys[0]),
+	).Add(
+		(*blst.P2Affine)(&testPubKeys[1]),
+	).Add(
+		(*blst.P2Affine)(&testPubKeys[2]),
+	).Add(
+		(*blst.P2Affine)(&testPubKeys[3]),
+	).ToAffine()
+	aggKey := gblsminsig.PubKey(*aggP2)
+
+	require.True(t, aggKey.Verify(msg, fin.MainSignatures[0].Sig))
+
+	// And we need to validate it through the scheme too.
+	signBits, unique := s.ValidateFinalizedProof(
+		fin,
+		map[string]string{
+			string(fin.MainMessage): string(msg),
+		},
+	)
+
+	require.True(t, unique)
+	require.Len(t, signBits, 1)
+	bs := signBits[string(msg)]
+	require.NotNil(t, bs)
+	require.Equal(t, uint(4), bs.Count())
+
+	require.True(t, bs.Test(0))
+	require.True(t, bs.Test(1))
+	require.True(t, bs.Test(2))
+	require.True(t, bs.Test(3))
+
+	// We can't modify the combination index because it is supposed to be empty.
+	finCopy := gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
+	finCopy.MainSignatures[0].KeyID[1]++
+
+	signBits, unique = s.ValidateFinalizedProof(
+		finCopy,
+		map[string]string{
+			string(fin.MainMessage): string(msg),
+		},
+	)
+
+	require.False(t, unique)
+	require.Nil(t, signBits)
+
+	// Likewise, if we modify the signature, validation also fails.
+	finCopy = gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
+	finCopy.MainSignatures[0].Sig = bytes.Clone(fin.MainSignatures[0].Sig)
+	finCopy.MainSignatures[0].Sig[0]++
+
+	signBits, unique = s.ValidateFinalizedProof(
+		finCopy,
+		map[string]string{
+			string(fin.MainMessage): string(msg),
+		},
+	)
+
+	require.False(t, unique)
+	require.Nil(t, signBits)
+}
+
+func TestFinalize_singleRestPartial_roundTrip(t *testing.T) {
 	t.Parallel()
 
 	s := gblsminsig.SignatureProofScheme{}
@@ -226,6 +332,138 @@ func TestFinalize_singleRest_roundTrip(t *testing.T) {
 	require.True(t, restBS.Test(2))
 	require.True(t, restBS.Test(4))
 	require.True(t, restBS.Test(7))
+
+	// Then if we modify some of the bits in the finalization,
+	// validating it should fail.
+
+	// Change main signature.
+	finCopy := gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
+	finCopy.MainSignatures[0].Sig[0]++
+	signBitsByHash, unique = s.ValidateFinalizedProof(finCopy, messageMap)
+	require.False(t, unique)
+	require.Nil(t, signBitsByHash)
+
+	// Change main key ID.
+	finCopy = gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
+	finCopy.MainSignatures[0].KeyID[0]++
+	signBitsByHash, unique = s.ValidateFinalizedProof(finCopy, messageMap)
+	require.False(t, unique)
+	require.Nil(t, signBitsByHash)
+
+	// Change rest signature.
+	finCopy = gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
+	finCopy.Rest[string(nilMsg)][0].Sig[0]++
+	signBitsByHash, unique = s.ValidateFinalizedProof(finCopy, messageMap)
+	require.False(t, unique)
+	require.Nil(t, signBitsByHash)
+
+	// Change rest key ID.
+	finCopy = gcryptotest.CloneFinalizedCommonMessageSignatureProof(fin)
+	finCopy.Rest[string(nilMsg)][0].KeyID[1]++
+	signBitsByHash, unique = s.ValidateFinalizedProof(finCopy, messageMap)
+	require.False(t, unique)
+	require.Nil(t, signBitsByHash)
+}
+
+func TestFinalize_singleRestFull_roundTrip(t *testing.T) {
+	t.Parallel()
+
+	s := gblsminsig.SignatureProofScheme{}
+
+	mainMsg := []byte("main sign content")
+	mainProof, err := s.New(mainMsg, testPubKeys[:6], "pub_key_hash")
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	sig0, err := testSigners[0].Sign(ctx, mainMsg)
+	require.NoError(t, err)
+
+	sig1, err := testSigners[1].Sign(ctx, mainMsg)
+	require.NoError(t, err)
+
+	sig4, err := testSigners[4].Sign(ctx, mainMsg)
+	require.NoError(t, err)
+
+	require.NoError(t, mainProof.AddSignature(sig0, testPubKeys[0]))
+	require.NoError(t, mainProof.AddSignature(sig1, testPubKeys[1]))
+	require.NoError(t, mainProof.AddSignature(sig4, testPubKeys[4]))
+
+	// Doesn't really matter if the vote is for nil or another block,
+	// but we will say this is for nil anyway.
+	nilMsg := []byte("nil sign content")
+	nilProof, err := s.New(nilMsg, testPubKeys[:6], "pub_key_hash")
+	require.NoError(t, err)
+
+	sig2, err := testSigners[2].Sign(ctx, nilMsg)
+	require.NoError(t, err)
+
+	sig3, err := testSigners[3].Sign(ctx, nilMsg)
+	require.NoError(t, err)
+
+	sig5, err := testSigners[5].Sign(ctx, nilMsg)
+	require.NoError(t, err)
+
+	require.NoError(t, nilProof.AddSignature(sig2, testPubKeys[2]))
+	require.NoError(t, nilProof.AddSignature(sig3, testPubKeys[3]))
+	require.NoError(t, nilProof.AddSignature(sig5, testPubKeys[5]))
+
+	fin := s.Finalize(mainProof, []gcrypto.CommonMessageSignatureProof{nilProof})
+
+	require.Len(t, fin.Keys, 6)
+	require.Equal(t, "pub_key_hash", fin.PubKeyHash)
+
+	require.Equal(t, mainMsg, fin.MainMessage)
+	require.Len(t, fin.MainSignatures, 1)
+
+	require.Len(t, fin.Rest, 1)                 // One entry in the map.
+	require.Len(t, fin.Rest[string(nilMsg)], 1) // One sparse signature entry.
+
+	// Aggregate the main key manually and make sure it matches.
+	aggP2 := new(blst.P2).Add(
+		(*blst.P2Affine)(&testPubKeys[0]),
+	).Add(
+		(*blst.P2Affine)(&testPubKeys[1]),
+	).Add(
+		(*blst.P2Affine)(&testPubKeys[4]),
+	).ToAffine()
+	mainAggKey := gblsminsig.PubKey(*aggP2)
+
+	require.True(t, mainAggKey.Verify(mainMsg, fin.MainSignatures[0].Sig))
+
+	// Also aggregate the key for the nil votes.
+	aggP2 = new(blst.P2).Add(
+		(*blst.P2Affine)(&testPubKeys[2]),
+	).Add(
+		(*blst.P2Affine)(&testPubKeys[3]),
+	).Add(
+		(*blst.P2Affine)(&testPubKeys[5]),
+	).ToAffine()
+	nilAggKey := gblsminsig.PubKey(*aggP2)
+
+	require.True(t, nilAggKey.Verify(nilMsg, fin.Rest[string(nilMsg)][0].Sig))
+
+	// And we need to validate it through the scheme too.
+	messageMap := map[string]string{
+		string(fin.MainMessage): "main hash",
+		string(nilMsg):          "",
+	}
+	signBitsByHash, unique := s.ValidateFinalizedProof(fin, messageMap)
+
+	require.True(t, unique)
+	require.Len(t, signBitsByHash, 2)
+
+	mainBS := signBitsByHash["main hash"]
+	require.Equal(t, uint(3), mainBS.Count())
+	require.True(t, mainBS.Test(0))
+	require.True(t, mainBS.Test(1))
+	require.True(t, mainBS.Test(4))
+
+	restBS := signBitsByHash[""]
+	require.Equal(t, uint(3), restBS.Count())
+	require.True(t, restBS.Test(2))
+	require.True(t, restBS.Test(3))
+	require.True(t, restBS.Test(5))
 
 	// Then if we modify some of the bits in the finalization,
 	// validating it should fail.
@@ -438,7 +676,3 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 	require.False(t, unique)
 	require.Nil(t, signBitsByHash)
 }
-
-// TODO:
-//   - Test just main signature, 100% voted.
-//   - Test partial main signature with 100% rest on nil.

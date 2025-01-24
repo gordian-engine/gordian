@@ -405,6 +405,10 @@ func (SignatureProofScheme) ValidateFinalizedProof(
 		// First get the reduced key set.
 		reducedKeys, projections = createKeyProjection(proof.Keys, &usedOriginalBits)
 		// Then determine the bit set mapping this combination index into the reduced key set.
+		if k > len(reducedKeys) {
+			// Corrupt/invalid key ID.
+			return nil, false
+		}
 		decodeCombinationIndex(len(reducedKeys), k, &combIndex, &reducedProofBits)
 
 		// Project back to original key set and check for duplicates.
