@@ -1,6 +1,7 @@
 package sigtree
 
 import (
+	"errors"
 	"fmt"
 	"iter"
 	"math"
@@ -293,7 +294,7 @@ func (t Tree) SparseIndices(dst []int) []int {
 	return dst
 }
 
-func (t Tree) FinalizedKey() (blst.P2Affine) {
+func (t Tree) FinalizedKey() blst.P2Affine {
 	accKey := new(blst.P2)
 	t.walkFromRoot(func(_ bool, _ int, k blst.P2Affine, _ blst.P1Affine) {
 		accKey.Add(&k)
@@ -303,20 +304,43 @@ func (t Tree) FinalizedKey() (blst.P2Affine) {
 	return *aff
 }
 
-// Finalized returns the aggregation of all the present signatures,
-// and the single aggregated key belonging to that aggregated signature.
-// It does not mutate the tree.
-func (t Tree) Finalized() (blst.P2Affine, blst.P1Affine) {
+// Finalized sets the input pointers to the finalized aggregation
+// of the keys and signatures respectively,
+// where a key is only aggregated if it has a non-zero signature,
+// and only non-zero signatures are aggregated.
+//
+// If either argument is nil, then that value is not aggregated internally.
+func (t Tree) Finalized(dstKey *blst.P2Affine, dstSig *blst.P1Affine) {
+	if dstKey == nil && dstSig == nil {
+		panic(errors.New(
+			"BUG: do not call Finalized with both arguments nil",
+		))
+	}
+
 	// We will follow the same structure as in SparseIndices,
 	// but we won't share that code since that produces a data structure we don't need.
 
 	if rootSig := t.sigs[len(t.sigs)-1]; rootSig != (blst.P1Affine{}) {
 		// We have the root signature, so we don't need to traverse anything.
-		return t.keys[len(t.keys)-1], t.sigs[len(t.sigs)-1]
+		if dstKey != nil {
+			*dstKey = t.keys[len(t.keys)-1]
+		}
+		if dstSig != nil {
+			*dstSig = t.sigs[len(t.sigs)-1]
+		}
+
+		return
 	}
 
-	accKey := new(blst.P2)
-	accSig := new(blst.P1)
+	var accKey *blst.P2
+	var accSig *blst.P1
+
+	if dstKey != nil {
+		accKey = new(blst.P2)
+	}
+	if dstSig != nil {
+		accSig = new(blst.P1)
+	}
 
 	curRowStart := len(t.sigs) - 3
 	curRowWidth := 2
@@ -345,8 +369,12 @@ func (t Tree) Finalized() (blst.P2Affine, blst.P1Affine) {
 
 			// We do have a signature, and an ancestor didn't cover it.
 			// So aggregate the representative key and signature.
-			accKey = accKey.Add(&t.keys[i])
-			accSig = accSig.Add(&t.sigs[i])
+			if accKey != nil {
+				accKey = accKey.Add(&t.keys[i])
+			}
+			if accSig != nil {
+				accSig = accSig.Add(&t.sigs[i])
+			}
 			skipCheck[i-curRowStart] = true
 		}
 
@@ -369,13 +397,22 @@ func (t Tree) Finalized() (blst.P2Affine, blst.P1Affine) {
 			continue
 		}
 
-		accKey = accKey.Add(&t.keys[i])
-		accSig = accSig.Add(&t.sigs[i])
+		if accKey != nil {
+			accKey = accKey.Add(&t.keys[i])
+		}
+		if accSig != nil {
+			accSig = accSig.Add(&t.sigs[i])
+		}
 	}
 
-	keyAff := accKey.ToAffine()
-	sigAff := accSig.ToAffine()
-	return *keyAff, *sigAff
+	if accKey != nil {
+		keyAff := accKey.ToAffine()
+		*dstKey = *keyAff
+	}
+	if accSig != nil {
+		sigAff := accSig.ToAffine()
+		*dstSig = *sigAff
+	}
 }
 
 // ClearSignatures zeros every signature in the tree.

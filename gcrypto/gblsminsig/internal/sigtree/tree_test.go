@@ -394,7 +394,9 @@ func TestTree_Finalized(t *testing.T) {
 		Add(sig0).Add(sig1).Add(sig3).
 		ToAffine()
 
-	finKey, finSig := tree.Finalized()
+	var finKey blst.P2Affine
+	var finSig blst.P1Affine
+	tree.Finalized(&finKey, &finSig)
 	require.True(t, expKey.Equals(&finKey))
 	require.True(t, expSig.Equals(&finSig))
 }
