@@ -22,6 +22,7 @@ import (
 )
 
 // Engine is the entrypoint to a working consensus engine.
+// Use [New] to create a new Engine.
 type Engine struct {
 	log *slog.Logger
 
@@ -46,6 +47,9 @@ type Engine struct {
 	watchdog *gwatchdog.Watchdog
 }
 
+// New returns an initialized engine.
+// There are many required option values;
+// New provides detailed errors indicating whether any required options are missing.
 func New(ctx context.Context, log *slog.Logger, opts ...Opt) (*Engine, error) {
 	// These channels must be unbuffered so that all communication is synchronized.
 	smViewCh := make(chan tmeil.StateMachineRoundView)
@@ -140,6 +144,8 @@ func New(ctx context.Context, log *slog.Logger, opts ...Opt) (*Engine, error) {
 	return e, nil
 }
 
+// Wait blocks until the Engine has completely shut down.
+// To begin a shutdown, the context value passed to [New] must be canceled.
 func (e *Engine) Wait() {
 	// For the subsystems, these will typically be non-nil,
 	// but they may be nil if there was a failure during NewEngine.

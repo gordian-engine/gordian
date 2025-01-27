@@ -15,7 +15,7 @@ import (
 // and when the engine is shutting down it will call the strategy's Wait method.
 type Strategy interface {
 	// Start provides the channel of NetworkViewUpdate for the strategy to begin running.
-	// It is an error to call Start more than once.
+	// It is incorrect to call Start more than once.
 	Start(updates <-chan tmelink.NetworkViewUpdate)
 
 	// Wait blocks until the strategy is finished.

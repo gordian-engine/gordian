@@ -6,6 +6,8 @@ import (
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
+// FinalizationStore stores and retrieves the block finalizations
+// that the local validator has computed.
 type FinalizationStore interface {
 	SaveFinalization(
 		ctx context.Context,
