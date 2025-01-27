@@ -385,20 +385,20 @@ func TestTree_Finalized(t *testing.T) {
 	sig3 = sig3.Uncompress(sig3Bytes)
 	tree.AddSignature(3, *sig3)
 
+	expSig := new(blst.P1).
+		Add(sig0).Add(sig1).Add(sig3).
+		ToAffine()
+
+	finSig := tree.FinalizedSig()
+	require.True(t, expSig.Equals(&finSig))
+
 	expKey := new(blst.P2).
 		Add((*blst.P2Affine)(&testPubKeys[0])).
 		Add((*blst.P2Affine)(&testPubKeys[1])).
 		Add((*blst.P2Affine)(&testPubKeys[3])).
 		ToAffine()
-	expSig := new(blst.P1).
-		Add(sig0).Add(sig1).Add(sig3).
-		ToAffine()
 
-	var finKey blst.P2Affine
-	var finSig blst.P1Affine
-	tree.Finalized(&finKey, &finSig)
-	require.True(t, expKey.Equals(&finKey))
-	require.True(t, expSig.Equals(&finSig))
+	require.True(t, ((gblsminsig.PubKey)(*expKey)).Verify(msg, finSig.Compress()))
 }
 
 func keysSeq(n int) iter.Seq[blst.P2Affine] {

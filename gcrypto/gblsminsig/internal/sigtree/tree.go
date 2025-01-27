@@ -1,7 +1,6 @@
 package sigtree
 
 import (
-	"errors"
 	"fmt"
 	"iter"
 	"math"
@@ -294,125 +293,17 @@ func (t Tree) SparseIndices(dst []int) []int {
 	return dst
 }
 
-func (t Tree) FinalizedKey() blst.P2Affine {
-	accKey := new(blst.P2)
-	t.walkFromRoot(func(_ bool, _ int, k blst.P2Affine, _ blst.P1Affine) {
-		accKey.Add(&k)
+// Return the finalized signature represented in the tree,
+// by doing a final aggregation across all non-zero signatures
+// without regard to tree structure.
+func (t Tree) FinalizedSig() blst.P1Affine {
+	accSig := new(blst.P1)
+	t.walkFromRoot(func(_ bool, i int, _ blst.P2Affine, s blst.P1Affine) {
+		accSig = accSig.Add(&s)
 	})
 
-	aff := accKey.ToAffine()
+	aff := accSig.ToAffine()
 	return *aff
-}
-
-// Finalized sets the input pointers to the finalized aggregation
-// of the keys and signatures respectively,
-// where a key is only aggregated if it has a non-zero signature,
-// and only non-zero signatures are aggregated.
-//
-// If either argument is nil, then that value is not aggregated internally.
-func (t Tree) Finalized(dstKey *blst.P2Affine, dstSig *blst.P1Affine) {
-	if dstKey == nil && dstSig == nil {
-		panic(errors.New(
-			"BUG: do not call Finalized with both arguments nil",
-		))
-	}
-
-	// We will follow the same structure as in SparseIndices,
-	// but we won't share that code since that produces a data structure we don't need.
-
-	if rootSig := t.sigs[len(t.sigs)-1]; rootSig != (blst.P1Affine{}) {
-		// We have the root signature, so we don't need to traverse anything.
-		if dstKey != nil {
-			*dstKey = t.keys[len(t.keys)-1]
-		}
-		if dstSig != nil {
-			*dstSig = t.sigs[len(t.sigs)-1]
-		}
-
-		return
-	}
-
-	var accKey *blst.P2
-	var accSig *blst.P1
-
-	if dstKey != nil {
-		accKey = new(blst.P2)
-	}
-	if dstSig != nil {
-		accSig = new(blst.P1)
-	}
-
-	curRowStart := len(t.sigs) - 3
-	curRowWidth := 2
-
-	// Track indices that we don't need to check,
-	// due to an ancestor having already been included in the output.
-	var skipCheck []bool
-	if t.nKeys&(t.nKeys-1) == 0 {
-		// Already a power of two, so just use that value directly.
-		skipCheck = make([]bool, t.nKeys)
-	} else {
-		skipCheck = make([]bool, 1<<(bits.Len16(uint16(t.nKeys))))
-	}
-
-	for curRowStart > 0 {
-		for i := curRowStart; i < curRowStart+curRowWidth; i++ {
-			if skipCheck[i-curRowStart] {
-				// We already included an ancestor of this index.
-				continue
-			}
-
-			// Do we have a signature for this node?
-			if t.sigs[i] == (blst.P1Affine{}) {
-				continue
-			}
-
-			// We do have a signature, and an ancestor didn't cover it.
-			// So aggregate the representative key and signature.
-			if accKey != nil {
-				accKey = accKey.Add(&t.keys[i])
-			}
-			if accSig != nil {
-				accSig = accSig.Add(&t.sigs[i])
-			}
-			skipCheck[i-curRowStart] = true
-		}
-
-		// "Double" the skip check.
-		for i := curRowWidth - 1; i >= 0; i-- {
-			skipCheck[2*i+1] = skipCheck[i]
-			skipCheck[2*i] = skipCheck[i]
-		}
-
-		curRowWidth *= 2
-		curRowStart -= curRowWidth
-	}
-
-	// Finally, we are on the leaf row.
-	for i := range t.nKeys {
-		if skipCheck[i] {
-			continue
-		}
-		if t.sigs[i] == (blst.P1Affine{}) {
-			continue
-		}
-
-		if accKey != nil {
-			accKey = accKey.Add(&t.keys[i])
-		}
-		if accSig != nil {
-			accSig = accSig.Add(&t.sigs[i])
-		}
-	}
-
-	if accKey != nil {
-		keyAff := accKey.ToAffine()
-		*dstKey = *keyAff
-	}
-	if accSig != nil {
-		sigAff := accSig.ToAffine()
-		*dstSig = *sigAff
-	}
 }
 
 // ClearSignatures zeros every signature in the tree.

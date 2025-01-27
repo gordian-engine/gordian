@@ -84,8 +84,7 @@ func (SignatureProofScheme) Finalize(
 	binary.BigEndian.PutUint16(mainKeyID[:2], uint16(presentVoteBits.Count()))
 	_ = combIndex.FillBytes(mainKeyID[2:]) // Discard result since we pre-sized.
 
-	var mainSig blst.P1Affine
-	m.sigTree.Finalized(nil, &mainSig)
+	mainSig := m.sigTree.FinalizedSig()
 
 	f := gcrypto.FinalizedCommonMessageSignatureProof{
 		Keys:       pubKeys,
@@ -161,8 +160,7 @@ func (SignatureProofScheme) Finalize(
 		binary.BigEndian.PutUint16(restKeyID[:2], uint16(reducedBits.Count()))
 		_ = combIndex.FillBytes(restKeyID[2:]) // Discard result since we pre-sized.
 
-		var restSig blst.P1Affine
-		p.sigTree.Finalized(nil, &restSig)
+		restSig := p.sigTree.FinalizedSig()
 
 		f.Rest[string(p.msg)] = []gcrypto.SparseSignature{
 			{
