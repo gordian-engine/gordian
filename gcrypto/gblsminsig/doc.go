@@ -12,6 +12,9 @@
 // [RFC9380] (Hashing to Elliptic Curves)
 // and the IETF draft for [BLS Signatures].
 //
+// See the [SignatureProofScheme] docs for a detailed explanation
+// of how this package aggregates keys and signatures.
+//
 // [RFC9380]: https://www.rfc-editor.org/rfc/rfc9380.html
 // [BLS Signatures]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05
 package gblsminsig

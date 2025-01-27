@@ -224,11 +224,30 @@ AGAIN:
 	goto AGAIN
 }
 
-func (t Tree) SparseIndices(dst []int) []int {
+// walkFromRoot walks the tree from the root to the leaves,
+// calling the handle callback a minimal number of times
+// for any node where the signature is non-zero.
+// For example, given a tree structure like:
+//
+//	0 1 2 3
+//	 4   5
+//	   6
+//
+// If there were signatures set for leaves 0 and 1 but not 2 or 3,
+// then handle would be called only once for index 4.
+// The isRoot parameter is only set to true if called on the root node,
+// e.g. 6 in the above layout.
+//
+// It may be important to recall that [(*Tree).AddSignature]
+// does automatic aggregation, so adding the signatures at 0 and 1
+// would automatically set the aggregation for index 4 in this example.
+func (t Tree) walkFromRoot(
+	handle func(isRoot bool, idx int, key blst.P2Affine, sig blst.P1Affine),
+) {
 	if rootSig := t.sigs[len(t.sigs)-1]; rootSig != (blst.P1Affine{}) {
-		// Special case where we have the root signature,
-		// so we don't need to traverse anything.
-		return append(dst, len(t.sigs)-1)
+		// When we have the root signature, we don't need to traverse anything.
+		handle(true, len(t.sigs)-1, t.keys[len(t.keys)-1], t.sigs[len(t.sigs)-1])
+		return
 	}
 
 	curRowStart := len(t.sigs) - 3
@@ -258,7 +277,7 @@ func (t Tree) SparseIndices(dst []int) []int {
 			}
 
 			// We do have a signature, and an ancestor didn't cover it.
-			dst = append(dst, i)
+			handle(false, i, t.keys[i], t.sigs[i])
 			skipCheck[i-curRowStart] = true
 		}
 
@@ -272,6 +291,7 @@ func (t Tree) SparseIndices(dst []int) []int {
 		curRowStart -= curRowWidth
 	}
 
+	// Finally, we are on the leaf row.
 	for i := range t.nKeys {
 		if skipCheck[i] {
 			continue
@@ -279,10 +299,30 @@ func (t Tree) SparseIndices(dst []int) []int {
 		if t.sigs[i] == (blst.P1Affine{}) {
 			continue
 		}
-		dst = append(dst, i)
+		handle(false, i, t.keys[i], t.sigs[i])
 	}
+}
 
+// SparseIndices appends to dst the index of each
+// minimally-aggregated non-zero signature.
+func (t Tree) SparseIndices(dst []int) []int {
+	t.walkFromRoot(func(_ bool, i int, _ blst.P2Affine, _ blst.P1Affine) {
+		dst = append(dst, i)
+	})
 	return dst
+}
+
+// Return the finalized signature represented in the tree,
+// by doing a final aggregation across all non-zero signatures
+// without regard to tree structure.
+func (t Tree) FinalizedSig() blst.P1Affine {
+	accSig := new(blst.P1)
+	t.walkFromRoot(func(_ bool, i int, _ blst.P2Affine, s blst.P1Affine) {
+		accSig = accSig.Add(&s)
+	})
+
+	aff := accSig.ToAffine()
+	return *aff
 }
 
 // ClearSignatures zeros every signature in the tree.
@@ -291,11 +331,17 @@ func (t Tree) ClearSignatures() {
 	clear(t.sigs)
 }
 
+// Clone returns a new Tree with cloned signatures.
 func (t Tree) Clone() Tree {
 	return Tree{
+		keys: t.keys,
+
 		// Keys are immutable,
 		// sigs are not.
-		keys: t.keys,
+		// I am about 90% sure that slices.Clone works as intended here,
+		// because the underlying blst.P1Affine type
+		// should be represented as a fixed-size C array,
+		// which should be copied by value.
 		sigs: slices.Clone(t.sigs),
 
 		SigBits: t.SigBits.Clone(),
@@ -304,6 +350,8 @@ func (t Tree) Clone() Tree {
 	}
 }
 
+// Derive returns a new Tree with the same keys
+// but with a new, empty set of signatures.
 func (t Tree) Derive() Tree {
 	return Tree{
 		// Keys are immutable.

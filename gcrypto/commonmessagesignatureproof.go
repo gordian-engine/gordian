@@ -12,7 +12,7 @@ import (
 // This is intended primarily for checking validator signatures,
 // when validators are each signing an identical message.
 type CommonMessageSignatureProof interface {
-	// Message is the value being signed in this proof.
+	// Message is the actual signing content being signed in this proof.
 	// It is assumed that one proof contains signatures representing one or many public keys,
 	// all for the same message.
 	//
@@ -146,7 +146,9 @@ type CommonMessageSignatureProofScheme interface {
 	// are all of the same underlying type,
 	// and that those proofs all consider the same set of public keys.
 	// Implementations are expected to panic if those assumptions do not hold.
-	Finalize(primary CommonMessageSignatureProof, rest []CommonMessageSignatureProof) FinalizedCommonMessageSignatureProof
+	//
+	// The caller should also assume that the scheme takes ownership of the rest slice.
+	Finalize(main CommonMessageSignatureProof, rest []CommonMessageSignatureProof) FinalizedCommonMessageSignatureProof
 
 	// ValidateFinalized returns a map whose keys are the block hashes that have signatures,
 	// and whose values are the bit sets representing the validators who signed for that hash.
