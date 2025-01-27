@@ -224,6 +224,23 @@ AGAIN:
 	goto AGAIN
 }
 
+// walkFromRoot walks the tree from the root to the leaves,
+// calling the handle callback a minimal number of times
+// for any node where the signature is non-zero.
+// For example, given a tree structure like:
+//
+//	0 1 2 3
+//	 4   5
+//	   6
+//
+// If there were signatures set for leaves 0 and 1 but not 2 or 3,
+// then handle would be called only once for index 4.
+// The isRoot parameter is only set to true if called on the root node,
+// e.g. 6 in the above layout.
+//
+// It may be important to recall that [(*Tree).AddSignature]
+// does automatic aggregation, so adding the signatures at 0 and 1
+// would automatically set the aggregation for index 4 in this example.
 func (t Tree) walkFromRoot(
 	handle func(isRoot bool, idx int, key blst.P2Affine, sig blst.P1Affine),
 ) {
@@ -286,6 +303,8 @@ func (t Tree) walkFromRoot(
 	}
 }
 
+// SparseIndices appends to dst the index of each
+// minimally-aggregated non-zero signature.
 func (t Tree) SparseIndices(dst []int) []int {
 	t.walkFromRoot(func(_ bool, i int, _ blst.P2Affine, _ blst.P1Affine) {
 		dst = append(dst, i)
@@ -312,11 +331,17 @@ func (t Tree) ClearSignatures() {
 	clear(t.sigs)
 }
 
+// Clone returns a new Tree with cloned signatures.
 func (t Tree) Clone() Tree {
 	return Tree{
+		keys: t.keys,
+
 		// Keys are immutable,
 		// sigs are not.
-		keys: t.keys,
+		// I am about 90% sure that slices.Clone works as intended here,
+		// because the underlying blst.P1Affine type
+		// should be represented as a fixed-size C array,
+		// which should be copied by value.
 		sigs: slices.Clone(t.sigs),
 
 		SigBits: t.SigBits.Clone(),
@@ -325,6 +350,8 @@ func (t Tree) Clone() Tree {
 	}
 }
 
+// Derive returns a new Tree with the same keys
+// but with a new, empty set of signatures.
 func (t Tree) Derive() Tree {
 	return Tree{
 		// Keys are immutable.
