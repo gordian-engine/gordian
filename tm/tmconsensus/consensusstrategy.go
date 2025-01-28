@@ -68,7 +68,7 @@ type ConsensusStrategy interface {
 	// The empty string indicates a prevote for nil.
 	//
 	// If the consensus strategy wants to wait longer before making a selection,
-	// it must return ErrProposedBlockChoiceNotReady.
+	// it must return [ErrProposedBlockChoiceNotReady].
 	// Any other error is fatal.
 	ConsiderProposedBlocks(
 		ctx context.Context,

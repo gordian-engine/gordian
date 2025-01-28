@@ -23,7 +23,7 @@ import (
 type Fixture struct {
 	Log *slog.Logger
 
-	Fx *tmconsensustest.StandardFixture
+	Fx *tmconsensustest.Fixture
 
 	// Exposed on the fixture explicitly as the MockConsensusStrategy type.
 	CStrat *tmconsensustest.MockConsensusStrategy
@@ -41,7 +41,7 @@ type Fixture struct {
 }
 
 func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
-	fx := tmconsensustest.NewStandardFixture(nVals)
+	fx := tmconsensustest.NewEd25519Fixture(nVals)
 
 	cStrat := tmconsensustest.NewMockConsensusStrategy()
 

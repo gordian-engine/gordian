@@ -140,8 +140,8 @@ func expectStep(t *testing.T, want, got tsi.Step) {
 	require.Equalf(t, want, got, "expected %q but got %q", want, got)
 }
 
-func makeRV(nVals int) (*tmconsensustest.StandardFixture, tmconsensus.RoundView) {
-	fx := tmconsensustest.NewStandardFixture(nVals)
+func makeRV(nVals int) (*tmconsensustest.Fixture, tmconsensus.RoundView) {
+	fx := tmconsensustest.NewEd25519Fixture(nVals)
 
 	rv := tmconsensus.RoundView{
 		Height: 1,

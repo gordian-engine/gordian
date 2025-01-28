@@ -21,7 +21,7 @@ import (
 type Fixture struct {
 	Log *slog.Logger
 
-	Fx *tmconsensustest.StandardFixture
+	Fx *tmconsensustest.Fixture
 
 	ConsensusStrategy *tmconsensustest.MockConsensusStrategy
 	GossipStrategy    *tmgossiptest.PassThroughStrategy
@@ -45,7 +45,7 @@ type Fixture struct {
 }
 
 func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
-	fx := tmconsensustest.NewStandardFixture(nVals)
+	fx := tmconsensustest.NewEd25519Fixture(nVals)
 
 	log := gtest.NewLogger(t)
 

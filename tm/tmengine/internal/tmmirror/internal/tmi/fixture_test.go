@@ -23,7 +23,7 @@ import (
 type KernelFixture struct {
 	Log *slog.Logger
 
-	Fx *tmconsensustest.StandardFixture
+	Fx *tmconsensustest.Fixture
 
 	// These channels are bidirectional in the fixture,
 	// because they are write-only in the config.
@@ -49,7 +49,7 @@ type KernelFixture struct {
 }
 
 func NewKernelFixture(ctx context.Context, t *testing.T, nVals int) *KernelFixture {
-	fx := tmconsensustest.NewStandardFixture(nVals)
+	fx := tmconsensustest.NewEd25519Fixture(nVals)
 
 	// Unbuffered because the kernel needs to know exactly what was received.
 	rhi := make(chan tmelink.ReplayedHeaderRequest)

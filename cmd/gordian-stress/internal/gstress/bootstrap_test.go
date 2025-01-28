@@ -99,7 +99,7 @@ func TestBootstrap_registerValidator(t *testing.T) {
 	c := bfx.NewBootstrapClient()
 
 	// Registering a validator once succeeds.
-	v := tmconsensustest.DeterministicValidatorsEd25519(1)[0].CVal
+	v := tmconsensustest.DeterministicValidatorsEd25519(1)[0].Val
 	require.NoError(t, c.RegisterValidator(v))
 
 	// Attempting again will cause a panic on one of the bootstrap host goroutines,

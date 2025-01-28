@@ -1648,7 +1648,7 @@ func TestMirror_proposedBlockOutOfBounds(t *testing.T) {
 
 	// And now let's make a fake proposed header multiple heights in the future,
 	// from a different fixture altogether so the voting hashes and validators differ.
-	ffx := tmconsensustest.NewStandardFixture(5)
+	ffx := tmconsensustest.NewEd25519Fixture(5)
 	for i := 0; i < 10; i++ {
 		ph := ffx.NextProposedHeader([]byte("ignore"), 4)
 

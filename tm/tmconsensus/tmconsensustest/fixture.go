@@ -10,31 +10,25 @@ import (
 	"github.com/gordian-engine/gordian/tm/tmstore/tmmemstore"
 )
 
-// StandardFixture is a set of values used for typical test flows
+// Fixture is a set of values used for typical test flows
 // involving validators and voting,
 // with some convenience methods for common test actions.
 //
-// It is named StandardFixture with the expectation that there will be
-// some non-standard fixtures later.
-type StandardFixture struct {
-	PrivVals PrivValsEd25519
+// Most Gordian core tests will use the [NewEd25519Fixture] method.
+// This type is uncoupled from any particular concrete implementations
+// in order to facilitate tests with external signer types.
+type Fixture struct {
+	PrivVals PrivVals
 
-	// The signature scheme to use when constructing signatures.
-	// May be safely reassigned before using the fixture.
 	SignatureScheme tmconsensus.SignatureScheme
 
-	// The hash scheme to use when calculating hashes.
-	// May be safely reassigned before using the fixture.
 	HashScheme tmconsensus.HashScheme
 
-	// How to construct signature proofs.
-	// May be safely reassigned before using the fixture.
 	CommonMessageSignatureProofScheme gcrypto.CommonMessageSignatureProofScheme
 
-	// Chain genesis value.
-	// Set on a call to DefaultGenesis, or can be manually set
-	// before a call to NextProposedHeader.
 	Genesis tmconsensus.Genesis
+
+	Registry gcrypto.Registry
 
 	prevCommitProof  tmconsensus.CommitProof
 	prevAppStateHash []byte
@@ -42,50 +36,22 @@ type StandardFixture struct {
 	prevBlockHeight  uint64
 }
 
-// NewStandardFixture returns an initialized StandardFixture
-// with the given number of determinstic ed25519 validators,
-// a [SimpleSignatureScheme], and a [SimpleHashScheme].
-//
-// See the StandardFixture docs for other fields that
-// may be set to default values but which may be overridden before use.
-func NewStandardFixture(numVals int) *StandardFixture {
-	return &StandardFixture{
-		PrivVals: DeterministicValidatorsEd25519(numVals),
-
-		SignatureScheme: SimpleSignatureScheme{},
-
-		CommonMessageSignatureProofScheme: gcrypto.SimpleCommonMessageSignatureProofScheme{},
-
-		HashScheme: SimpleHashScheme{},
-
-		prevCommitProof: tmconsensus.CommitProof{
-			// This map is expected to be empty, not nil, for the initial height.
-			// TODO: why though? the stores return nil proofs when looking up the initial height,
-			// and things appear to work fine that way.
-			// And the nil-empty mismatch clutters up a lot of tests.
-			Proofs: map[string][]gcrypto.SparseSignature{},
-		},
-
-		prevAppStateHash: []byte("uninitialized"),
-	}
+func (f *Fixture) Vals() []tmconsensus.Validator {
+	// NOTE: the StandardFixture used to sort the validators,
+	// but based on how the deterministic validators were generated,
+	// that should not have still been necessary.
+	return f.PrivVals.Vals()
 }
 
-// Vals returns the sorted list of f's Validators.
-func (f *StandardFixture) Vals() []tmconsensus.Validator {
-	vals := f.PrivVals.Vals()
-	tmconsensus.SortValidators(vals)
-	return vals
-}
-
-func (f *StandardFixture) ValSet() tmconsensus.ValidatorSet {
-	vs, err := tmconsensus.NewValidatorSet(f.Vals(), f.HashScheme)
+func (f *Fixture) ValSet() tmconsensus.ValidatorSet {
+	vs, err := tmconsensus.NewValidatorSet(f.PrivVals.Vals(), f.HashScheme)
 	if err != nil {
 		panic(fmt.Errorf("error building new validator set: %w", err))
 	}
 	return vs
 }
 
-func (f *StandardFixture) ValidatorHashes() (pubKeyHash, powHash string) {
+func (f *Fixture) ValidatorHashes() (pubKeyHash, powHash string) {
 	vals := f.Vals()
 	pubKeys := tmconsensus.ValidatorsToPubKeys(vals)
 	bPubKeyHash, err := f.HashScheme.PubKeys(pubKeys)
@@ -101,16 +67,14 @@ func (f *StandardFixture) ValidatorHashes() (pubKeyHash, powHash string) {
 	return string(bPubKeyHash), string(bPowHash)
 }
 
-func (f *StandardFixture) NewMemActionStore() *tmmemstore.ActionStore {
-	return tmmemstore.NewActionStore()
-}
+// Skipped: NewMemActionStore
 
-func (f *StandardFixture) NewMemValidatorStore() *tmmemstore.ValidatorStore {
+func (f *Fixture) NewMemValidatorStore() *tmmemstore.ValidatorStore {
 	return tmmemstore.NewValidatorStore(f.HashScheme)
 }
 
 // DefaultGenesis returns a simple genesis suitable for basic tests.
-func (f *StandardFixture) DefaultGenesis() tmconsensus.Genesis {
+func (f *Fixture) DefaultGenesis() tmconsensus.Genesis {
 	g := tmconsensus.Genesis{
 		ChainID: "my-chain",
 
@@ -125,7 +89,7 @@ func (f *StandardFixture) DefaultGenesis() tmconsensus.Genesis {
 	if len(f.prevBlockHash) == 0 {
 		h, err := g.Header(f.HashScheme)
 		if err != nil {
-			panic(fmt.Errorf("(*StandardFixture).DefaultGenesis: error calling (Genesis).Header: %w", err))
+			panic(fmt.Errorf("(*Fixture).DefaultGenesis: error calling (Genesis).Header: %w", err))
 		}
 
 		f.prevBlockHash = h.Hash
@@ -145,7 +109,7 @@ func (f *StandardFixture) DefaultGenesis() tmconsensus.Genesis {
 // Both Validators and NextValidators are set to f.Vals().
 // These and other fields may be overridden,
 // in which case you should call f.RecalculateHash and f.SignProposal again.
-func (f *StandardFixture) NextProposedHeader(appDataID []byte, valIdx int) tmconsensus.ProposedHeader {
+func (f *Fixture) NextProposedHeader(appDataID []byte, valIdx int) tmconsensus.ProposedHeader {
 	vs := f.ValSet()
 
 	h := tmconsensus.Header{
@@ -171,7 +135,7 @@ func (f *StandardFixture) NextProposedHeader(appDataID []byte, valIdx int) tmcon
 // SignProposal sets the signature on the proposed header ph,
 // using the validator at f.PrivVals[valIdx].
 // On error, SignProposal panics.
-func (f *StandardFixture) SignProposal(ctx context.Context, ph *tmconsensus.ProposedHeader, valIdx int) {
+func (f *Fixture) SignProposal(ctx context.Context, ph *tmconsensus.ProposedHeader, valIdx int) {
 	v := f.PrivVals[valIdx]
 
 	b, err := tmconsensus.ProposalSignBytes(ph.Header, ph.Round, ph.Annotations, f.SignatureScheme)
@@ -184,13 +148,13 @@ func (f *StandardFixture) SignProposal(ctx context.Context, ph *tmconsensus.Prop
 		panic(fmt.Errorf("failed to sign proposal: %w", err))
 	}
 
-	ph.ProposerPubKey = v.CVal.PubKey
+	ph.ProposerPubKey = v.Val.PubKey
 }
 
 // PrevoteSignature returns the signature for the validator at valIdx
 // against the given vote target,
 // respecting vt.BlockHash in deciding whether the vote is active or nil.
-func (f *StandardFixture) PrevoteSignature(
+func (f *Fixture) PrevoteSignature(
 	ctx context.Context,
 	vt tmconsensus.VoteTarget,
 	valIdx int,
@@ -201,7 +165,7 @@ func (f *StandardFixture) PrevoteSignature(
 // PrecommitSignature returns the signature for the validator at valIdx
 // against the given vote target,
 // respecting vt.BlockHash in deciding whether the vote is active or nil.
-func (f *StandardFixture) PrecommitSignature(
+func (f *Fixture) PrecommitSignature(
 	ctx context.Context,
 	vt tmconsensus.VoteTarget,
 	valIdx int,
@@ -209,7 +173,7 @@ func (f *StandardFixture) PrecommitSignature(
 	return f.voteSignature(ctx, vt, valIdx, tmconsensus.PrecommitSignBytes)
 }
 
-func (f *StandardFixture) voteSignature(
+func (f *Fixture) voteSignature(
 	ctx context.Context,
 	vt tmconsensus.VoteTarget,
 	valIdx int,
@@ -236,7 +200,7 @@ func (f *StandardFixture) voteSignature(
 //
 // valIdxs is the set of indices of f's Validators, whose signatures should be part of the proof.
 // These indices refer to f's Validators, and are not necessarily related to blockVals.
-func (f *StandardFixture) PrevoteSignatureProof(
+func (f *Fixture) PrevoteSignatureProof(
 	ctx context.Context,
 	vt tmconsensus.VoteTarget,
 	blockVals []tmconsensus.Validator, // If nil, use f's validators.
@@ -284,7 +248,7 @@ func (f *StandardFixture) PrevoteSignatureProof(
 //
 // valIdxs is the set of indices of f's Validators, whose signatures should be part of the proof.
 // These indices refer to f's Validators, and are not necessarily related to blockVals.
-func (f *StandardFixture) PrecommitSignatureProof(
+func (f *Fixture) PrecommitSignatureProof(
 	ctx context.Context,
 	vt tmconsensus.VoteTarget,
 	blockVals []tmconsensus.Validator, // If nil, use f's validators.
@@ -326,7 +290,7 @@ func (f *StandardFixture) PrecommitSignatureProof(
 
 // PrevoteProofMap creates a map of prevote signatures that can be passed
 // directly to [tmstore.ConsensusStore.OverwritePrevoteProof].
-func (f *StandardFixture) PrevoteProofMap(
+func (f *Fixture) PrevoteProofMap(
 	ctx context.Context,
 	height uint64,
 	round uint32,
@@ -354,7 +318,7 @@ func (f *StandardFixture) PrevoteProofMap(
 
 // SparsePrevoteProofMap returns a map of block hashes to sparse signature lists,
 // which can be used to populate a PrevoteSparseProof.
-func (f *StandardFixture) SparsePrevoteProofMap(
+func (f *Fixture) SparsePrevoteProofMap(
 	ctx context.Context,
 	height uint64,
 	round uint32,
@@ -369,7 +333,7 @@ func (f *StandardFixture) SparsePrevoteProofMap(
 	return out
 }
 
-func (f *StandardFixture) SparsePrevoteSignatureCollection(
+func (f *Fixture) SparsePrevoteSignatureCollection(
 	ctx context.Context,
 	height uint64,
 	round uint32,
@@ -395,7 +359,7 @@ func (f *StandardFixture) SparsePrevoteSignatureCollection(
 
 // PrecommitProofMap creates a map of precommit signatures that can be passed
 // directly to [tmstore.ConsensusStore.OverwritePrecommitProof].
-func (f *StandardFixture) PrecommitProofMap(
+func (f *Fixture) PrecommitProofMap(
 	ctx context.Context,
 	height uint64,
 	round uint32,
@@ -423,7 +387,7 @@ func (f *StandardFixture) PrecommitProofMap(
 
 // SparsePrecommitProofMap returns a map of block hashes to sparse signature lists,
 // which can be used to populate a CommitProof.
-func (f *StandardFixture) SparsePrecommitProofMap(
+func (f *Fixture) SparsePrecommitProofMap(
 	ctx context.Context,
 	height uint64,
 	round uint32,
@@ -438,7 +402,7 @@ func (f *StandardFixture) SparsePrecommitProofMap(
 	return out
 }
 
-func (f *StandardFixture) SparsePrecommitSignatureCollection(
+func (f *Fixture) SparsePrecommitSignatureCollection(
 	ctx context.Context,
 	height uint64,
 	round uint32,
@@ -465,7 +429,7 @@ func (f *StandardFixture) SparsePrecommitSignatureCollection(
 // CommitBlock uses the input arguments to set up the next call to NextProposedHeader.
 // The commit parameter is the set of precommits to associate with the block being committed,
 // which will then be used as the previous commit details.
-func (f *StandardFixture) CommitBlock(h tmconsensus.Header, appStateHash []byte, round uint32, commit map[string]gcrypto.CommonMessageSignatureProof) {
+func (f *Fixture) CommitBlock(h tmconsensus.Header, appStateHash []byte, round uint32, commit map[string]gcrypto.CommonMessageSignatureProof) {
 	if len(commit) == 0 {
 		panic(fmt.Errorf("BUG: cannot commit block with empty commit data"))
 	}
@@ -491,18 +455,18 @@ func (f *StandardFixture) CommitBlock(h tmconsensus.Header, appStateHash []byte,
 	f.prevCommitProof = p
 }
 
-func (f *StandardFixture) ValidatorPubKey(idx int) gcrypto.PubKey {
-	return f.PrivVals[idx].CVal.PubKey
+func (f *Fixture) ValidatorPubKey(idx int) gcrypto.PubKey {
+	return f.PrivVals[idx].Val.PubKey
 }
 
-func (f *StandardFixture) ValidatorPubKeyString(idx int) string {
+func (f *Fixture) ValidatorPubKeyString(idx int) string {
 	return string(f.ValidatorPubKey(idx).PubKeyBytes())
 }
 
 // RecalculateHash modifies h.Hash using f.HashScheme.
 // This is useful if a block is modified by hand for any reason.
 // If calculating the hash results in an error, this method panics.
-func (f *StandardFixture) RecalculateHash(h *tmconsensus.Header) {
+func (f *Fixture) RecalculateHash(h *tmconsensus.Header) {
 	newHash, err := f.HashScheme.Block(*h)
 	if err != nil {
 		panic(fmt.Errorf("failed to calculate block hash: %w", err))
@@ -513,7 +477,7 @@ func (f *StandardFixture) RecalculateHash(h *tmconsensus.Header) {
 
 // UpdateVRVPrevotes returns a clone of vrv, with its version incremented and with all its prevote information
 // updated to match the provided voteMap (which is a map of block hashes to voting validator indices).
-func (f *StandardFixture) UpdateVRVPrevotes(
+func (f *Fixture) UpdateVRVPrevotes(
 	ctx context.Context,
 	vrv tmconsensus.VersionedRoundView,
 	voteMap map[string][]int,
@@ -538,7 +502,7 @@ func (f *StandardFixture) UpdateVRVPrevotes(
 
 // UpdateVRVPrecommits returns a clone of vrv, with its version incremented and with all its precommit information
 // updated to match the provided voteMap (which is a map of block hashes to voting validator indices).
-func (f *StandardFixture) UpdateVRVPrecommits(
+func (f *Fixture) UpdateVRVPrecommits(
 	ctx context.Context,
 	vrv tmconsensus.VersionedRoundView,
 	voteMap map[string][]int,

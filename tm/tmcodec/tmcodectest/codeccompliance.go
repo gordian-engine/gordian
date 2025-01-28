@@ -36,7 +36,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 					t.Parallel()
 
 					const curVals = 4
-					fx := tmconsensustest.NewStandardFixture(curVals)
+					fx := tmconsensustest.NewEd25519Fixture(curVals)
 					getPH := func() (tmconsensus.ProposedHeader, tmconsensus.Header) {
 						ph := fx.NextProposedHeader([]byte("app_data"), 0)
 
@@ -193,7 +193,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 					t.Run("committed header", func(t *testing.T) {
 						ph, _ := getPH()
 
-						fx := tmconsensustest.NewStandardFixture(curVals)
+						fx := tmconsensustest.NewEd25519Fixture(curVals)
 						voteMap := map[string][]int{
 							string(ph.Header.Hash): {0, 1, 2},
 							"":                     {3}, // Include another vote that isn't for the block.
@@ -221,7 +221,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 				t.Run("determinism", func(t *testing.T) {
 					t.Parallel()
 
-					fx := tmconsensustest.NewStandardFixture(8)
+					fx := tmconsensustest.NewEd25519Fixture(8)
 
 					ph := fx.NextProposedHeader([]byte("app_data"), 0)
 					fx.SignProposal(ctx, &ph, 0)
@@ -270,7 +270,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 		t.Run("round trip", func(t *testing.T) {
 			t.Parallel()
 
-			fx := tmconsensustest.NewStandardFixture(8)
+			fx := tmconsensustest.NewEd25519Fixture(8)
 
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)
 
@@ -297,7 +297,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 		t.Run("determinism", func(t *testing.T) {
 			t.Parallel()
 
-			fx := tmconsensustest.NewStandardFixture(8)
+			fx := tmconsensustest.NewEd25519Fixture(8)
 
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)
 
@@ -328,7 +328,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 		t.Run("round trip", func(t *testing.T) {
 			t.Parallel()
 
-			fx := tmconsensustest.NewStandardFixture(8)
+			fx := tmconsensustest.NewEd25519Fixture(8)
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)
 
 			vt := tmconsensus.VoteTarget{Height: 1, Round: 0, BlockHash: string(ph.Header.Hash)}
@@ -354,7 +354,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 		t.Run("determinism", func(t *testing.T) {
 			t.Parallel()
 
-			fx := tmconsensustest.NewStandardFixture(8)
+			fx := tmconsensustest.NewEd25519Fixture(8)
 
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)
 
@@ -389,7 +389,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 			{
 				name: "with proposed header",
 				populate: func(m *tmcodec.ConsensusMessage) {
-					fx := tmconsensustest.NewStandardFixture(3)
+					fx := tmconsensustest.NewEd25519Fixture(3)
 
 					ph := fx.NextProposedHeader([]byte("app_data"), 0)
 					fx.SignProposal(ctx, &ph, 0)
@@ -400,7 +400,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 			{
 				name: "with prevote proof",
 				populate: func(m *tmcodec.ConsensusMessage) {
-					fx := tmconsensustest.NewStandardFixture(8)
+					fx := tmconsensustest.NewEd25519Fixture(8)
 
 					ph := fx.NextProposedHeader([]byte("app_data"), 0)
 
@@ -420,7 +420,7 @@ func TestMarshalCodecCompliance(t *testing.T, mcf MarshalCodecFactory) {
 			{
 				name: "with precommit proof",
 				populate: func(m *tmcodec.ConsensusMessage) {
-					fx := tmconsensustest.NewStandardFixture(8)
+					fx := tmconsensustest.NewEd25519Fixture(8)
 
 					ph := fx.NextProposedHeader([]byte("app_data"), 0)
 

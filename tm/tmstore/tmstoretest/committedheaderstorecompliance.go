@@ -22,7 +22,7 @@ func TestCommittedHeaderStoreCompliance(t *testing.T, f CommittedHeaderStoreFact
 		s, err := f(t.Cleanup)
 		require.NoError(t, err)
 
-		fx := tmconsensustest.NewStandardFixture(4)
+		fx := tmconsensustest.NewEd25519Fixture(4)
 
 		ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 		ph1.Header.PrevAppStateHash = []byte("initial_app_state") // TODO: this should be automatically set in the fixture.

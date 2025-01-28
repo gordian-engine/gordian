@@ -1351,8 +1351,8 @@ func TestEngine_initChain(t *testing.T) {
 func TestEngine_configuration(t *testing.T) {
 	t.Parallel()
 
-	fx := tmconsensustest.NewStandardFixture(1)
-	as := fx.NewMemActionStore()
+	fx := tmconsensustest.NewEd25519Fixture(1)
+	as := tmmemstore.NewActionStore()
 	fs := tmmemstore.NewFinalizationStore()
 	ms := tmmemstore.NewMirrorStore()
 	rs := tmmemstore.NewRoundStore()

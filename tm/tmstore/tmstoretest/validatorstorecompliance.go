@@ -133,7 +133,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 
 			pows := make([]uint64, len(vals3))
 			for i, v := range vals3 {
-				pows[i] = v.CVal.Power
+				pows[i] = v.Val.Power
 			}
 
 			powHash, err := s.SaveVotePowers(ctx, pows)
@@ -165,7 +165,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 
 			pows := make([]uint64, len(vals3))
 			for i, v := range vals3 {
-				pows[i] = v.CVal.Power
+				pows[i] = v.Val.Power
 			}
 
 			powHash, err := sGood.SaveVotePowers(ctx, pows)
@@ -201,7 +201,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 
 			pows := make([]uint64, len(vals3))
 			for i, v := range vals3 {
-				pows[i] = v.CVal.Power
+				pows[i] = v.Val.Power
 			}
 
 			powHash, err := sGood.SaveVotePowers(ctx, pows)
@@ -236,7 +236,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 
 			pows := make([]uint64, len(vals3))
 			for i, v := range vals3 {
-				pows[i] = v.CVal.Power
+				pows[i] = v.Val.Power
 			}
 
 			powHash, err := sGood.SaveVotePowers(ctx, pows)
@@ -268,7 +268,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 
 				pows := make([]uint64, len(vals)-1)
 				for i, v := range vals[:3] {
-					pows[i] = v.CVal.Power
+					pows[i] = v.Val.Power
 				}
 
 				powHash, err := s.SaveVotePowers(ctx, pows)
@@ -298,7 +298,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 
 				pows := make([]uint64, len(vals))
 				for i, v := range vals {
-					pows[i] = v.CVal.Power
+					pows[i] = v.Val.Power
 				}
 
 				powHash, err := s.SaveVotePowers(ctx, pows)

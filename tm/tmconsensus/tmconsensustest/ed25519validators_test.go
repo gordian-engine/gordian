@@ -14,7 +14,7 @@ func TestDeterministicValidatorsEd25519(t *testing.T) {
 		vals := tmconsensustest.DeterministicValidatorsEd25519(4)
 
 		for i, v := range vals {
-			require.Equal(t, uint64(100_000-i), v.CVal.Power)
+			require.Equal(t, uint64(100_000-i), v.Val.Power)
 		}
 	})
 
@@ -27,8 +27,8 @@ func TestDeterministicValidatorsEd25519(t *testing.T) {
 			again := tmconsensustest.DeterministicValidatorsEd25519(4)
 
 			for i := range vals4 {
-				pub1 := vals4[i].CVal.PubKey.PubKeyBytes()
-				pub2 := again[i].CVal.PubKey.PubKeyBytes()
+				pub1 := vals4[i].Val.PubKey.PubKeyBytes()
+				pub2 := again[i].Val.PubKey.PubKeyBytes()
 				require.Truef(
 					t,
 					bytes.Equal(pub1, pub2),
@@ -48,8 +48,8 @@ func TestDeterministicValidatorsEd25519(t *testing.T) {
 			vals2 := tmconsensustest.DeterministicValidatorsEd25519(2)
 
 			for i := range vals2 {
-				pub1 := vals4[i].CVal.PubKey.PubKeyBytes()
-				pub2 := vals2[i].CVal.PubKey.PubKeyBytes()
+				pub1 := vals4[i].Val.PubKey.PubKeyBytes()
+				pub2 := vals2[i].Val.PubKey.PubKeyBytes()
 				require.Truef(
 					t,
 					bytes.Equal(pub1, pub2),
@@ -69,8 +69,8 @@ func TestDeterministicValidatorsEd25519(t *testing.T) {
 			vals6 := tmconsensustest.DeterministicValidatorsEd25519(6)
 
 			for i := range vals4 {
-				pub1 := vals4[i].CVal.PubKey.PubKeyBytes()
-				pub2 := vals6[i].CVal.PubKey.PubKeyBytes()
+				pub1 := vals4[i].Val.PubKey.PubKeyBytes()
+				pub2 := vals6[i].Val.PubKey.PubKeyBytes()
 				require.Truef(
 					t,
 					bytes.Equal(pub1, pub2),
@@ -91,8 +91,8 @@ func TestDeterministicValidatorsEd25519(t *testing.T) {
 		a := tmconsensustest.DeterministicValidatorsEd25519(1)
 		b := tmconsensustest.DeterministicValidatorsEd25519(1)
 
-		pub1 := a[0].CVal.PubKey.PubKeyBytes()
-		pub2 := b[0].CVal.PubKey.PubKeyBytes()
+		pub1 := a[0].Val.PubKey.PubKeyBytes()
+		pub2 := b[0].Val.PubKey.PubKeyBytes()
 		pub2[0]++
 
 		require.False(

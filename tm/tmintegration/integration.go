@@ -40,7 +40,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 		defer cancel()
 
 		const netSize = 2
-		fx := tmconsensustest.NewStandardFixture(netSize)
+		fx := tmconsensustest.NewEd25519Fixture(netSize)
 		genesis := fx.DefaultGenesis()
 
 		// Make just the connections first, so we can stabilize the network,
@@ -92,7 +92,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 			cStrat := &identityConsensusStrategy{
 				Log:    log.With("sys", "consensusstrategy", "idx", i),
-				PubKey: v.CVal.PubKey,
+				PubKey: v.Val.PubKey,
 			}
 
 			blockFinCh := make(chan tmdriver.FinalizeBlockRequest)
@@ -203,7 +203,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 		defer n.Wait()
 		defer cancel()
 
-		fx := tmconsensustest.NewStandardFixture(netSize)
+		fx := tmconsensustest.NewEd25519Fixture(netSize)
 		genesis := fx.DefaultGenesis()
 
 		// Make just the connections first, so we can stabilize the network,
@@ -255,7 +255,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 			cStrat := &valShuffleConsensusStrategy{
 				Log:        log.With("sys", "consensusstrategy", "idx", i),
-				PubKey:     v.CVal.PubKey,
+				PubKey:     v.Val.PubKey,
 				HashScheme: hashScheme,
 			}
 

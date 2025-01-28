@@ -155,7 +155,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 
 		require.NoError(t, net.Stabilize(ctx))
 
-		fx := tmconsensustest.NewStandardFixture(3)
+		fx := tmconsensustest.NewEd25519Fixture(3)
 		h := fx.NextProposedHeader([]byte("app_data"), 0)
 		fx.SignProposal(ctx, &h, 0)
 
@@ -202,7 +202,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		require.NoError(t, net.Stabilize(ctx))
 
 		// Use a fixture so we populate all relevant fields.
-		fx := tmconsensustest.NewStandardFixture(3)
+		fx := tmconsensustest.NewEd25519Fixture(3)
 
 		ph1 := fx.NextProposedHeader([]byte("app_data"), 0)
 		fx.SignProposal(ctx, &ph1, 0)
@@ -242,7 +242,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 	t.Run("basic prevote proof send and receive", func(t *testing.T) {
 		t.Parallel()
 
-		fx := tmconsensustest.NewStandardFixture(2)
+		fx := tmconsensustest.NewEd25519Fixture(2)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -304,7 +304,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 	t.Run("basic precommit send and receive", func(t *testing.T) {
 		t.Parallel()
 
-		fx := tmconsensustest.NewStandardFixture(2)
+		fx := tmconsensustest.NewEd25519Fixture(2)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

@@ -45,7 +45,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewStandardFixture(2)
+			fx := tmconsensustest.NewEd25519Fixture(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			fx.SignProposal(ctx, &ph1, 0)
@@ -67,7 +67,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewStandardFixture(2)
+			fx := tmconsensustest.NewEd25519Fixture(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			require.Empty(t, ph1.Header.PrevCommitProof.Proofs)
@@ -118,7 +118,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewStandardFixture(2)
+			fx := tmconsensustest.NewEd25519Fixture(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			fx.SignProposal(ctx, &ph1, 0)
@@ -140,7 +140,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewStandardFixture(2)
+			fx := tmconsensustest.NewEd25519Fixture(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			require.Empty(t, ph1.Header.PrevCommitProof.Proofs)

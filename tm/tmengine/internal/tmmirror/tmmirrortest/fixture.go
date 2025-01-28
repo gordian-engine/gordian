@@ -26,7 +26,7 @@ import (
 type Fixture struct {
 	Log *slog.Logger
 
-	Fx *tmconsensustest.StandardFixture
+	Fx *tmconsensustest.Fixture
 
 	// These channels are bidirectional in the fixture,
 	// because they are write-only in the config.
@@ -44,7 +44,7 @@ type Fixture struct {
 }
 
 func NewFixture(ctx context.Context, t *testing.T, nVals int) *Fixture {
-	fx := tmconsensustest.NewStandardFixture(nVals)
+	fx := tmconsensustest.NewEd25519Fixture(nVals)
 	gso := make(chan tmelink.NetworkViewUpdate)
 	lso := make(chan tmelink.LagState)
 	smIn := make(chan tmeil.StateMachineRoundEntrance, 1)

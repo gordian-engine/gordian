@@ -12,7 +12,7 @@ import (
 func TestVoteSummary_powers(t *testing.T) {
 	t.Parallel()
 
-	fx := tmconsensustest.NewStandardFixture(4)
+	fx := tmconsensustest.NewEd25519Fixture(4)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -15,7 +15,7 @@ import (
 // Env contains some of the primitives of the current test environment,
 // to inform the creation of a [Factory].
 type Env struct {
-	// The RootLogger can be reference when the Factory
+	// The RootLogger can be used when the Factory
 	// needs a logger in a created value.
 	RootLogger *slog.Logger
 
