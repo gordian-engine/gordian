@@ -20,7 +20,7 @@ func TestFinalize_partialMainOnly_roundTrip(t *testing.T) {
 
 	keys := gblsminsigtest.DeterministicPubKeys(16)
 	msg := []byte("main message")
-	proof, err := s.New(msg, keys, "ignored_hash")
+	proof, err := gblsminsig.NewSignatureProof(msg, keys, "ignored_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -126,7 +126,7 @@ func TestFinalize_fullMain_roundTrip(t *testing.T) {
 
 	keys := gblsminsigtest.DeterministicPubKeys(4)
 	msg := []byte("main message")
-	proof, err := s.New(msg, keys, "ignored_hash")
+	proof, err := gblsminsig.NewSignatureProof(msg, keys, "ignored_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -230,7 +230,7 @@ func TestFinalize_singleRestPartial_roundTrip(t *testing.T) {
 
 	keys := gblsminsigtest.DeterministicPubKeys(16)
 	mainMsg := []byte("main sign content")
-	mainProof, err := s.New(mainMsg, keys, "pub_key_hash")
+	mainProof, err := gblsminsig.NewSignatureProof(mainMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -256,7 +256,7 @@ func TestFinalize_singleRestPartial_roundTrip(t *testing.T) {
 	// Doesn't really matter if the vote is for nil or another block,
 	// but we will say this is for nil anyway.
 	nilMsg := []byte("nil sign content")
-	nilProof, err := s.New(nilMsg, keys, "pub_key_hash")
+	nilProof, err := gblsminsig.NewSignatureProof(nilMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	sig2, err := signers[2].Sign(ctx, nilMsg)
@@ -371,7 +371,7 @@ func TestFinalize_singleRestFull_roundTrip(t *testing.T) {
 
 	keys := gblsminsigtest.DeterministicPubKeys(6)
 	mainMsg := []byte("main sign content")
-	mainProof, err := s.New(mainMsg, keys, "pub_key_hash")
+	mainProof, err := gblsminsig.NewSignatureProof(mainMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -393,7 +393,7 @@ func TestFinalize_singleRestFull_roundTrip(t *testing.T) {
 	// Doesn't really matter if the vote is for nil or another block,
 	// but we will say this is for nil anyway.
 	nilMsg := []byte("nil sign content")
-	nilProof, err := s.New(nilMsg, keys, "pub_key_hash")
+	nilProof, err := gblsminsig.NewSignatureProof(nilMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	sig2, err := signers[2].Sign(ctx, nilMsg)
@@ -505,7 +505,7 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 
 	keys := gblsminsigtest.DeterministicPubKeys(16)
 	mainMsg := []byte("main sign content")
-	mainProof, err := s.New(mainMsg, keys, "pub_key_hash")
+	mainProof, err := gblsminsig.NewSignatureProof(mainMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -531,7 +531,7 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 	// Doesn't really matter if the vote is for nil or another block,
 	// but we will say this is for nil anyway.
 	nilMsg := []byte("nil sign content")
-	nilProof, err := s.New(nilMsg, keys, "pub_key_hash")
+	nilProof, err := gblsminsig.NewSignatureProof(nilMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	sig2, err := signers[2].Sign(ctx, nilMsg)
@@ -545,7 +545,7 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 
 	// And some other validators voted for a different block.
 	otherMsg := []byte("other sign content")
-	otherProof, err := s.New(otherMsg, keys, "pub_key_hash")
+	otherProof, err := gblsminsig.NewSignatureProof(otherMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	sig7, err := signers[7].Sign(ctx, otherMsg)

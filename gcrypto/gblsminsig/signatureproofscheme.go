@@ -105,13 +105,21 @@ import (
 // [combinatorial index]: https://en.wikipedia.org/wiki/Combinatorial_number_system
 type SignatureProofScheme struct{}
 
-func (SignatureProofScheme) New(msg []byte, keys []PubKey, pubKeyHash string) (
+func (SignatureProofScheme) New(msg []byte, keys []gcrypto.PubKey, pubKeyHash string) (
 	gcrypto.CommonMessageSignatureProof, error,
 ) {
-	return NewSignatureProof(msg, keys, pubKeyHash)
+	// It's unfortunate that we are allocating another slice for this.
+	// Prefer to call NewSignatureProof directly
+	// if you already have a slice of gblsminsig.PubKey.
+	blsKeys := make([]PubKey, len(keys))
+	for i, k := range keys {
+		blsKeys[i] = k.(PubKey)
+	}
+
+	return NewSignatureProof(msg, blsKeys, pubKeyHash)
 }
 
-func (SignatureProofScheme) KeyIDChecker(keys []PubKey) gcrypto.KeyIDChecker {
+func (SignatureProofScheme) KeyIDChecker(keys []gcrypto.PubKey) gcrypto.KeyIDChecker {
 	var n int
 	nKeys := len(keys)
 	if nKeys&(nKeys-1) == 0 {
@@ -136,6 +144,11 @@ func (c keyIDChecker) IsValid(keyID []byte) bool {
 
 	id := int(binary.BigEndian.Uint16(keyID))
 	return id < c.n
+}
+
+func (SignatureProofScheme) CanMergeFinalizedProofs() bool {
+	// Finalized proofs cannot be decomposed into precommits.
+	return false
 }
 
 func (SignatureProofScheme) Finalize(
