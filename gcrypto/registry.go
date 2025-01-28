@@ -24,6 +24,13 @@ func (r *Registry) Register(name string, inst PubKey, newFn NewPubKeyFunc) {
 	// TODO: validation on name.
 	// TODO: fail if previously registered.
 
+	if len(name) > prefixSize {
+		panic(fmt.Errorf(
+			"BUG: gcrypto.Registry entries must be <= 8 bytes (got %q, %d bytes)",
+			name, len(name),
+		))
+	}
+
 	if r.byPrefix == nil {
 		r.byPrefix = map[string]NewPubKeyFunc{}
 	}

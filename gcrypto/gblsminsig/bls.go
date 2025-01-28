@@ -9,7 +9,7 @@ import (
 	blst "github.com/supranational/blst/bindings/go"
 )
 
-const keyTypeName = "bls-minsig"
+const keyTypeName = "bls-ms" // ms=min-sig; abbreviated due to registry limitations.
 
 // The domain separation tag is a requirement per RFC9380 (Hashing to Elliptic Curves).
 // See sections 2.2.5 (domain separation),
