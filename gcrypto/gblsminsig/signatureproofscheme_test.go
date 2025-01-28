@@ -7,6 +7,7 @@ import (
 
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/gcrypto/gblsminsig"
+	"github.com/gordian-engine/gordian/gcrypto/gblsminsig/gblsminsigtest"
 	"github.com/gordian-engine/gordian/gcrypto/gcryptotest"
 	"github.com/stretchr/testify/require"
 	blst "github.com/supranational/blst/bindings/go"
@@ -17,36 +18,34 @@ func TestFinalize_partialMainOnly_roundTrip(t *testing.T) {
 
 	s := gblsminsig.SignatureProofScheme{}
 
+	keys := gblsminsigtest.DeterministicPubKeys(16)
 	msg := []byte("main message")
-	proof, err := s.New(
-		msg,
-		testPubKeys[:],
-		"ignored_hash",
-	)
+	proof, err := s.New(msg, keys, "ignored_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	sig0, err := testSigners[0].Sign(ctx, msg)
+	signers := gblsminsigtest.DeterministicSigners(16)
+	sig0, err := signers[0].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	sig1, err := testSigners[1].Sign(ctx, msg)
+	sig1, err := signers[1].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	sig3, err := testSigners[3].Sign(ctx, msg)
+	sig3, err := signers[3].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	sig5, err := testSigners[5].Sign(ctx, msg)
+	sig5, err := signers[5].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	require.NoError(t, proof.AddSignature(sig0, testPubKeys[0]))
-	require.NoError(t, proof.AddSignature(sig1, testPubKeys[1]))
-	require.NoError(t, proof.AddSignature(sig3, testPubKeys[3]))
-	require.NoError(t, proof.AddSignature(sig5, testPubKeys[5]))
+	require.NoError(t, proof.AddSignature(sig0, keys[0]))
+	require.NoError(t, proof.AddSignature(sig1, keys[1]))
+	require.NoError(t, proof.AddSignature(sig3, keys[3]))
+	require.NoError(t, proof.AddSignature(sig5, keys[5]))
 
 	fin := s.Finalize(proof, nil)
 
-	require.Len(t, fin.Keys, len(testPubKeys))
+	require.Len(t, fin.Keys, len(keys))
 	require.Equal(t, "ignored_hash", fin.PubKeyHash)
 
 	require.Equal(t, msg, fin.MainMessage)
@@ -57,13 +56,13 @@ func TestFinalize_partialMainOnly_roundTrip(t *testing.T) {
 
 	// Aggregate the key manually and make sure it matches.
 	aggP2 := new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[0]),
+		(*blst.P2Affine)(&keys[0]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[1]),
+		(*blst.P2Affine)(&keys[1]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[3]),
+		(*blst.P2Affine)(&keys[3]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[5]),
+		(*blst.P2Affine)(&keys[5]),
 	).ToAffine()
 	aggKey := gblsminsig.PubKey(*aggP2)
 
@@ -125,32 +124,30 @@ func TestFinalize_fullMain_roundTrip(t *testing.T) {
 
 	s := gblsminsig.SignatureProofScheme{}
 
+	keys := gblsminsigtest.DeterministicPubKeys(4)
 	msg := []byte("main message")
-	proof, err := s.New(
-		msg,
-		testPubKeys[:4],
-		"ignored_hash",
-	)
+	proof, err := s.New(msg, keys, "ignored_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	sig0, err := testSigners[0].Sign(ctx, msg)
+	signers := gblsminsigtest.DeterministicSigners(4)
+	sig0, err := signers[0].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	sig1, err := testSigners[1].Sign(ctx, msg)
+	sig1, err := signers[1].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	sig2, err := testSigners[2].Sign(ctx, msg)
+	sig2, err := signers[2].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	sig3, err := testSigners[3].Sign(ctx, msg)
+	sig3, err := signers[3].Sign(ctx, msg)
 	require.NoError(t, err)
 
-	require.NoError(t, proof.AddSignature(sig0, testPubKeys[0]))
-	require.NoError(t, proof.AddSignature(sig1, testPubKeys[1]))
-	require.NoError(t, proof.AddSignature(sig2, testPubKeys[2]))
-	require.NoError(t, proof.AddSignature(sig3, testPubKeys[3]))
+	require.NoError(t, proof.AddSignature(sig0, keys[0]))
+	require.NoError(t, proof.AddSignature(sig1, keys[1]))
+	require.NoError(t, proof.AddSignature(sig2, keys[2]))
+	require.NoError(t, proof.AddSignature(sig3, keys[3]))
 
 	fin := s.Finalize(proof, nil)
 
@@ -165,13 +162,13 @@ func TestFinalize_fullMain_roundTrip(t *testing.T) {
 
 	// Aggregate the key manually and make sure it matches.
 	aggP2 := new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[0]),
+		(*blst.P2Affine)(&keys[0]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[1]),
+		(*blst.P2Affine)(&keys[1]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[2]),
+		(*blst.P2Affine)(&keys[2]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[3]),
+		(*blst.P2Affine)(&keys[3]),
 	).ToAffine()
 	aggKey := gblsminsig.PubKey(*aggP2)
 
@@ -231,51 +228,53 @@ func TestFinalize_singleRestPartial_roundTrip(t *testing.T) {
 
 	s := gblsminsig.SignatureProofScheme{}
 
+	keys := gblsminsigtest.DeterministicPubKeys(16)
 	mainMsg := []byte("main sign content")
-	mainProof, err := s.New(mainMsg, testPubKeys[:], "pub_key_hash")
+	mainProof, err := s.New(mainMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	sig0, err := testSigners[0].Sign(ctx, mainMsg)
+	signers := gblsminsigtest.DeterministicSigners(16)
+	sig0, err := signers[0].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig1, err := testSigners[1].Sign(ctx, mainMsg)
+	sig1, err := signers[1].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig3, err := testSigners[3].Sign(ctx, mainMsg)
+	sig3, err := signers[3].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig5, err := testSigners[5].Sign(ctx, mainMsg)
+	sig5, err := signers[5].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	require.NoError(t, mainProof.AddSignature(sig0, testPubKeys[0]))
-	require.NoError(t, mainProof.AddSignature(sig1, testPubKeys[1]))
-	require.NoError(t, mainProof.AddSignature(sig3, testPubKeys[3]))
-	require.NoError(t, mainProof.AddSignature(sig5, testPubKeys[5]))
+	require.NoError(t, mainProof.AddSignature(sig0, keys[0]))
+	require.NoError(t, mainProof.AddSignature(sig1, keys[1]))
+	require.NoError(t, mainProof.AddSignature(sig3, keys[3]))
+	require.NoError(t, mainProof.AddSignature(sig5, keys[5]))
 
 	// Doesn't really matter if the vote is for nil or another block,
 	// but we will say this is for nil anyway.
 	nilMsg := []byte("nil sign content")
-	nilProof, err := s.New(nilMsg, testPubKeys[:], "pub_key_hash")
+	nilProof, err := s.New(nilMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
-	sig2, err := testSigners[2].Sign(ctx, nilMsg)
+	sig2, err := signers[2].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	sig4, err := testSigners[4].Sign(ctx, nilMsg)
+	sig4, err := signers[4].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	sig7, err := testSigners[7].Sign(ctx, nilMsg)
+	sig7, err := signers[7].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	require.NoError(t, nilProof.AddSignature(sig2, testPubKeys[2]))
-	require.NoError(t, nilProof.AddSignature(sig4, testPubKeys[4]))
-	require.NoError(t, nilProof.AddSignature(sig7, testPubKeys[7]))
+	require.NoError(t, nilProof.AddSignature(sig2, keys[2]))
+	require.NoError(t, nilProof.AddSignature(sig4, keys[4]))
+	require.NoError(t, nilProof.AddSignature(sig7, keys[7]))
 
 	fin := s.Finalize(mainProof, []gcrypto.CommonMessageSignatureProof{nilProof})
 
-	require.Len(t, fin.Keys, len(testPubKeys))
+	require.Len(t, fin.Keys, len(keys))
 	require.Equal(t, "pub_key_hash", fin.PubKeyHash)
 
 	require.Equal(t, mainMsg, fin.MainMessage)
@@ -286,13 +285,13 @@ func TestFinalize_singleRestPartial_roundTrip(t *testing.T) {
 
 	// Aggregate the main key manually and make sure it matches.
 	aggP2 := new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[0]),
+		(*blst.P2Affine)(&keys[0]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[1]),
+		(*blst.P2Affine)(&keys[1]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[3]),
+		(*blst.P2Affine)(&keys[3]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[5]),
+		(*blst.P2Affine)(&keys[5]),
 	).ToAffine()
 	mainAggKey := gblsminsig.PubKey(*aggP2)
 
@@ -300,11 +299,11 @@ func TestFinalize_singleRestPartial_roundTrip(t *testing.T) {
 
 	// Also aggregate the key for the nil votes.
 	aggP2 = new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[2]),
+		(*blst.P2Affine)(&keys[2]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[4]),
+		(*blst.P2Affine)(&keys[4]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[7]),
+		(*blst.P2Affine)(&keys[7]),
 	).ToAffine()
 	nilAggKey := gblsminsig.PubKey(*aggP2)
 
@@ -370,43 +369,45 @@ func TestFinalize_singleRestFull_roundTrip(t *testing.T) {
 
 	s := gblsminsig.SignatureProofScheme{}
 
+	keys := gblsminsigtest.DeterministicPubKeys(6)
 	mainMsg := []byte("main sign content")
-	mainProof, err := s.New(mainMsg, testPubKeys[:6], "pub_key_hash")
+	mainProof, err := s.New(mainMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	sig0, err := testSigners[0].Sign(ctx, mainMsg)
+	signers := gblsminsigtest.DeterministicSigners(6)
+	sig0, err := signers[0].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig1, err := testSigners[1].Sign(ctx, mainMsg)
+	sig1, err := signers[1].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig4, err := testSigners[4].Sign(ctx, mainMsg)
+	sig4, err := signers[4].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	require.NoError(t, mainProof.AddSignature(sig0, testPubKeys[0]))
-	require.NoError(t, mainProof.AddSignature(sig1, testPubKeys[1]))
-	require.NoError(t, mainProof.AddSignature(sig4, testPubKeys[4]))
+	require.NoError(t, mainProof.AddSignature(sig0, keys[0]))
+	require.NoError(t, mainProof.AddSignature(sig1, keys[1]))
+	require.NoError(t, mainProof.AddSignature(sig4, keys[4]))
 
 	// Doesn't really matter if the vote is for nil or another block,
 	// but we will say this is for nil anyway.
 	nilMsg := []byte("nil sign content")
-	nilProof, err := s.New(nilMsg, testPubKeys[:6], "pub_key_hash")
+	nilProof, err := s.New(nilMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
-	sig2, err := testSigners[2].Sign(ctx, nilMsg)
+	sig2, err := signers[2].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	sig3, err := testSigners[3].Sign(ctx, nilMsg)
+	sig3, err := signers[3].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	sig5, err := testSigners[5].Sign(ctx, nilMsg)
+	sig5, err := signers[5].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	require.NoError(t, nilProof.AddSignature(sig2, testPubKeys[2]))
-	require.NoError(t, nilProof.AddSignature(sig3, testPubKeys[3]))
-	require.NoError(t, nilProof.AddSignature(sig5, testPubKeys[5]))
+	require.NoError(t, nilProof.AddSignature(sig2, keys[2]))
+	require.NoError(t, nilProof.AddSignature(sig3, keys[3]))
+	require.NoError(t, nilProof.AddSignature(sig5, keys[5]))
 
 	fin := s.Finalize(mainProof, []gcrypto.CommonMessageSignatureProof{nilProof})
 
@@ -421,11 +422,11 @@ func TestFinalize_singleRestFull_roundTrip(t *testing.T) {
 
 	// Aggregate the main key manually and make sure it matches.
 	aggP2 := new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[0]),
+		(*blst.P2Affine)(&keys[0]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[1]),
+		(*blst.P2Affine)(&keys[1]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[4]),
+		(*blst.P2Affine)(&keys[4]),
 	).ToAffine()
 	mainAggKey := gblsminsig.PubKey(*aggP2)
 
@@ -433,11 +434,11 @@ func TestFinalize_singleRestFull_roundTrip(t *testing.T) {
 
 	// Also aggregate the key for the nil votes.
 	aggP2 = new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[2]),
+		(*blst.P2Affine)(&keys[2]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[3]),
+		(*blst.P2Affine)(&keys[3]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[5]),
+		(*blst.P2Affine)(&keys[5]),
 	).ToAffine()
 	nilAggKey := gblsminsig.PubKey(*aggP2)
 
@@ -502,61 +503,63 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 
 	s := gblsminsig.SignatureProofScheme{}
 
+	keys := gblsminsigtest.DeterministicPubKeys(16)
 	mainMsg := []byte("main sign content")
-	mainProof, err := s.New(mainMsg, testPubKeys[:], "pub_key_hash")
+	mainProof, err := s.New(mainMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	sig0, err := testSigners[0].Sign(ctx, mainMsg)
+	signers := gblsminsigtest.DeterministicSigners(16)
+	sig0, err := signers[0].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig1, err := testSigners[1].Sign(ctx, mainMsg)
+	sig1, err := signers[1].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig3, err := testSigners[3].Sign(ctx, mainMsg)
+	sig3, err := signers[3].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	sig5, err := testSigners[5].Sign(ctx, mainMsg)
+	sig5, err := signers[5].Sign(ctx, mainMsg)
 	require.NoError(t, err)
 
-	require.NoError(t, mainProof.AddSignature(sig0, testPubKeys[0]))
-	require.NoError(t, mainProof.AddSignature(sig1, testPubKeys[1]))
-	require.NoError(t, mainProof.AddSignature(sig3, testPubKeys[3]))
-	require.NoError(t, mainProof.AddSignature(sig5, testPubKeys[5]))
+	require.NoError(t, mainProof.AddSignature(sig0, keys[0]))
+	require.NoError(t, mainProof.AddSignature(sig1, keys[1]))
+	require.NoError(t, mainProof.AddSignature(sig3, keys[3]))
+	require.NoError(t, mainProof.AddSignature(sig5, keys[5]))
 
 	// Doesn't really matter if the vote is for nil or another block,
 	// but we will say this is for nil anyway.
 	nilMsg := []byte("nil sign content")
-	nilProof, err := s.New(nilMsg, testPubKeys[:], "pub_key_hash")
+	nilProof, err := s.New(nilMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
-	sig2, err := testSigners[2].Sign(ctx, nilMsg)
+	sig2, err := signers[2].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	sig9, err := testSigners[9].Sign(ctx, nilMsg)
+	sig9, err := signers[9].Sign(ctx, nilMsg)
 	require.NoError(t, err)
 
-	require.NoError(t, nilProof.AddSignature(sig2, testPubKeys[2]))
-	require.NoError(t, nilProof.AddSignature(sig9, testPubKeys[9]))
+	require.NoError(t, nilProof.AddSignature(sig2, keys[2]))
+	require.NoError(t, nilProof.AddSignature(sig9, keys[9]))
 
 	// And some other validators voted for a different block.
 	otherMsg := []byte("other sign content")
-	otherProof, err := s.New(otherMsg, testPubKeys[:], "pub_key_hash")
+	otherProof, err := s.New(otherMsg, keys, "pub_key_hash")
 	require.NoError(t, err)
 
-	sig7, err := testSigners[7].Sign(ctx, otherMsg)
+	sig7, err := signers[7].Sign(ctx, otherMsg)
 	require.NoError(t, err)
 
-	sig11, err := testSigners[11].Sign(ctx, otherMsg)
+	sig11, err := signers[11].Sign(ctx, otherMsg)
 	require.NoError(t, err)
 
-	require.NoError(t, otherProof.AddSignature(sig7, testPubKeys[7]))
-	require.NoError(t, otherProof.AddSignature(sig11, testPubKeys[11]))
+	require.NoError(t, otherProof.AddSignature(sig7, keys[7]))
+	require.NoError(t, otherProof.AddSignature(sig11, keys[11]))
 
 	fin := s.Finalize(mainProof, []gcrypto.CommonMessageSignatureProof{nilProof, otherProof})
 
-	require.Len(t, fin.Keys, len(testPubKeys))
+	require.Len(t, fin.Keys, len(keys))
 	require.Equal(t, "pub_key_hash", fin.PubKeyHash)
 
 	require.Equal(t, mainMsg, fin.MainMessage)
@@ -568,13 +571,13 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 
 	// Aggregate the main key manually and make sure it matches.
 	aggP2 := new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[0]),
+		(*blst.P2Affine)(&keys[0]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[1]),
+		(*blst.P2Affine)(&keys[1]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[3]),
+		(*blst.P2Affine)(&keys[3]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[5]),
+		(*blst.P2Affine)(&keys[5]),
 	).ToAffine()
 	mainAggKey := gblsminsig.PubKey(*aggP2)
 
@@ -582,9 +585,9 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 
 	// Also aggregate the key for the nil votes.
 	aggP2 = new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[2]),
+		(*blst.P2Affine)(&keys[2]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[9]),
+		(*blst.P2Affine)(&keys[9]),
 	).ToAffine()
 	nilAggKey := gblsminsig.PubKey(*aggP2)
 	t.Logf("nil msg key: %x", aggP2.Compress())
@@ -593,12 +596,11 @@ func TestFinalize_multipleRest_equalSigCounts_roundTrip(t *testing.T) {
 
 	// And finally the one for the other block.
 	aggP2 = new(blst.P2).Add(
-		(*blst.P2Affine)(&testPubKeys[7]),
+		(*blst.P2Affine)(&keys[7]),
 	).Add(
-		(*blst.P2Affine)(&testPubKeys[11]),
+		(*blst.P2Affine)(&keys[11]),
 	).ToAffine()
 	otherAggKey := gblsminsig.PubKey(*aggP2)
-	t.Logf("other key: %x", aggP2.Compress())
 
 	require.True(t, otherAggKey.Verify(otherMsg, fin.Rest[string(otherMsg)][0].Sig))
 

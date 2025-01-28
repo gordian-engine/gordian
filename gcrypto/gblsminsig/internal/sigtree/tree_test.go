@@ -6,33 +6,11 @@ import (
 	"testing"
 
 	"github.com/gordian-engine/gordian/gcrypto/gblsminsig"
+	"github.com/gordian-engine/gordian/gcrypto/gblsminsig/gblsminsigtest"
 	"github.com/gordian-engine/gordian/gcrypto/gblsminsig/internal/sigtree"
 	"github.com/stretchr/testify/require"
 	blst "github.com/supranational/blst/bindings/go"
 )
-
-var (
-	testSigners [16]gblsminsig.Signer
-	testPubKeys [16]gblsminsig.PubKey
-)
-
-func init() {
-	for i := range testSigners {
-		ikm := [32]byte{}
-		for j := range ikm {
-			ikm[j] = byte(i)
-		}
-
-		s, err := gblsminsig.NewSigner(ikm[:])
-		if err != nil {
-			panic(err)
-		}
-
-		testSigners[i] = s
-
-		testPubKeys[i] = s.PubKey().(gblsminsig.PubKey)
-	}
-}
 
 func TestTree_indexing(t *testing.T) {
 	t.Run("2 keys", func(t *testing.T) {
@@ -44,17 +22,19 @@ func TestTree_indexing(t *testing.T) {
 		//   0 1
 		//    2
 
-		requireKeyAtIndex(t, tree, 0, testPubKeys[0])
-		requireKeyAtIndex(t, tree, 1, testPubKeys[1])
+		keys := gblsminsigtest.DeterministicPubKeys(2)
+		requireKeyAtIndex(t, tree, 0, keys[0])
+		requireKeyAtIndex(t, tree, 1, keys[1])
 
 		agg01 := new(blst.P2).Add(
-			(*blst.P2Affine)(&testPubKeys[0]),
+			(*blst.P2Affine)(&keys[0]),
 		).Add(
-			(*blst.P2Affine)(&testPubKeys[1]),
+			(*blst.P2Affine)(&keys[1]),
 		).ToAffine()
 		requireP2AtIndex(t, tree, 2, *agg01)
 
-		require.Equal(t, -1, tree.Index(blst.P2Affine(testPubKeys[5])))
+		missing := gblsminsigtest.DeterministicPubKeys(5)[4]
+		require.Equal(t, -1, tree.Index(blst.P2Affine(missing)))
 	})
 
 	t.Run("3 keys", func(t *testing.T) {
@@ -68,32 +48,34 @@ func TestTree_indexing(t *testing.T) {
 		//      6
 		// Element 3 is padding, and element 5 is effectively aliased to 2.
 
-		requireKeyAtIndex(t, tree, 0, testPubKeys[0])
-		requireKeyAtIndex(t, tree, 1, testPubKeys[1])
-		requireKeyAtIndex(t, tree, 2, testPubKeys[2])
+		keys := gblsminsigtest.DeterministicPubKeys(3)
+		requireKeyAtIndex(t, tree, 0, keys[0])
+		requireKeyAtIndex(t, tree, 1, keys[1])
+		requireKeyAtIndex(t, tree, 2, keys[2])
 
 		// Padding elements.
 		// requireKeyAtIndex works for the first blank key,
 		// but for later padded blank keys,
 		// we cannot look up the key value.
 		requireKeyAtIndex(t, tree, 3, gblsminsig.PubKey{})
-		requirePaddingMergedKeyAtIndex(t, tree, 5, testPubKeys[2])
+		requirePaddingMergedKeyAtIndex(t, tree, 5, keys[2])
 
 		agg01 := new(blst.P2).Add(
-			(*blst.P2Affine)(&testPubKeys[0]),
+			(*blst.P2Affine)(&keys[0]),
 		).Add(
-			(*blst.P2Affine)(&testPubKeys[1]),
+			(*blst.P2Affine)(&keys[1]),
 		).ToAffine()
 		requireP2AtIndex(t, tree, 4, *agg01)
 
 		agg012 := new(blst.P2).Add(
 			agg01,
 		).Add(
-			(*blst.P2Affine)(&testPubKeys[2]),
+			(*blst.P2Affine)(&keys[2]),
 		).ToAffine()
 		requireP2AtIndex(t, tree, 6, *agg012)
 
-		require.Equal(t, -1, tree.Index(blst.P2Affine(testPubKeys[5])))
+		missing := gblsminsigtest.DeterministicPubKeys(5)[4]
+		require.Equal(t, -1, tree.Index(blst.P2Affine(missing)))
 	})
 
 	t.Run("4 keys", func(t *testing.T) {
@@ -106,29 +88,31 @@ func TestTree_indexing(t *testing.T) {
 		//    4   5
 		//      6
 
-		requireKeyAtIndex(t, tree, 0, testPubKeys[0])
-		requireKeyAtIndex(t, tree, 1, testPubKeys[1])
-		requireKeyAtIndex(t, tree, 2, testPubKeys[2])
-		requireKeyAtIndex(t, tree, 3, testPubKeys[3])
+		keys := gblsminsigtest.DeterministicPubKeys(4)
+		requireKeyAtIndex(t, tree, 0, keys[0])
+		requireKeyAtIndex(t, tree, 1, keys[1])
+		requireKeyAtIndex(t, tree, 2, keys[2])
+		requireKeyAtIndex(t, tree, 3, keys[3])
 
 		agg01 := new(blst.P2).Add(
-			(*blst.P2Affine)(&testPubKeys[0]),
+			(*blst.P2Affine)(&keys[0]),
 		).Add(
-			(*blst.P2Affine)(&testPubKeys[1]),
+			(*blst.P2Affine)(&keys[1]),
 		).ToAffine()
 		requireP2AtIndex(t, tree, 4, *agg01)
 
 		agg23 := new(blst.P2).Add(
-			(*blst.P2Affine)(&testPubKeys[2]),
+			(*blst.P2Affine)(&keys[2]),
 		).Add(
-			(*blst.P2Affine)(&testPubKeys[3]),
+			(*blst.P2Affine)(&keys[3]),
 		).ToAffine()
 		requireP2AtIndex(t, tree, 5, *agg23)
 
 		agg0123 := new(blst.P2).Add(agg01).Add(agg23).ToAffine()
 		requireP2AtIndex(t, tree, 6, *agg0123)
 
-		require.Equal(t, -1, tree.Index(blst.P2Affine(testPubKeys[5])))
+		missing := gblsminsigtest.DeterministicPubKeys(5)[4]
+		require.Equal(t, -1, tree.Index(blst.P2Affine(missing)))
 	})
 }
 
@@ -140,13 +124,14 @@ func TestTree_AddSignature(t *testing.T) {
 	ctx := context.Background()
 	msg := []byte("hello")
 
-	sig0Bytes, err := testSigners[0].Sign(ctx, msg)
+	signers := gblsminsigtest.DeterministicSigners(2)
+	sig0Bytes, err := signers[0].Sign(ctx, msg)
 	require.NoError(t, err)
 
 	sig0 := new(blst.P1Affine)
 	sig0 = sig0.Uncompress(sig0Bytes)
 
-	sig1Bytes, err := testSigners[1].Sign(ctx, msg)
+	sig1Bytes, err := signers[1].Sign(ctx, msg)
 	require.NoError(t, err)
 
 	sig1 := new(blst.P1Affine)
@@ -176,13 +161,14 @@ func TestTree_AddSignature_root(t *testing.T) {
 	ctx := context.Background()
 	msg := []byte("hello")
 
-	sig0Bytes, err := testSigners[0].Sign(ctx, msg)
+	signers := gblsminsigtest.DeterministicSigners(2)
+	sig0Bytes, err := signers[0].Sign(ctx, msg)
 	require.NoError(t, err)
 
 	sig0 := new(blst.P1Affine)
 	sig0 = sig0.Uncompress(sig0Bytes)
 
-	sig1Bytes, err := testSigners[1].Sign(ctx, msg)
+	sig1Bytes, err := signers[1].Sign(ctx, msg)
 	require.NoError(t, err)
 
 	sig1 := new(blst.P1Affine)
@@ -215,19 +201,20 @@ func TestTree_AddSignature_cascadesUpward(t *testing.T) {
 	ctx := context.Background()
 	msg := []byte("hello")
 
-	sig0Bytes, err := testSigners[0].Sign(ctx, msg)
+	signers := gblsminsigtest.DeterministicSigners(4)
+	sig0Bytes, err := signers[0].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig0 := new(blst.P1Affine)
 	sig0 = sig0.Uncompress(sig0Bytes)
 	tree.AddSignature(0, *sig0)
 
-	sig1Bytes, err := testSigners[1].Sign(ctx, msg)
+	sig1Bytes, err := signers[1].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig1 := new(blst.P1Affine)
 	sig1 = sig1.Uncompress(sig1Bytes)
 	tree.AddSignature(1, *sig1)
 
-	sig2Bytes, err := testSigners[2].Sign(ctx, msg)
+	sig2Bytes, err := signers[2].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig2 := new(blst.P1Affine)
 	sig2 = sig2.Uncompress(sig2Bytes)
@@ -236,7 +223,7 @@ func TestTree_AddSignature_cascadesUpward(t *testing.T) {
 	// Now that we've added all three individually,
 	// this last signature should trigger the 2-3 aggregation
 	// which should trigger the 0-1-2-3 aggregation.
-	sig3Bytes, err := testSigners[3].Sign(ctx, msg)
+	sig3Bytes, err := signers[3].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig3 := new(blst.P1Affine)
 	sig3 = sig3.Uncompress(sig3Bytes)
@@ -268,14 +255,15 @@ func TestTree_AddSignature_withPadding(t *testing.T) {
 	//      6
 	// Element 3 is padding, and element 5 is effectively aliased to 2.
 
-	requireKeyAtIndex(t, tree, 0, testPubKeys[0])
-	requireKeyAtIndex(t, tree, 1, testPubKeys[1])
-	requireKeyAtIndex(t, tree, 2, testPubKeys[2])
+	keys := gblsminsigtest.DeterministicPubKeys(3)
+	requireKeyAtIndex(t, tree, 0, keys[0])
+	requireKeyAtIndex(t, tree, 1, keys[1])
+	requireKeyAtIndex(t, tree, 2, keys[2])
 
 	ctx := context.Background()
 	msg := []byte("hello")
 
-	sig2Bytes, err := testSigners[2].Sign(ctx, msg)
+	sig2Bytes, err := gblsminsigtest.DeterministicSigners(3)[2].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig2 := new(blst.P1Affine)
 	sig2 = sig2.Uncompress(sig2Bytes)
@@ -310,7 +298,8 @@ func TestTree_SparseIndices(t *testing.T) {
 	//    4   5
 	//      6
 
-	sig0Bytes, err := testSigners[0].Sign(ctx, msg)
+	signers := gblsminsigtest.DeterministicSigners(4)
+	sig0Bytes, err := signers[0].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig0 := new(blst.P1Affine)
 	sig0 = sig0.Uncompress(sig0Bytes)
@@ -320,7 +309,7 @@ func TestTree_SparseIndices(t *testing.T) {
 	ids := tree.SparseIndices(nil)
 	require.Equal(t, []int{0}, ids)
 
-	sig1Bytes, err := testSigners[1].Sign(ctx, msg)
+	sig1Bytes, err := signers[1].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig1 := new(blst.P1Affine)
 	sig1 = sig1.Uncompress(sig1Bytes)
@@ -330,7 +319,7 @@ func TestTree_SparseIndices(t *testing.T) {
 	ids = tree.SparseIndices(ids[:0])
 	require.Equal(t, []int{4}, ids)
 
-	sig2Bytes, err := testSigners[2].Sign(ctx, msg)
+	sig2Bytes, err := signers[2].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig2 := new(blst.P1Affine)
 	sig2 = sig2.Uncompress(sig2Bytes)
@@ -340,7 +329,7 @@ func TestTree_SparseIndices(t *testing.T) {
 	ids = tree.SparseIndices(ids[:0])
 	require.Equal(t, []int{4, 2}, ids)
 
-	sig3Bytes, err := testSigners[3].Sign(ctx, msg)
+	sig3Bytes, err := signers[3].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig3 := new(blst.P1Affine)
 	sig3 = sig3.Uncompress(sig3Bytes)
@@ -364,22 +353,24 @@ func TestTree_Finalized(t *testing.T) {
 	//    4   5
 	//      6
 
+	signers := gblsminsigtest.DeterministicSigners(4)
+
 	// Add signature 0.
-	sig0Bytes, err := testSigners[0].Sign(ctx, msg)
+	sig0Bytes, err := signers[0].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig0 := new(blst.P1Affine)
 	sig0 = sig0.Uncompress(sig0Bytes)
 	tree.AddSignature(0, *sig0)
 
 	// Add signature 1.
-	sig1Bytes, err := testSigners[1].Sign(ctx, msg)
+	sig1Bytes, err := signers[1].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig1 := new(blst.P1Affine)
 	sig1 = sig1.Uncompress(sig1Bytes)
 	tree.AddSignature(1, *sig1)
 
 	// Add signature 3.
-	sig3Bytes, err := testSigners[3].Sign(ctx, msg)
+	sig3Bytes, err := signers[3].Sign(ctx, msg)
 	require.NoError(t, err)
 	sig3 := new(blst.P1Affine)
 	sig3 = sig3.Uncompress(sig3Bytes)
@@ -392,10 +383,11 @@ func TestTree_Finalized(t *testing.T) {
 	finSig := tree.FinalizedSig()
 	require.True(t, expSig.Equals(&finSig))
 
+	keys := gblsminsigtest.DeterministicPubKeys(4)
 	expKey := new(blst.P2).
-		Add((*blst.P2Affine)(&testPubKeys[0])).
-		Add((*blst.P2Affine)(&testPubKeys[1])).
-		Add((*blst.P2Affine)(&testPubKeys[3])).
+		Add((*blst.P2Affine)(&keys[0])).
+		Add((*blst.P2Affine)(&keys[1])).
+		Add((*blst.P2Affine)(&keys[3])).
 		ToAffine()
 
 	require.True(t, ((gblsminsig.PubKey)(*expKey)).Verify(msg, finSig.Compress()))
@@ -403,7 +395,7 @@ func TestTree_Finalized(t *testing.T) {
 
 func keysSeq(n int) iter.Seq[blst.P2Affine] {
 	return func(yield func(blst.P2Affine) bool) {
-		for _, pk := range testPubKeys[:n] {
+		for _, pk := range gblsminsigtest.DeterministicPubKeys(n) {
 			if !yield(blst.P2Affine(pk)) {
 				return
 			}
