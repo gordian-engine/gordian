@@ -322,22 +322,22 @@ RESTART:
 		}
 	}
 
-	signBitsByHash, allSigsUnique := m.cmspScheme.ValidateFinalizedProof(
-		finProof, hashesBySignContent,
-	)
-
-	if !allSigsUnique {
-		return tmconsensus.HandleProposedHeaderBadPrevCommitProofDoubleSigned
-	}
-
-	if signBitsByHash == nil {
-		// Pretty sure, but not 100% sure, this is the right error to return here.
-		return tmconsensus.HandleProposedHeaderBadPrevCommitProofSignature
-	}
-
 	if ph.Header.Height > m.initialHeight {
-		// Only confirm the vote power if we are beyond the genesis height,
+		// Only confirm the previous commit proof if we are beyond the genesis height,
 		// as the initial height does not have previous commit proofs.
+		signBitsByHash, allSigsUnique := m.cmspScheme.ValidateFinalizedProof(
+			finProof, hashesBySignContent,
+		)
+
+		if !allSigsUnique {
+			return tmconsensus.HandleProposedHeaderBadPrevCommitProofDoubleSigned
+		}
+
+		if signBitsByHash == nil {
+			// Pretty sure, but not 100% sure, this is the right error to return here.
+			return tmconsensus.HandleProposedHeaderBadPrevCommitProofSignature
+		}
+
 		var prevBlockVotePower, availableVotePower uint64
 		prevVals := checkResp.PrevValidatorSet.Validators
 		sigBits := signBitsByHash[string(ph.Header.PrevBlockHash)]

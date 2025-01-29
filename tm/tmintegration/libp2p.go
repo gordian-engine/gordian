@@ -24,10 +24,7 @@ func NewLibp2pFactory(e *Env) Libp2pFactory {
 	return Libp2pFactory{e: e}
 }
 
-func (f Libp2pFactory) NewNetwork(ctx context.Context, log *slog.Logger) (tmp2ptest.Network, error) {
-	reg := new(gcrypto.Registry)
-	gcrypto.RegisterEd25519(reg)
-
+func (f Libp2pFactory) NewNetwork(ctx context.Context, log *slog.Logger, reg *gcrypto.Registry) (tmp2ptest.Network, error) {
 	codec := tmjson.MarshalCodec{
 		CryptoRegistry: reg,
 	}

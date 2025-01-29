@@ -12,7 +12,6 @@ import (
 	"github.com/gordian-engine/gordian/gwatchdog"
 	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
-	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmdebug"
 	"github.com/gordian-engine/gordian/tm/tmdriver"
 	"github.com/gordian-engine/gordian/tm/tmengine"
@@ -34,13 +33,14 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 			tb: t,
 		})
 
-		n, err := f.NewNetwork(ctx, log)
+		const netSize = 2
+		fx := f.NewConsensusFixture(netSize)
+
+		n, err := f.NewNetwork(ctx, log, &fx.Registry)
 		require.NoError(t, err)
 		defer n.Wait()
 		defer cancel()
 
-		const netSize = 2
-		fx := tmconsensustest.NewEd25519Fixture(netSize)
 		genesis := fx.DefaultGenesis()
 
 		// Make just the connections first, so we can stabilize the network,
@@ -198,12 +198,13 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 		const netSize = 6 // Total number of validators in the network.
 		const pickN = 4   // How many validators participate in rounds beyond initial height.
-		n, err := f.NewNetwork(ctx, log)
+		fx := f.NewConsensusFixture(netSize)
+
+		n, err := f.NewNetwork(ctx, log, &fx.Registry)
 		require.NoError(t, err)
 		defer n.Wait()
 		defer cancel()
 
-		fx := tmconsensustest.NewEd25519Fixture(netSize)
 		genesis := fx.DefaultGenesis()
 
 		// Make just the connections first, so we can stabilize the network,

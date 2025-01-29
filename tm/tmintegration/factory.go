@@ -6,6 +6,7 @@ import (
 
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmgossip"
 	"github.com/gordian-engine/gordian/tm/tmp2p"
 	"github.com/gordian-engine/gordian/tm/tmp2p/tmp2ptest"
@@ -45,7 +46,7 @@ type Factory interface {
 	// NewNetwork will be called only once per test.
 	// The implementer may assume that the context will be canceled
 	// at or before the test's completion.
-	NewNetwork(context.Context, *slog.Logger) (tmp2ptest.Network, error)
+	NewNetwork(context.Context, *slog.Logger, *gcrypto.Registry) (tmp2ptest.Network, error)
 
 	NewActionStore(context.Context, int) (tmstore.ActionStore, error)
 	NewCommittedHeaderStore(context.Context, int) (tmstore.CommittedHeaderStore, error)
@@ -55,9 +56,12 @@ type Factory interface {
 	NewStateMachineStore(context.Context, int) (tmstore.StateMachineStore, error)
 	NewValidatorStore(context.Context, int, tmconsensus.HashScheme) (tmstore.ValidatorStore, error)
 
+	// TODO: fixture probably takes precedence over this?
 	HashScheme(context.Context, int) (tmconsensus.HashScheme, error)
 	SignatureScheme(context.Context, int) (tmconsensus.SignatureScheme, error)
 	CommonMessageSignatureProofScheme(context.Context, int) (gcrypto.CommonMessageSignatureProofScheme, error)
 
 	NewGossipStrategy(context.Context, int, tmp2p.Connection) (tmgossip.Strategy, error)
+
+	NewConsensusFixture(nVals int) *tmconsensustest.Fixture
 }

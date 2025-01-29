@@ -160,7 +160,14 @@ func (SignatureProofScheme) Finalize(
 	pubKeys := make([]gcrypto.PubKey, m.sigTree.NUnaggregatedKeys())
 	for i := range pubKeys {
 		k, _, _ := m.sigTree.Get(i)
-		pubKeys[i] = (*PubKey)(&k)
+		// It would be nice to use pointers to PubKey values here
+		// since we treat the tree's keys as immutable,
+		// but the other sources of public keys --
+		// in particular getting the public keys from Validator values --
+		// use non-reference values, and we can't really switch between
+		// references and non-references at runtime,
+		// so we just stick with PubKey values.
+		pubKeys[i] = (PubKey)(k)
 	}
 
 	// Get the bit set representing the validators who voted for the committing block.
@@ -399,12 +406,9 @@ func (SignatureProofScheme) ValidateFinalizedProof(
 	signBitsByHash map[string]*bitset.BitSet, allSignaturesUnique bool,
 ) {
 	nKeys := len(proof.Keys)
-	keys := make([]*PubKey, nKeys)
+	keys := make([]PubKey, nKeys)
 	for i, k := range proof.Keys {
-		// We are often using PubKey values,
-		// but we actually use a slice of pointers in Finalize,
-		// so follow that here.
-		keys[i] = k.(*PubKey)
+		keys[i] = k.(PubKey)
 	}
 
 	// There is surely a better way we can use an existing sigTree for this.
@@ -444,7 +448,7 @@ func (SignatureProofScheme) ValidateFinalizedProof(
 	aggMainKey := new(blst.P2)
 	for u, ok := usedOriginalBits.NextSet(0); ok && int(u) < nKeys; u, ok = usedOriginalBits.NextSet(u + 1) {
 		i := int(u)
-		aggMainKey = aggMainKey.Add((*blst.P2Affine)(keys[i]))
+		aggMainKey = aggMainKey.Add((*blst.P2Affine)(&keys[i]))
 	}
 
 	finalizedMainKey := (*PubKey)(aggMainKey.ToAffine())
@@ -535,7 +539,7 @@ func (SignatureProofScheme) ValidateFinalizedProof(
 		aggKey := new(blst.P2)
 		for u, ok := originalProjectionBits.NextSet(0); ok; u, ok = originalProjectionBits.NextSet(u + 1) {
 			i := int(u)
-			aggKey = aggKey.Add((*blst.P2Affine)(keys[i]))
+			aggKey = aggKey.Add((*blst.P2Affine)(&keys[i]))
 		}
 
 		// And verify that the signature matches the aggregated key.
