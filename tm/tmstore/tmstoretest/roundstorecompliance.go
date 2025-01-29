@@ -15,7 +15,7 @@ import (
 
 type RoundStoreFactory func(cleanup func(func())) (tmstore.RoundStore, error)
 
-func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
+func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory, fxf FixtureFactory) {
 	t.Run("nothing stored at height", func(t *testing.T) {
 		t.Parallel()
 
@@ -42,7 +42,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph10 := fx.NextProposedHeader([]byte("val0"), 0)
 			ph10.Round = 1
@@ -116,7 +116,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph0 := fx.NextProposedHeader([]byte("val0"), 0)
 			fx.SignProposal(ctx, &ph0, 0)
@@ -147,7 +147,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph1 := fx.NextProposedHeader([]byte("val0"), 0)
 			require.Empty(t, ph1.Header.PrevCommitProof.Proofs)
@@ -185,7 +185,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph1 := fx.NextProposedHeader([]byte("val0"), 0)
 			fx.SignProposal(ctx, &ph1, 0)
@@ -281,7 +281,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 				s, err := f(t.Cleanup)
 				require.NoError(t, err)
 
-				fx := tmconsensustest.NewEd25519Fixture(2)
+				fx := fxf(2)
 				attemptToSavePubKeys(t, ctx, s, fx.Vals())
 
 				ph := fx.NextProposedHeader([]byte("app_data"), 0)
@@ -315,7 +315,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 			attemptToSavePubKeys(t, ctx, s, fx.Vals())
 
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)
@@ -352,7 +352,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 			attemptToSavePubKeys(t, ctx, s, fx.Vals())
 
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)
@@ -379,7 +379,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 			attemptToSavePubKeys(t, ctx, s, fx.Vals())
 
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)
@@ -413,7 +413,7 @@ func TestRoundStoreCompliance(t *testing.T, f RoundStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 			attemptToSavePubKeys(t, ctx, s, fx.Vals())
 
 			ph := fx.NextProposedHeader([]byte("app_data"), 0)

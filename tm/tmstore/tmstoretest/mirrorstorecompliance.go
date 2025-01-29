@@ -10,6 +10,8 @@ import (
 
 type MirrorStoreFactory func(cleanup func(func())) (tmstore.MirrorStore, error)
 
+// TestMirrorStoreCompliance does not require a FixtureFactory
+// because there is no representation of validators or signatures in the mirror store.
 func TestMirrorStoreCompliance(t *testing.T, f MirrorStoreFactory) {
 	t.Run("returns ErrStoreUninitialized before first update", func(t *testing.T) {
 		t.Parallel()

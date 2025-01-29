@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
-	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmstore"
 	"github.com/stretchr/testify/require"
 )
 
 type CommittedHeaderStoreFactory func(cleanup func(func())) (tmstore.CommittedHeaderStore, error)
 
-func TestCommittedHeaderStoreCompliance(t *testing.T, f CommittedHeaderStoreFactory) {
+func TestCommittedHeaderStoreCompliance(t *testing.T, f CommittedHeaderStoreFactory, fxf FixtureFactory) {
 	t.Run("happy path", func(t *testing.T) {
 		t.Parallel()
 
@@ -22,7 +21,7 @@ func TestCommittedHeaderStoreCompliance(t *testing.T, f CommittedHeaderStoreFact
 		s, err := f(t.Cleanup)
 		require.NoError(t, err)
 
-		fx := tmconsensustest.NewEd25519Fixture(4)
+		fx := fxf(4)
 
 		ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 		ph1.Header.PrevAppStateHash = []byte("initial_app_state") // TODO: this should be automatically set in the fixture.

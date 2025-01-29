@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
-	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmstore"
 	"github.com/stretchr/testify/require"
 )
@@ -20,6 +19,7 @@ type MultiStoreFactory[S any] func(cleanup func(func())) (S, error)
 func TestMultiStoreCompliance[S any](
 	t *testing.T,
 	f MultiStoreFactory[S],
+	fxf FixtureFactory,
 ) {
 	confirmStoreInterfaces[S]()
 
@@ -45,7 +45,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			fx.SignProposal(ctx, &ph1, 0)
@@ -67,7 +67,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			require.Empty(t, ph1.Header.PrevCommitProof.Proofs)
@@ -118,7 +118,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			fx.SignProposal(ctx, &ph1, 0)
@@ -140,7 +140,7 @@ func TestMultiStoreCompliance[S any](
 			require.NoError(t, err)
 			s := any(plain).(store)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			require.Empty(t, ph1.Header.PrevCommitProof.Proofs)

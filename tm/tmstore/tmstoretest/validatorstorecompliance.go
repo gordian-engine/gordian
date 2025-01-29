@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
-	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmstore"
 	"github.com/stretchr/testify/require"
 )
 
 type ValidatorStoreFactory func(cleanup func(func())) (tmstore.ValidatorStore, error)
 
-func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
+func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory, fxf FixtureFactory) {
 	t.Run("pub keys", func(t *testing.T) {
 		t.Run("round trip", func(t *testing.T) {
 			t.Parallel()
@@ -23,7 +22,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			keys3 := tmconsensustest.DeterministicValidatorsEd25519(3).PubKeys()
+			keys3 := fxf(3).PrivVals.PubKeys()
 
 			hash3, err := s.SavePubKeys(ctx, keys3)
 			require.NoError(t, err)
@@ -53,7 +52,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 			sGood, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			keys3 := tmconsensustest.DeterministicValidatorsEd25519(3).PubKeys()
+			keys3 := fxf(3).PrivVals.PubKeys()
 
 			hash3, err := sGood.SavePubKeys(ctx, keys3)
 			require.NoError(t, err)
@@ -126,7 +125,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			vals3 := tmconsensustest.DeterministicValidatorsEd25519(3)
+			vals3 := fxf(3).PrivVals
 
 			keyHash, err := s.SavePubKeys(ctx, vals3.PubKeys())
 			require.NoError(t, err)
@@ -158,7 +157,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 			sGood, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			vals3 := tmconsensustest.DeterministicValidatorsEd25519(3)
+			vals3 := fxf(3).PrivVals
 
 			keyHash, err := sGood.SavePubKeys(ctx, vals3.PubKeys())
 			require.NoError(t, err)
@@ -194,7 +193,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 			sGood, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			vals3 := tmconsensustest.DeterministicValidatorsEd25519(3)
+			vals3 := fxf(3).PrivVals
 
 			keyHash, err := sGood.SavePubKeys(ctx, vals3.PubKeys())
 			require.NoError(t, err)
@@ -229,7 +228,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 			sGood, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			vals3 := tmconsensustest.DeterministicValidatorsEd25519(3)
+			vals3 := fxf(3).PrivVals
 
 			keyHash, err := sGood.SavePubKeys(ctx, vals3.PubKeys())
 			require.NoError(t, err)
@@ -261,7 +260,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 				s, err := f(t.Cleanup)
 				require.NoError(t, err)
 
-				vals := tmconsensustest.DeterministicValidatorsEd25519(4)
+				vals := fxf(4).PrivVals
 
 				keyHash, err := s.SavePubKeys(ctx, vals.PubKeys())
 				require.NoError(t, err)
@@ -291,7 +290,7 @@ func TestValidatorStoreCompliance(t *testing.T, f ValidatorStoreFactory) {
 				s, err := f(t.Cleanup)
 				require.NoError(t, err)
 
-				vals := tmconsensustest.DeterministicValidatorsEd25519(4)
+				vals := fxf(4).PrivVals
 
 				keyHash, err := s.SavePubKeys(ctx, vals[:3].PubKeys())
 				require.NoError(t, err)

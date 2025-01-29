@@ -14,5 +14,5 @@ func TestMemValidatorStore(t *testing.T) {
 
 	tmstoretest.TestValidatorStoreCompliance(t, func(func(func())) (tmstore.ValidatorStore, error) {
 		return tmmemstore.NewValidatorStore(tmconsensustest.SimpleHashScheme{}), nil
-	})
+	}, tmconsensustest.NewEd25519Fixture)
 }

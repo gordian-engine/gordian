@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
-	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmstore"
 	"github.com/stretchr/testify/require"
 )
 
 type ActionStoreFactory func(cleanup func(func())) (tmstore.ActionStore, error)
 
-func TestActionStoreCompliance(t *testing.T, f ActionStoreFactory) {
+func TestActionStoreCompliance(t *testing.T, f ActionStoreFactory, fxf FixtureFactory) {
 	t.Run("proposed headers", func(t *testing.T) {
 		t.Parallel()
 
@@ -22,7 +21,7 @@ func TestActionStoreCompliance(t *testing.T, f ActionStoreFactory) {
 		s, err := f(t.Cleanup)
 		require.NoError(t, err)
 
-		fx := tmconsensustest.NewEd25519Fixture(2)
+		fx := fxf(2)
 		ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 		ph1.Round = 2 // Arbitrary, test nonzero round.
 
@@ -71,7 +70,7 @@ func TestActionStoreCompliance(t *testing.T, f ActionStoreFactory) {
 		s, err := f(t.Cleanup)
 		require.NoError(t, err)
 
-		fx := tmconsensustest.NewEd25519Fixture(2)
+		fx := fxf(2)
 		ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 		ph1.Round = 2
 
@@ -127,7 +126,7 @@ func TestActionStoreCompliance(t *testing.T, f ActionStoreFactory) {
 		s, err := f(t.Cleanup)
 		require.NoError(t, err)
 
-		fx := tmconsensustest.NewEd25519Fixture(2)
+		fx := fxf(2)
 		ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 		ph1.Round = 2
 
@@ -177,7 +176,7 @@ func TestActionStoreCompliance(t *testing.T, f ActionStoreFactory) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fx := tmconsensustest.NewEd25519Fixture(2)
+		fx := fxf(2)
 		ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 		ph1.Round = 2
 
@@ -239,7 +238,7 @@ func TestActionStoreCompliance(t *testing.T, f ActionStoreFactory) {
 			s, err := f(t.Cleanup)
 			require.NoError(t, err)
 
-			fx := tmconsensustest.NewEd25519Fixture(2)
+			fx := fxf(2)
 			ph1 := fx.NextProposedHeader([]byte("app_data_1"), 0)
 			ph1.Round = 2 // Arbitrary, test nonzero round.
 

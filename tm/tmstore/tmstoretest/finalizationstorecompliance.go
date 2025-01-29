@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
-	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmstore"
 	"github.com/stretchr/testify/require"
 )
 
 type FinalizationStoreFactory func(cleanup func(func())) (tmstore.FinalizationStore, error)
 
-func TestFinalizationStoreCompliance(t *testing.T, f FinalizationStoreFactory) {
+func TestFinalizationStoreCompliance(t *testing.T, f FinalizationStoreFactory, fxf FixtureFactory) {
 	t.Run("round trip", func(t *testing.T) {
 		t.Parallel()
 
@@ -22,11 +21,7 @@ func TestFinalizationStoreCompliance(t *testing.T, f FinalizationStoreFactory) {
 		s, err := f(t.Cleanup)
 		require.NoError(t, err)
 
-		valSet, err := tmconsensus.NewValidatorSet(
-			tmconsensustest.DeterministicValidatorsEd25519(3).Vals(),
-			tmconsensustest.SimpleHashScheme{},
-		)
-		require.NoError(t, err)
+		valSet := fxf(3).ValSet()
 
 		require.NoError(t, s.SaveFinalization(ctx, 1, 3, "my_block_hash", valSet, "my_app_state_hash"))
 
@@ -61,11 +56,7 @@ func TestFinalizationStoreCompliance(t *testing.T, f FinalizationStoreFactory) {
 		s, err := f(t.Cleanup)
 		require.NoError(t, err)
 
-		valSet, err := tmconsensus.NewValidatorSet(
-			tmconsensustest.DeterministicValidatorsEd25519(3).Vals(),
-			tmconsensustest.SimpleHashScheme{},
-		)
-		require.NoError(t, err)
+		valSet := fxf(3).ValSet()
 
 		require.NoError(t, s.SaveFinalization(ctx, 1, 3, "my_block_hash", valSet, "my_app_state_hash"))
 

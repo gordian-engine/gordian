@@ -33,10 +33,13 @@ func NewMemMultiStore() *MemMultiStore {
 }
 
 func TestMemMultiStoreCompliance(t *testing.T) {
+	t.Parallel()
+
 	tmstoretest.TestMultiStoreCompliance(
 		t,
 		func(cleanup func(func())) (*MemMultiStore, error) {
 			return NewMemMultiStore(), nil
 		},
+		tmconsensustest.NewEd25519Fixture,
 	)
 }
