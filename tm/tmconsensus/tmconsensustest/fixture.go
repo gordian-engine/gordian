@@ -36,6 +36,35 @@ type Fixture struct {
 	prevBlockHeight  uint64
 }
 
+// NewBareFixture returns a Fixture with the default testing schemes,
+// and with appropriately initialized unexported fields.
+//
+// Callers must still set the Registry and PrivVals fields,
+// and they may optionally override any of the Scheme fields.
+//
+// This function is preferred over direct instantiation of a Fixture due to the unexported fields.
+func NewBareFixture() *Fixture {
+	return &Fixture{
+		SignatureScheme: SimpleSignatureScheme{},
+
+		CommonMessageSignatureProofScheme: gcrypto.SimpleCommonMessageSignatureProofScheme{},
+
+		HashScheme: SimpleHashScheme{},
+
+		prevCommitProof: tmconsensus.CommitProof{
+			// Store implementations like tmsqlite expect the Proofs map
+			// to be empty but non-nil at the initial height.
+			Proofs: map[string][]gcrypto.SparseSignature{},
+		},
+
+		// Various parts of the codebase assume this is non-empty.
+		// The "uninitialized" string is obviously a bit meaningless.
+		// Calling DefaultGenesis sets this field to the genesis app hash,
+		// matching the behavior in production.
+		prevAppStateHash: []byte("uninitialized"),
+	}
+}
+
 func (f *Fixture) Vals() []tmconsensus.Validator {
 	// NOTE: the StandardFixture used to sort the validators,
 	// but based on how the deterministic validators were generated,
