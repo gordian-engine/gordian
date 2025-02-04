@@ -3,6 +3,7 @@ package gcrypto
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"maps"
 	"slices"
 	"sort"
@@ -142,6 +143,12 @@ type SimpleCommonMessageSignatureProof struct {
 }
 
 func NewSimpleCommonMessageSignatureProof(msg []byte, candidateKeys []PubKey, pubKeyHash string) (SimpleCommonMessageSignatureProof, error) {
+	if len(candidateKeys) == 0 {
+		panic(errors.New(
+			"BUG: NewSimpleCommonMessageSignatureProof requires len(candidateKeys) > 0",
+		))
+	}
+
 	keyIdxs := make(map[string]int, len(candidateKeys))
 
 	for i, k := range candidateKeys {

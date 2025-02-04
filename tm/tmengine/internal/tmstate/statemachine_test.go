@@ -63,6 +63,13 @@ func TestStateMachine_initialization(t *testing.T) {
 
 		require.NoError(t, sfx.Cfg.FinalizationStore.SaveFinalization(
 			ctx,
+			0, 0,
+			"some_genesis_hash",
+			sfx.Fx.ValSet(),
+			"some_genesis_app_state_hash",
+		))
+		require.NoError(t, sfx.Cfg.FinalizationStore.SaveFinalization(
+			ctx,
 			1, 0,
 			"some_block_hash",
 			sfx.Fx.ValSet(),

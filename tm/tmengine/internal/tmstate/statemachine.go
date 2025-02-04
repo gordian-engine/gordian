@@ -627,18 +627,20 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 		initRE.PubKey = m.signer.PubKey()
 	}
 
-	isGenesis := h == m.genesis.InitialHeight && r == 0
-
 	// And we only populate the actions channel if we are participating,
 	// i.e. we are a validator in the current set.
 	// Although we set the rest of the rlc values later,
 	// we need the current validator set now to determine participation.
-	if isGenesis {
+	if h == m.genesis.InitialHeight { // Round doesn't matter for this check.
+		// This relies on the Engine having run InitChain against the app already,
+		// ensuring that genesis.ValidatorSet is not empty.
 		rlc.CurValSet = m.genesis.ValidatorSet
 		rlc.PrevValSet = m.genesis.ValidatorSet
 	} else {
 		// If we are past genesis,
 		// it should be safe to assume we have a finalization for two heights back.
+		// Even if initial height is 1 and we are on height 2,
+		// the engine stores a finalization at height 0 which specifically helps this case.
 		_, _, rlc.CurValSet, _, err = m.fStore.LoadFinalizationByHeight(ctx, h-2)
 		if err != nil {
 			m.log.Error(
@@ -649,10 +651,14 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 			return rlc, rer, false
 		}
 
-		if h-3 > m.genesis.InitialHeight {
-			// If the current validator set was declared at h-2,
-			// then the previous validator set must have been declared at h-3.
-			// If we don't have that finalization then we need to fall back to genesis.
+		// We know we have a finalization at h-2.
+		// The only tricky case is if we are at initial height + 1.
+		// In that case, the previous validator set is the same as the current validator set we just got.
+		if h == m.genesis.InitialHeight+1 {
+			rlc.PrevValSet = rlc.CurValSet
+		} else {
+			// We are at least at initial height + 2,
+			// so we can safely read the finalization for h-3.
 			_, _, rlc.PrevValSet, _, err = m.fStore.LoadFinalizationByHeight(ctx, h-3)
 			if err != nil {
 				m.log.Error(
@@ -662,10 +668,7 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 				)
 				return rlc, rer, false
 			}
-		} else {
-			rlc.PrevValSet = m.genesis.ValidatorSet
 		}
-
 	}
 	if m.isParticipating(&rlc) {
 		initRE.Actions = make(chan tmeil.StateMachineRoundAction, 3)
@@ -696,6 +699,8 @@ func (m *StateMachine) sendInitialActionSet(ctx context.Context) (
 		rlc.HeightCommitted = hc
 		rlc.OutgoingActionsCh = initRE.Actions // Should this be part of the Reset method instead?
 
+		// TODO: is it correct to keep the r == 0 check on this?
+		isGenesis := h == m.genesis.InitialHeight && r == 0
 		if isGenesis {
 			// Assuming it's safe to take the reference of the genesis validators.
 			rlc.PrevFinNextValSet = m.genesis.ValidatorSet
