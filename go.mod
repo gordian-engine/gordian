@@ -15,8 +15,8 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/supranational/blst v0.3.15
 	github.com/tv42/httpunix v0.0.0-20191220191345-2ba4b9c3382c
-	golang.org/x/crypto v0.32.0
-	golang.org/x/tools v0.29.0
+	golang.org/x/crypto v0.39.0
+	golang.org/x/tools v0.33.0
 )
 
 require (
@@ -141,11 +141,11 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20250207012021-f9890c6ad9f3 // indirect
-	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/mod v0.25.0 // indirect
+	golang.org/x/net v0.41.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	gonum.org/v1/gonum v0.15.1 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
