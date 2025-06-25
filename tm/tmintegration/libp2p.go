@@ -3,9 +3,10 @@ package tmintegration
 import (
 	"context"
 	"fmt"
-	"log/slog"
+	"testing"
 
 	"github.com/gordian-engine/gordian/gcrypto"
+	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/gordian-engine/gordian/tm/tmcodec/tmjson"
 	"github.com/gordian-engine/gordian/tm/tmgossip"
 	"github.com/gordian-engine/gordian/tm/tmp2p"
@@ -24,11 +25,11 @@ func NewLibp2pFactory(e *Env) Libp2pFactory {
 	return Libp2pFactory{e: e}
 }
 
-func (f Libp2pFactory) NewNetwork(ctx context.Context, log *slog.Logger, reg *gcrypto.Registry) (tmp2ptest.Network, error) {
+func (f Libp2pFactory) NewNetwork(t *testing.T, ctx context.Context, reg *gcrypto.Registry) (tmp2ptest.Network, error) {
 	codec := tmjson.MarshalCodec{
 		CryptoRegistry: reg,
 	}
-	n, err := tmlibp2ptest.NewNetwork(ctx, log, codec)
+	n, err := tmlibp2ptest.NewNetwork(ctx, gtest.NewLogger(t), codec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build network: %w", err)
 	}

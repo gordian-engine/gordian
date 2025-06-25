@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"testing"
 
 	"github.com/gordian-engine/gordian/gexchange"
 	"github.com/gordian-engine/gordian/internal/gchan"
+	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/gordian-engine/gordian/tm/tmp2p"
 )
@@ -46,9 +48,9 @@ type dcSetHandlerRequest struct {
 
 // NewDaisyChainNetwork returns a new DaisyChainNetwork.
 // Cancelling the context will stop the network and disconnect all created connections.
-func NewDaisyChainNetwork(ctx context.Context, log *slog.Logger) *DaisyChainNetwork {
+func NewDaisyChainNetwork(t *testing.T, ctx context.Context) *DaisyChainNetwork {
 	n := &DaisyChainNetwork{
-		log: log.With("net_idx", atomic.AddUint64(&dcNetworkIdxCounter, 1)),
+		log: gtest.NewLogger(t).With("net_idx", atomic.AddUint64(&dcNetworkIdxCounter, 1)),
 
 		newConnRequests: make(chan dcConnectRequest), // Unbuffered since this is effectively synchronous.
 

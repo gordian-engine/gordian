@@ -3,6 +3,7 @@ package tmintegration
 import (
 	"context"
 	"log/slog"
+	"testing"
 
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
@@ -46,7 +47,7 @@ type Factory interface {
 	// NewNetwork will be called only once per test.
 	// The implementer may assume that the context will be canceled
 	// at or before the test's completion.
-	NewNetwork(context.Context, *slog.Logger, *gcrypto.Registry) (tmp2ptest.Network, error)
+	NewNetwork(*testing.T, context.Context, *gcrypto.Registry) (tmp2ptest.Network, error)
 
 	NewActionStore(context.Context, int) (tmstore.ActionStore, error)
 	NewCommittedHeaderStore(context.Context, int) (tmstore.CommittedHeaderStore, error)

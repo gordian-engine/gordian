@@ -2,7 +2,7 @@ package tmintegration
 
 import (
 	"context"
-	"log/slog"
+	"testing"
 
 	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/tm/tmgossip"
@@ -18,11 +18,11 @@ func NewDaisyChainFactory(e *Env) DaisyChainFactory {
 	return DaisyChainFactory{e: e}
 }
 
-func (f DaisyChainFactory) NewNetwork(ctx context.Context, log *slog.Logger, reg *gcrypto.Registry) (tmp2ptest.Network, error) {
+func (f DaisyChainFactory) NewNetwork(t *testing.T, ctx context.Context, reg *gcrypto.Registry) (tmp2ptest.Network, error) {
 	// We don't need the gcrypto registry for the daisy chain network,
 	// because we only transmit in-memory values,
 	// without serializing and deserializing across the network.
-	n := tmp2ptest.NewDaisyChainNetwork(ctx, log)
+	n := tmp2ptest.NewDaisyChainNetwork(t, ctx)
 
 	return &tmp2ptest.GenericNetwork[*tmp2ptest.DaisyChainConnection]{
 		Network: n,

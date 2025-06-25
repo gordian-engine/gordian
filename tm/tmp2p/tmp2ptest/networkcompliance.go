@@ -2,7 +2,6 @@ package tmp2ptest
 
 import (
 	"context"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -37,7 +36,8 @@ type Network interface {
 }
 
 // NetworkConstructor is used within [TestNetworkCompliance] to create a Network.
-type NetworkConstructor func(context.Context, *slog.Logger) (Network, error)
+// The testing.T parameter is available for tests to register cleanup.
+type NetworkConstructor func(*testing.T, context.Context) (Network, error)
 
 // GenericNetwork is a convenience wrapper type that allows
 // a concrete network implementation to have a Connect method
@@ -82,9 +82,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		log := gtest.NewLogger(t)
-
-		net, err := newNet(ctx, log)
+		net, err := newNet(t, ctx)
 		require.NoError(t, err)
 		defer net.Wait()
 		defer cancel()
@@ -136,9 +134,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		log := gtest.NewLogger(t)
-
-		net, err := newNet(ctx, log)
+		net, err := newNet(t, ctx)
 		require.NoError(t, err)
 		defer net.Wait()
 		defer cancel()
@@ -178,9 +174,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		log := gtest.NewLogger(t)
-
-		net, err := newNet(ctx, log)
+		net, err := newNet(t, ctx)
 		require.NoError(t, err)
 		defer net.Wait()
 		defer cancel()
@@ -247,9 +241,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		log := gtest.NewLogger(t)
-
-		net, err := newNet(ctx, log)
+		net, err := newNet(t, ctx)
 		require.NoError(t, err)
 		defer net.Wait()
 		defer cancel()
@@ -309,9 +301,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		log := gtest.NewLogger(t)
-
-		net, err := newNet(ctx, log)
+		net, err := newNet(t, ctx)
 		require.NoError(t, err)
 		defer net.Wait()
 		defer cancel()

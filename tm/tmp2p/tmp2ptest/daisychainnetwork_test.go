@@ -2,7 +2,6 @@ package tmp2ptest_test
 
 import (
 	"context"
-	"log/slog"
 	"testing"
 
 	"github.com/gordian-engine/gordian/tm/tmp2p/tmp2ptest"
@@ -11,8 +10,8 @@ import (
 func TestDaisyChainNetwork_Compliance(t *testing.T) {
 	tmp2ptest.TestNetworkCompliance(
 		t,
-		func(ctx context.Context, log *slog.Logger) (tmp2ptest.Network, error) {
-			n := tmp2ptest.NewDaisyChainNetwork(ctx, log)
+		func(t *testing.T, ctx context.Context) (tmp2ptest.Network, error) {
+			n := tmp2ptest.NewDaisyChainNetwork(t, ctx)
 			return &tmp2ptest.GenericNetwork[*tmp2ptest.DaisyChainConnection]{
 				Network: n,
 			}, nil
