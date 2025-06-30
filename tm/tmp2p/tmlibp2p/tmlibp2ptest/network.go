@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gordian-engine/gordian/tm/tmcodec"
+	"github.com/gordian-engine/gordian/tm/tmconsensus"
+	"github.com/gordian-engine/gordian/tm/tmp2p"
 	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -154,6 +156,11 @@ func (n *Network) Wait() {
 	if err := n.seed.Close(); err != nil {
 		n.log.Info("Error closing seed host", "err", err)
 	}
+}
+
+// AddDriverAnnotations is a no-op.
+func (n *Network) AddDriverAnnotations(context.Context, tmp2p.Connection, *tmconsensus.ProposedHeader) error {
+	return nil
 }
 
 // Stabilize blocks until all peers in the network

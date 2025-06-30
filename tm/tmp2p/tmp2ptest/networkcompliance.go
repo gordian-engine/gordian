@@ -22,6 +22,14 @@ type Network interface {
 	// Open a connection.
 	Connect(context.Context) (tmp2p.Connection, error)
 
+	// The network compliance tests do not directly touch the annotations
+	// on the ProposedHeader or its Header.
+	// This method gives the network a chance to modify those fields
+	// so that recipients have sufficient information to decode the value.
+	//
+	// In production code, the driver would directly set those fields initially.
+	AddDriverAnnotations(context.Context, tmp2p.Connection, *tmconsensus.ProposedHeader) error
+
 	// Block until the network has cleaned up.
 	// Typically the Network has a lifecycle associated with a context,
 	// so cancel that context to stop the network.
@@ -57,6 +65,8 @@ type GenericNetwork[C tmp2p.Connection] struct {
 	Network interface {
 		Connect(context.Context) (C, error)
 
+		AddDriverAnnotations(context.Context, tmp2p.Connection, *tmconsensus.ProposedHeader) error
+
 		Wait()
 
 		Stabilize(context.Context) error
@@ -65,6 +75,12 @@ type GenericNetwork[C tmp2p.Connection] struct {
 
 func (n *GenericNetwork[C]) Connect(ctx context.Context) (tmp2p.Connection, error) {
 	return n.Network.Connect(ctx)
+}
+
+func (n *GenericNetwork[C]) AddDriverAnnotations(
+	ctx context.Context, c tmp2p.Connection, ph *tmconsensus.ProposedHeader,
+) error {
+	return n.Network.AddDriverAnnotations(ctx, c, ph)
 }
 
 func (n *GenericNetwork[C]) Wait() {
@@ -153,6 +169,8 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 
 		fx := tmconsensustest.NewEd25519Fixture(3)
 		h := fx.NextProposedHeader([]byte("app_data"), 0)
+		net.AddDriverAnnotations(ctx, conn1, &h)
+		fx.RecalculateHash(&h.Header)
 		fx.SignProposal(ctx, &h, 0)
 
 		conn1.ConsensusBroadcaster().OutgoingProposedHeaders() <- h
@@ -199,6 +217,8 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		fx := tmconsensustest.NewEd25519Fixture(3)
 
 		ph1 := fx.NextProposedHeader([]byte("app_data"), 0)
+		net.AddDriverAnnotations(ctx, conn1, &ph1)
+		fx.RecalculateHash(&ph1.Header)
 		fx.SignProposal(ctx, &ph1, 0)
 
 		// Outgoing proposal is seen on other channels.
@@ -215,6 +235,7 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 
 		ph2 := fx.NextProposedHeader([]byte("app_data_2"), 1)
 		ph2.Header.Height = 2
+		net.AddDriverAnnotations(ctx, conn2, &ph2)
 		fx.RecalculateHash(&ph2.Header)
 		fx.SignProposal(ctx, &ph2, 1)
 
@@ -260,6 +281,8 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		require.NoError(t, net.Stabilize(ctx))
 
 		ph := fx.NextProposedHeader([]byte("block_hash"), 0)
+		net.AddDriverAnnotations(ctx, conn1, &ph)
+		fx.RecalculateHash(&ph.Header)
 		vt := tmconsensus.VoteTarget{
 			Height:    1,
 			Round:     0,
@@ -319,6 +342,8 @@ func TestNetworkCompliance(t *testing.T, newNet NetworkConstructor) {
 		require.NoError(t, net.Stabilize(ctx))
 
 		ph := fx.NextProposedHeader([]byte("block_hash"), 0)
+		net.AddDriverAnnotations(ctx, conn1, &ph)
+		fx.RecalculateHash(&ph.Header)
 
 		vt := tmconsensus.VoteTarget{
 			Height:    1,

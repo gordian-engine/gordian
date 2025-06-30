@@ -354,14 +354,17 @@ func (e *Engine) maybeInitializeChain(
 	return updatedGenesis, nil
 }
 
+// HandleProposedHeader satisfies the [tmconsensus.ConsensusHandler] interface.
 func (e *Engine) HandleProposedHeader(ctx context.Context, ph tmconsensus.ProposedHeader) tmconsensus.HandleProposedHeaderResult {
 	return e.m.HandleProposedHeader(ctx, ph)
 }
 
+// HandlePrevoteProofs satisfies the [tmconsensus.ConsensusHandler] interface.
 func (e *Engine) HandlePrevoteProofs(ctx context.Context, p tmconsensus.PrevoteSparseProof) tmconsensus.HandleVoteProofsResult {
 	return e.m.HandlePrevoteProofs(ctx, p)
 }
 
+// HandlePrecommitProofs satisfies the [tmconsensus.ConsensusHandler] interface.
 func (e *Engine) HandlePrecommitProofs(ctx context.Context, p tmconsensus.PrecommitSparseProof) tmconsensus.HandleVoteProofsResult {
 	return e.m.HandlePrecommitProofs(ctx, p)
 }

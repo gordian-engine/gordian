@@ -124,6 +124,11 @@ func (n *DaisyChainNetwork) Connect(ctx context.Context) (*DaisyChainConnection,
 	}
 }
 
+// AddDriverAnnotations is a no-op for the DaisyChainNetwork.
+func (n *DaisyChainNetwork) AddDriverAnnotations(context.Context, tmp2p.Connection, *tmconsensus.ProposedHeader) error {
+	return nil
+}
+
 // Stabilize is a no-op for the DaisyChainNetwork.
 func (n *DaisyChainNetwork) Stabilize(context.Context) error {
 	return nil
