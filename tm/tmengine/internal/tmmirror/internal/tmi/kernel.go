@@ -46,7 +46,6 @@ type Kernel struct {
 	mc  *tmemetrics.Collector
 
 	replayedHeadersIn <-chan tmelink.ReplayedHeaderRequest
-	gossipOutCh       chan<- tmelink.NetworkViewUpdate
 
 	stateMachineRoundEntranceIn <-chan tmeil.StateMachineRoundEntrance
 
@@ -181,7 +180,6 @@ func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel
 		// Channels provided through the config,
 		// i.e. channels coordinated by the Engine or Mirror.
 		replayedHeadersIn: cfg.ReplayedHeadersIn,
-		gossipOutCh:       cfg.GossipStrategyOut,
 
 		stateMachineRoundEntranceIn: cfg.StateMachineRoundEntranceIn,
 

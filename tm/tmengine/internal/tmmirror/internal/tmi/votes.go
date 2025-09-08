@@ -6,6 +6,7 @@ type AddPrevoteRequest struct {
 	H uint64
 	R uint32
 
+	// Key is block hash.
 	PrevoteUpdates map[string]VoteUpdate
 
 	Response chan AddVoteResult
@@ -15,6 +16,7 @@ type AddPrecommitRequest struct {
 	H uint64
 	R uint32
 
+	// Key is block hash.
 	PrecommitUpdates map[string]VoteUpdate
 
 	Response chan AddVoteResult
