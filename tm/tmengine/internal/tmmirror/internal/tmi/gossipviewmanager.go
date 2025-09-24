@@ -5,6 +5,15 @@ import (
 	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 )
 
+// The gossipViewManager contains [OutgoingView] values
+// corresponding to the Committing, Voting, and NextRound views.
+// The [Kernel] updates those fields,
+// and then calls [*gossipViewManager.Output] to get a (possibly nil) channel
+// and value to send on it, from the kernel's main loop,
+//
+// Ultimately, the channel receiver is the
+// [github.com/gordian-engine/gordian/tm/tmgossip.Strategy]
+// as wired up in tmengine.
 type gossipViewManager struct {
 	out chan<- tmelink.NetworkViewUpdate
 

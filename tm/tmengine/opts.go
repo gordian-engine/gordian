@@ -174,9 +174,9 @@ func WithBlockFinalizationChannel(ch chan<- tmdriver.FinalizeBlockRequest) Opt {
 	}
 }
 
-// WithAppDataArrivalChannel sets the channel that the engine reads from
+// WithBlockDataArrivalChannel sets the channel that the engine reads from
 // in order to refresh the consensus strategy,
-// in the event that application data is received
+// in the event that block data is received
 // later than a proposed block is received.
 func WithBlockDataArrivalChannel(ch <-chan tmelink.BlockDataArrival) Opt {
 	return func(_ *Engine, smc *tmstate.StateMachineConfig) error {
