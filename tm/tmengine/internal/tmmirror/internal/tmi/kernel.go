@@ -25,6 +25,14 @@ import (
 
 //go:generate go run github.com/gordian-engine/gordian/gassert/cmd/generate-nodebug kernel_debug.go
 
+// The Kernel contains the logic for, and maintains the state of,
+// the [*github.com/gordian-engine/gordian/tm/tmengine/internal/tmmirror.Mirror].
+//
+// The Kernel has very few methods;
+// communication is done through channels provided on the [KernelConfig] value
+// passed to [NewKernel].
+// Most of those channels are set through engine options
+// via the [github.com/goridan-engine/gordian/tm/tmengine.Opt] type.
 type Kernel struct {
 	log *slog.Logger
 
@@ -62,6 +70,7 @@ type Kernel struct {
 	done chan struct{}
 }
 
+// KernelConfig is the configuration value for [NewKernel].
 type KernelConfig struct {
 	Store                tmstore.MirrorStore
 	CommittedHeaderStore tmstore.CommittedHeaderStore
@@ -106,6 +115,7 @@ type KernelConfig struct {
 	AssertEnv gassert.Env
 }
 
+// NewKernel returns a new instance of [*Kernel].
 func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel, error) {
 	if len(cfg.InitialValidatorSet.Validators) == 0 {
 		panic(fmt.Errorf("BUG: initial validator set is empty"))
@@ -310,42 +320,78 @@ func (k *Kernel) mainLoop(ctx context.Context, s *kState, wd *gwatchdog.Watchdog
 			return
 
 		case req := <-k.snapshotRequests:
+			// The mirror can send snapshot requests,
+			// although it looks those are only used in tests,
+			// so this functionality should probably be removed.
 			k.sendSnapshotResponse(ctx, s, req)
 
 		case req := <-k.viewLookupRequests:
+			// The mirror sends a view lookup request
+			// to retrieve kernel state,
+			// early in handling prevote or precommit proofs.
+			// This is intended to be a lightweight check to allow the mirror
+			// to avoid work if a message contains only redundant information.
 			k.sendViewLookupResponse(ctx, s, req)
 
 		case req := <-k.phCheckRequests:
+			// The mirror sends the proposed header check request
+			// early in handling a proposed header.
+			// This is intended to be a lightweight check to allow the mirror
+			// to avoid work if a message contains only redundant information.
 			k.sendPHCheckResponse(ctx, s, req)
 
 		case ph := <-k.addPHRequests:
+			// The mirror makes an add proposed header request
+			// if it appears that the proposed header should be added to the mirror's state.
 			k.addProposedHeader(ctx, s, ph)
 
 		case req := <-k.addPrevoteRequests:
+			// The mirror makes an add prevote request
+			// when handling prevote proofs.
 			k.addPrevote(ctx, s, req)
 
 		case req := <-k.addPrecommitRequests:
+			// The mirror makes an add precommit request
+			// when handling precommit proofs.
 			k.addPrecommit(ctx, s, req)
 
 		case gsOut.Ch <- gsOut.Val:
+			// If the gossip strategy output channel is not nil,
+			// send the updated gossip strategy value.
 			gsOut.MarkSent()
 
 		case smOut.Ch <- smOut.Val:
+			// If the state machine output channel is not nil,
+			// send the updated state machine value.
 			smOut.MarkSent()
 
 		case lagOut.Ch <- lagOut.Val:
+			// If the lag manager output channel is not nil,
+			// send the updated state machine value.
 			lagOut.MarkSent()
 
 		case ph := <-k.phf.FetchedProposedHeaders:
+			// This channel has a complete proposed header value
+			// that was retrieved out of band from the normal network flow
+			// through the mirror.
 			k.addProposedHeader(ctx, s, ph)
 
 		case re := <-k.stateMachineRoundEntranceIn:
+			// The state machine has entered a new round
+			// (which could be round zero in a new height,
+			// or a non-zero round in the current height).
 			k.handleStateMachineRoundEntrance(ctx, s, re)
 
 		case act := <-s.StateMachineViewManager.Actions():
+			// The state machine is sending its own
+			// proposed header, prevote, or precommit.
 			k.handleStateMachineAction(ctx, s, act)
 
 		case req := <-k.replayedHeadersIn:
+			// The driver may provide replayed headers ("catchup"),
+			// if the mirror indicates the network is far ahead.
+			// Replayed headers advance the mirror,
+			// but the
 			err := k.handleReplayedHeader(ctx, s, req.Header, req.Proof)
 
 			invariantReplayedHeaderResponse(k.assertEnv, err)
@@ -365,6 +411,8 @@ func (k *Kernel) mainLoop(ctx context.Context, s *kState, wd *gwatchdog.Watchdog
 			}
 
 		case sig := <-wSig:
+			// Watchdog signal needs to be handled periodically
+			// to inform the watchdog that the mirror kernel has not deadlocked.
 			close(sig.Alive)
 		}
 	}

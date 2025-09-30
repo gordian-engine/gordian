@@ -22,6 +22,14 @@ import (
 
 // Mirror maintains a read-only view of the chain state,
 // based on inputs from the network.
+//
+// The mirror implements [tmconsensus.ConsensusHandler];
+// the [github.com/gordian-engine/gordian/tm/tmengine.Engine]
+// implements the same interface, simply delegating those calls to the mirror.
+//
+// Most of the heavy logic within the mirror is contained in the [*tmi.Kernel].
+//
+// Mirror methods are safe to call concurrently.
 type Mirror struct {
 	log *slog.Logger
 
@@ -171,6 +179,8 @@ func NewMirror(
 	return m, nil
 }
 
+// Wait blocks until the mirror's background goroutines have all completed.
+// To begin shutdown, cancel the context passed to [NewMirror].
 func (m *Mirror) Wait() {
 	m.k.Wait()
 }
