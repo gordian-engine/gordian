@@ -12,13 +12,12 @@ func _() {
 	_ = x[ViewBeforeCommitting-1]
 	_ = x[ViewWrongCommit-2]
 	_ = x[ViewOrphaned-3]
-	_ = x[ViewLaterVotingRound-4]
-	_ = x[ViewFuture-5]
+	_ = x[ViewFuture-4]
 }
 
-const _ViewLookupStatus_name = "FoundBeforeCommittingWrongCommitOrphanedLaterVotingRoundFuture"
+const _ViewLookupStatus_name = "FoundBeforeCommittingWrongCommitOrphanedFuture"
 
-var _ViewLookupStatus_index = [...]uint8{0, 5, 21, 32, 40, 56, 62}
+var _ViewLookupStatus_index = [...]uint8{0, 5, 21, 32, 40, 46}
 
 func (i ViewLookupStatus) String() string {
 	if i >= ViewLookupStatus(len(_ViewLookupStatus_index)-1) {

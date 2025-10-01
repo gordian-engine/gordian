@@ -75,10 +75,6 @@ const (
 	// Same height as the voting view, but an earlier round.
 	ViewOrphaned
 
-	// Same height as voting view but a later round than even NextRound.
-	// If the incoming data is valid, then we may have missed some votes.
-	ViewLaterVotingRound
-
 	// The requested height and round is beyond NextHeight and NextRound.
 	// The data may still be valid.
 	ViewFuture

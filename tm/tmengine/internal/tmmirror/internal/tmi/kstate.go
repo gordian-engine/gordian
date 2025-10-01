@@ -63,7 +63,7 @@ func (s *kState) FindView(h uint64, r uint32, reason string) (*tmconsensus.Versi
 			return nil, 0, ViewOrphaned
 		}
 
-		return nil, 0, ViewLaterVotingRound
+		return nil, 0, ViewFuture
 	}
 
 	if h == s.Committing.Height {
