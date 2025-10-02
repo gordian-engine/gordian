@@ -1521,7 +1521,7 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 			var err error
 			updatedVote, err = k.cmspScheme.New(
 				act.Prevote.SignContent,
-				tmconsensus.ValidatorsToPubKeys(s.Voting.ValidatorSet.Validators),
+				s.Voting.ValidatorSet.PubKeys,
 				string(s.Voting.ValidatorSet.PubKeyHash),
 			)
 			if err != nil {
@@ -1574,7 +1574,7 @@ func (k *Kernel) handleStateMachineAction(ctx context.Context, s *kState, act tm
 		var err error
 		updatedVote, err = k.cmspScheme.New(
 			act.Precommit.SignContent,
-			tmconsensus.ValidatorsToPubKeys(s.Voting.ValidatorSet.Validators),
+			s.Voting.ValidatorSet.PubKeys,
 			string(s.Voting.ValidatorSet.PubKeyHash),
 		)
 		if err != nil {
@@ -1726,9 +1726,11 @@ func (k *Kernel) handleReplayedHeader(
 				// TODO: this should be a gassert instead probably?
 				panic("TODO: ValidatorSet must be populated on replayed headers")
 			}
-			pubKeys := tmconsensus.ValidatorsToPubKeys(vals)
-			pubKeyHash := string(header.ValidatorSet.PubKeyHash)
-			haveProof, err = k.cmspScheme.New(precommitContent, pubKeys, pubKeyHash)
+			haveProof, err = k.cmspScheme.New(
+				precommitContent,
+				header.ValidatorSet.PubKeys,
+				string(header.ValidatorSet.PubKeyHash),
+			)
 			if err != nil {
 				return tmelink.ReplayedHeaderInternalError{
 					Err: fmt.Errorf(
@@ -1885,11 +1887,8 @@ func (k *Kernel) loadInitialView(
 
 	// Is there ever a case where we don't have the validator hashes in the store?
 	// This should be safe anyway, and it only happens once at startup.
-	valPubKeys := tmconsensus.ValidatorsToPubKeys(vs.Validators)
-
 	// TODO: gassert: confirm the store-returned hashes match vs.
-
-	_, err = k.vStore.SavePubKeys(ctx, valPubKeys)
+	_, err = k.vStore.SavePubKeys(ctx, vs.PubKeys)
 	if err != nil && !errors.As(err, new(tmstore.PubKeysAlreadyExistError)) {
 		return tmconsensus.RoundView{}, fmt.Errorf(
 			"cannot initialize view: failed to save or check initial view validator pubkey hash: %w",

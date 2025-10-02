@@ -22,6 +22,15 @@ type ValidatorSet struct {
 	// and therefore cannot be modified.
 	Validators []Validator
 
+	// The public keys of the validators,
+	// with each public key at the corresponding index in the Validators field.
+	//
+	// Many lower-level APIs work directly against a slice of public keys,
+	// so it is simpler to have one canonical slice of the public keys
+	// rather than repeatedly allocating
+	// or otherwise maintaining a managed slice.
+	PubKeys []gcrypto.PubKey
+
 	// Hashes generated via a [HashScheme].
 	PubKeyHash, VotePowerHash []byte
 }
@@ -40,7 +49,11 @@ func (v ValidatorSet) Equal(other ValidatorSet) bool {
 // NewValidatorSet assumes ownership over the validator slice,
 // so that slice should not be modified after passing it to NewValidatorSet.
 func NewValidatorSet(vs []Validator, hs HashScheme) (ValidatorSet, error) {
-	s := ValidatorSet{Validators: vs}
+	pubKeys := ValidatorsToPubKeys(vs)
+	s := ValidatorSet{
+		Validators: vs,
+		PubKeys:    pubKeys,
+	}
 
 	var err error
 	s.PubKeyHash, err = hs.PubKeys(ValidatorsToPubKeys(vs))

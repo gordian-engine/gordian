@@ -133,6 +133,7 @@ func (jh jsonHeader) ToHeader(
 	reg *gcrypto.Registry,
 ) (tmconsensus.Header, error) {
 	validators := make([]tmconsensus.Validator, len(jh.ValidatorSet.Validators))
+	curPubKeys := make([]gcrypto.PubKey, len(jh.ValidatorSet.Validators))
 	for i, jv := range jh.ValidatorSet.Validators {
 		var err error
 		validators[i], err = jv.ToValidator(reg)
@@ -142,9 +143,11 @@ func (jh jsonHeader) ToHeader(
 				i, err,
 			)
 		}
+		curPubKeys[i] = validators[i].PubKey
 	}
 
 	nextValidators := make([]tmconsensus.Validator, len(jh.NextValidatorSet.Validators))
+	nextPubKeys := make([]gcrypto.PubKey, len(jh.NextValidatorSet.Validators))
 	for i, jv := range jh.NextValidatorSet.Validators {
 		var err error
 		nextValidators[i], err = jv.ToValidator(reg)
@@ -154,11 +157,7 @@ func (jh jsonHeader) ToHeader(
 				i, err,
 			)
 		}
-	}
-
-	allPubKeys := make([]gcrypto.PubKey, len(validators))
-	for i, v := range validators {
-		allPubKeys[i] = v.PubKey
+		nextPubKeys[i] = nextValidators[i].PubKey
 	}
 
 	var proof tmconsensus.CommitProof
@@ -184,11 +183,13 @@ func (jh jsonHeader) ToHeader(
 
 		ValidatorSet: tmconsensus.ValidatorSet{
 			Validators:    validators,
+			PubKeys:       curPubKeys,
 			PubKeyHash:    jh.ValidatorSet.PubKeyHash,
 			VotePowerHash: jh.ValidatorSet.VotePowerHash,
 		},
 		NextValidatorSet: tmconsensus.ValidatorSet{
 			Validators:    nextValidators,
+			PubKeys:       nextPubKeys,
 			PubKeyHash:    jh.NextValidatorSet.PubKeyHash,
 			VotePowerHash: jh.NextValidatorSet.VotePowerHash,
 		},

@@ -291,7 +291,7 @@ RESTART:
 	pcp := ph.Header.PrevCommitProof
 	mainHash := string(ph.Header.PrevBlockHash)
 	finProof := gcrypto.FinalizedCommonMessageSignatureProof{
-		Keys:       tmconsensus.ValidatorsToPubKeys(checkResp.PrevValidatorSet.Validators),
+		Keys:       checkResp.PrevValidatorSet.PubKeys,
 		PubKeyHash: pcp.PubKeyHash,
 
 		MainSignatures: pcp.Proofs[mainHash],
@@ -466,7 +466,7 @@ RETRY:
 	}
 
 	curProofs := curPrevoteState.PrevoteProofs
-	sigsToAdd := m.getSignaturesToAdd(curProofs, p.Proofs, vlReq.VRV.ValidatorSet)
+	sigsToAdd := m.getSignaturesToAdd(curProofs, p.Proofs, vlReq.VRV.ValidatorSet.PubKeys)
 
 	if len(sigsToAdd) == 0 {
 		// Maybe the message had some valid signatures.
@@ -482,7 +482,10 @@ RETRY:
 		fullProof, ok := curProofs[blockHash]
 		if !ok {
 			emptyProof, ok := m.makeNewPrevoteProof(
-				p.Height, p.Round, blockHash, curPrevoteState.ValidatorSet,
+				p.Height, p.Round,
+				blockHash,
+				curPrevoteState.ValidatorSet.PubKeys,
+				string(curPrevoteState.ValidatorSet.PubKeyHash),
 			)
 			if !ok {
 				// Already logged.
@@ -630,7 +633,7 @@ RETRY:
 	}
 
 	curProofs := curPrecommitState.PrecommitProofs
-	sigsToAdd := m.getSignaturesToAdd(curProofs, p.Proofs, vlReq.VRV.ValidatorSet)
+	sigsToAdd := m.getSignaturesToAdd(curProofs, p.Proofs, vlReq.VRV.ValidatorSet.PubKeys)
 
 	if len(sigsToAdd) == 0 {
 		// Maybe the message had some valid signatures.
@@ -646,7 +649,10 @@ RETRY:
 		fullProof, ok := curProofs[blockHash]
 		if !ok {
 			emptyProof, ok := m.makeNewPrecommitProof(
-				p.Height, p.Round, blockHash, curPrecommitState.ValidatorSet,
+				p.Height, p.Round,
+				blockHash,
+				curPrecommitState.ValidatorSet.PubKeys,
+				string(curPrecommitState.ValidatorSet.PubKeyHash),
 			)
 			if !ok {
 				// Already logged.
@@ -733,7 +739,7 @@ RETRY:
 func (m *Mirror) getSignaturesToAdd(
 	curProofs map[string]gcrypto.CommonMessageSignatureProof,
 	incomingSparseProofs map[string][]gcrypto.SparseSignature,
-	valSet tmconsensus.ValidatorSet,
+	pubKeys []gcrypto.PubKey,
 ) map[string][]gcrypto.SparseSignature {
 	var toAdd map[string][]gcrypto.SparseSignature
 
@@ -750,7 +756,6 @@ func (m *Mirror) getSignaturesToAdd(
 
 			if keyIDChecker == nil {
 				// Only do this allocation once.
-				pubKeys := tmconsensus.ValidatorsToPubKeys(valSet.Validators)
 				keyIDChecker = m.cmspScheme.KeyIDChecker(pubKeys)
 			}
 
@@ -799,10 +804,8 @@ func (m *Mirror) makeNewPrevoteProof(
 	height uint64,
 	round uint32,
 	blockHash string,
-	// We expect that most of the time we will not be adding a new proof,
-	// so use the already available slice of validators
-	// and do the work of extracting the public keys in this rarely executed method.
-	valSet tmconsensus.ValidatorSet,
+	pubKeys []gcrypto.PubKey,
+	pubKeyHash string,
 ) (p gcrypto.CommonMessageSignatureProof, ok bool) {
 	vt := tmconsensus.VoteTarget{
 		Height:    height,
@@ -818,11 +821,7 @@ func (m *Mirror) makeNewPrevoteProof(
 		)
 		return nil, false
 	}
-	emptyProof, err := m.cmspScheme.New(
-		signContent,
-		tmconsensus.ValidatorsToPubKeys(valSet.Validators),
-		string(valSet.PubKeyHash),
-	)
+	emptyProof, err := m.cmspScheme.New(signContent, pubKeys, pubKeyHash)
 	if err != nil {
 		m.log.Warn(
 			"Failed to build signature proof",
@@ -839,10 +838,8 @@ func (m *Mirror) makeNewPrecommitProof(
 	height uint64,
 	round uint32,
 	blockHash string,
-	// We expect that most of the time we will not be adding a new proof,
-	// so use the already available slice of validators
-	// and do the work of extracting the public keys in this rarely executed method.
-	valSet tmconsensus.ValidatorSet,
+	pubKeys []gcrypto.PubKey,
+	pubKeyHash string,
 ) (p gcrypto.CommonMessageSignatureProof, ok bool) {
 	vt := tmconsensus.VoteTarget{
 		Height:    height,
@@ -858,11 +855,7 @@ func (m *Mirror) makeNewPrecommitProof(
 		)
 		return nil, false
 	}
-	emptyProof, err := m.cmspScheme.New(
-		signContent,
-		tmconsensus.ValidatorsToPubKeys(valSet.Validators),
-		string(valSet.PubKeyHash),
-	)
+	emptyProof, err := m.cmspScheme.New(signContent, pubKeys, pubKeyHash)
 	if err != nil {
 		m.log.Warn(
 			"Failed to build signature proof",
