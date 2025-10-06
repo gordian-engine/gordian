@@ -266,7 +266,7 @@ func (v prevoteVoter) FullProofsFromRoundStateMaps(
 ) map[string]gcrypto.CommonMessageSignatureProof {
 	out, err := prevotes.ToFullPrevoteProofMap(
 		height, round,
-		valSet,
+		valSet.PubKeys,
 		v.mfx.Fx.SignatureScheme,
 		v.mfx.Fx.CommonMessageSignatureProofScheme,
 	)
@@ -309,7 +309,7 @@ func (v precommitVoter) FullProofsFromRoundStateMaps(
 ) map[string]gcrypto.CommonMessageSignatureProof {
 	out, err := precommits.ToFullPrecommitProofMap(
 		height, round,
-		valSet,
+		valSet.PubKeys,
 		v.mfx.Fx.SignatureScheme,
 		v.mfx.Fx.CommonMessageSignatureProofScheme,
 	)

@@ -45,7 +45,7 @@ func TestFixture_CommitInitialHeight(t *testing.T) {
 			require.Len(t, precommits.BlockSignatures, 1)
 			fullPrecommits, err := precommits.ToFullPrecommitProofMap(
 				1, 0,
-				mfx.Fx.ValSet(),
+				mfx.Fx.ValSet().PubKeys,
 				mfx.Fx.SignatureScheme, mfx.Fx.CommonMessageSignatureProofScheme,
 			)
 			require.NoError(t, err)

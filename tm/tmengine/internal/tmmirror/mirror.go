@@ -3,6 +3,7 @@ package tmmirror
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/trace"
@@ -35,6 +36,9 @@ type Mirror struct {
 
 	k *tmi.Kernel
 
+	vs pubKeyLoader
+	rs roundStateLoader
+
 	initialHeight uint64
 
 	hashScheme tmconsensus.HashScheme
@@ -46,11 +50,29 @@ type Mirror struct {
 
 	phCheckRequests chan<- tmi.PHCheckRequest
 
-	addPHRequests        chan<- tmconsensus.ProposedHeader
-	addPrevoteRequests   chan<- tmi.AddPrevoteRequest
-	addPrecommitRequests chan<- tmi.AddPrecommitRequest
+	addPHRequests              chan<- tmconsensus.ProposedHeader
+	addPrevoteRequests         chan<- tmi.AddPrevoteRequest
+	addPrecommitRequests       chan<- tmi.AddPrecommitRequest
+	addFuturePrevoteRequests   chan<- tmi.AddFuturePrevoteRequest
+	addFuturePrecommitRequests chan<- tmi.AddFuturePrecommitRequest
 
 	assertEnv gassert.Env
+}
+
+// roundStateLoader is a subset of [tmstore.RoundStore]
+// just to avoid possible misuse of what methods we "allow" in the [Mirror].
+type roundStateLoader interface {
+	LoadRoundState(ctx context.Context, height uint64, round uint32) (
+		phs []tmconsensus.ProposedHeader,
+		prevotes, precommits tmconsensus.SparseSignatureCollection,
+		err error,
+	)
+}
+
+// pubKeyLoader is a subset of [tmstore.ValidatorStore]
+// just to avoid possible misuse of what methods we "allow" in the [Mirror].
+type pubKeyLoader interface {
+	LoadPubKeys(context.Context, string) ([]gcrypto.PubKey, error)
 }
 
 // MirrorConfig holds the configuration required to start a [Mirror].
@@ -145,10 +167,15 @@ func NewMirror(
 
 	// The calling method blocks on the response regardless,
 	// so no point in buffering these.
+	// It's fine if we don't exactly get FIFO on concurrent requests.
 	addPrevoteRequests := make(chan tmi.AddPrevoteRequest)
 	addPrecommitRequests := make(chan tmi.AddPrecommitRequest)
+	addFuturePrevoteRequests := make(chan tmi.AddFuturePrevoteRequest)
+	addFuturePrecommitRequests := make(chan tmi.AddFuturePrecommitRequest)
 	kCfg.AddPrevoteRequests = addPrevoteRequests
 	kCfg.AddPrecommitRequests = addPrecommitRequests
+	kCfg.AddFuturePrevoteRequests = addFuturePrevoteRequests
+	kCfg.AddFuturePrecommitRequests = addFuturePrecommitRequests
 
 	k, err := tmi.NewKernel(ctx, log.With("m_sys", "kernel"), kCfg)
 	if err != nil {
@@ -161,6 +188,9 @@ func NewMirror(
 
 		k: k,
 
+		vs: cfg.ValidatorStore,
+		rs: cfg.RoundStore,
+
 		initialHeight: cfg.InitialHeight,
 
 		hashScheme: cfg.HashScheme,
@@ -171,9 +201,11 @@ func NewMirror(
 		viewLookupRequests: viewLookupRequests,
 		phCheckRequests:    phCheckRequests,
 
-		addPHRequests:        addPHRequests,
-		addPrevoteRequests:   addPrevoteRequests,
-		addPrecommitRequests: addPrecommitRequests,
+		addPHRequests:              addPHRequests,
+		addPrevoteRequests:         addPrevoteRequests,
+		addPrecommitRequests:       addPrecommitRequests,
+		addFuturePrevoteRequests:   addFuturePrevoteRequests,
+		addFuturePrecommitRequests: addFuturePrecommitRequests,
 	}
 
 	return m, nil
@@ -443,8 +475,12 @@ RETRY:
 		return tmconsensus.HandleVoteProofsInternalError
 	}
 
+	if vlResp.Status == tmi.ViewFuture {
+		// Special handling for this case.
+		return m.handleFuturePrevoteProofs(ctx, p, vlReq)
+	}
+
 	if vlResp.Status != tmi.ViewFound {
-		// TODO: consider future view.
 		// TODO: this return value is not quite right.
 		return tmconsensus.HandleVoteProofsRoundTooOld
 	}
@@ -562,6 +598,187 @@ RETRY:
 	}
 }
 
+// handleFuturePrevoteProofs is a special case within HandlePrevoteProofs
+// for when we receive prevote proofs for a future round
+// (i.e. later than voting round plus one, or a later height).
+//
+// This is very similar to the flow in HandlePrevoteProofs,
+// but there are special accommodations
+// ƒor this being a vote beyond the current voting view.
+func (m *Mirror) handleFuturePrevoteProofs(
+	ctx context.Context,
+	p tmconsensus.PrevoteSparseProof,
+	vlReq tmi.ViewLookupRequest,
+) tmconsensus.HandleVoteProofsResult {
+	defer trace.StartRegion(ctx, "handleFuturePrevoteProofs").End()
+	// NOTE: keep changes to this method synchronized with handleFuturePrecommitProofs.
+
+	// First, gather the public keys for the hash.
+	// TODO: there is an optimistic case where the future votes
+	// match the same current validator set,
+	// so we should check that before querying the store.
+	pubKeys, err := m.vs.LoadPubKeys(ctx, p.PubKeyHash)
+	if err != nil {
+		// The only "acceptable" error for loading public keys is not finding them.
+		var noHashErr tmstore.NoPubKeyHashError
+		if errors.As(err, &noHashErr) {
+			// Call it too far in the future if we can't identify the public keys.
+			// However, if supported, it would be better to make a remote call
+			// to look up the public keys.
+			return tmconsensus.HandleVoteProofsFutureUnverified
+		}
+
+		// If it was any other error, fail now.
+		m.log.Warn(
+			"Error while looking up future public keys",
+			"h", p.Height,
+			"r", p.Round,
+			"err", err,
+		)
+		return tmconsensus.HandleVoteProofsInternalError
+	}
+
+	// In the normal flow with non-future views,
+	// the kernel maintains the canonical set of votes in memory;
+	// but since this is a future view,
+	// we will load from the store directly.
+	// TODO: now that we have a case for loading only prevotes,
+	// it may be better to add a more direct method on RoundStore,
+	// to save the effort of loading the other values.
+	_, curPrevotesSparse, _, err := m.rs.LoadRoundState(ctx, vlReq.H, vlReq.R)
+	if err != nil {
+		// Like with loading the public keys, there is one acceptable error,
+		// and anything else is a failure.
+		var noRoundErr tmconsensus.RoundUnknownError
+		if !errors.As(err, &noRoundErr) {
+			m.log.Warn(
+				"Error while looking up future prevotes",
+				"h", p.Height,
+				"r", p.Round,
+				"err", err,
+			)
+			return tmconsensus.HandleVoteProofsInternalError
+		}
+
+		// Then, it was a RoundUnknownError.
+		// We need to set base values in the sparse signature collection.
+		curPrevotesSparse.PubKeyHash = []byte(p.PubKeyHash)
+		curPrevotesSparse.BlockSignatures = make(
+			map[string][]gcrypto.SparseSignature, len(p.Proofs),
+		)
+	}
+
+	// Convert the prevotes we just loaded from storage,
+	// into a set of full proofs, so that we can merge in the new sparse proofs.
+	fullMap, err := curPrevotesSparse.ToFullPrevoteProofMap(
+		p.Height, p.Round,
+		pubKeys,
+		m.sigScheme, m.cmspScheme,
+	)
+	if err != nil {
+		m.log.Warn(
+			"Error building full prevote map for future prevotes",
+			"h", p.Height,
+			"r", p.Round,
+			"err", err,
+		)
+		return tmconsensus.HandleVoteProofsInternalError
+	}
+
+	res := gcrypto.SignatureProofMergeResult{
+		AllValidSignatures: true,
+	}
+	for hash, sparseSigs := range p.Proofs {
+		sparseProof := gcrypto.SparseSignatureProof{
+			PubKeyHash: p.PubKeyHash,
+			Signatures: sparseSigs,
+		}
+
+		if fullMap[hash] == nil {
+			// Then the full map just owns incoming proof.
+			vt := tmconsensus.VoteTarget{
+				Height:    p.Height,
+				Round:     p.Round,
+				BlockHash: hash,
+			}
+			msg, err := tmconsensus.PrevoteSignBytes(vt, m.sigScheme)
+			if err != nil {
+				m.log.Warn(
+					"Failed to get prevote sign bytes",
+					"h", p.Height,
+					"r", p.Round,
+					"err", err,
+				)
+				return tmconsensus.HandleVoteProofsInternalError
+			}
+
+			fullMap[hash], err = m.cmspScheme.New(
+				msg, pubKeys, p.PubKeyHash,
+			)
+			if err != nil {
+				m.log.Warn(
+					"Failed to make empty signature proof for prevotes",
+					"h", p.Height,
+					"r", p.Round,
+					"err", err,
+				)
+				return tmconsensus.HandleVoteProofsInternalError
+			}
+		}
+
+		res = res.Combine(fullMap[hash].MergeSparse(sparseProof))
+		if !res.AllValidSignatures {
+			// If we see any bad signatures,
+			// don't bother processing any of the good signatures.
+			return tmconsensus.HandleVoteProofsBadSignature
+		}
+	}
+
+	if !res.IncreasedSignatures {
+		return tmconsensus.HandleVoteProofsNoNewSignatures
+	}
+
+	// At this point, we have an updated set of full proofs,
+	// and we know we've added at least one new signature.
+	// So we can forward this to the kernel.
+	ch := make(chan tmi.AddVoteResult, 1)
+	fReq := tmi.AddFuturePrevoteRequest{
+		H: vlReq.H,
+		R: vlReq.R,
+
+		PubKeyHash: []byte(p.PubKeyHash),
+		PubKeys:    pubKeys,
+
+		Prevotes: fullMap,
+
+		Resp: ch,
+	}
+
+	result, ok := gchan.ReqResp(
+		ctx, m.log,
+		m.addFuturePrevoteRequests, fReq,
+		ch,
+		"handleFuturePrevoteProofs",
+	)
+	if !ok {
+		return tmconsensus.HandleVoteProofsInternalError
+	}
+
+	switch result {
+	case tmi.AddVoteAccepted:
+		// We are done.
+		return tmconsensus.HandleVoteProofsFutureVerified
+	case tmi.AddVoteRedundant:
+		return tmconsensus.HandleVoteProofsNoNewSignatures
+	case tmi.AddVoteInternalError:
+		return tmconsensus.HandleVoteProofsInternalError
+	default:
+		panic(fmt.Errorf(
+			"BUG: received unexpected AddVoteResult %d", result,
+		))
+	}
+}
+
 func (m *Mirror) HandlePrecommitProofs(ctx context.Context, p tmconsensus.PrecommitSparseProof) tmconsensus.HandleVoteProofsResult {
 	defer trace.StartRegion(ctx, "HandlePrecommitProofs").End()
 
@@ -608,6 +825,11 @@ RETRY:
 	)
 	if !ok {
 		return tmconsensus.HandleVoteProofsInternalError
+	}
+
+	if vlResp.Status == tmi.ViewFuture {
+		// Special handling for this case.
+		return m.handleFuturePrecommitProofs(ctx, p, vlReq)
 	}
 
 	if vlResp.Status != tmi.ViewFound {
@@ -725,6 +947,180 @@ RETRY:
 	default:
 		panic(fmt.Errorf(
 			"BUG: received unknown AddVoteResult %d", result,
+		))
+	}
+}
+
+func (m *Mirror) handleFuturePrecommitProofs(
+	ctx context.Context,
+	p tmconsensus.PrecommitSparseProof,
+	vlReq tmi.ViewLookupRequest,
+) tmconsensus.HandleVoteProofsResult {
+	defer trace.StartRegion(ctx, "handleFuturePrecommitProofs").End()
+	// NOTE: keep changes to this method synchronized with handleFuturePrecommitProofs.
+
+	// First, gather the public keys for the hash.
+	// TODO: there is an optimistic case where the future votes
+	// match the same current validator set,
+	// so we should check that before querying the store.
+	pubKeys, err := m.vs.LoadPubKeys(ctx, p.PubKeyHash)
+	if err != nil {
+		// The only "acceptable" error for loading public keys is not finding them.
+		var noHashErr tmstore.NoPubKeyHashError
+		if errors.As(err, &noHashErr) {
+			// Call it too far in the future if we can't identify the public keys.
+			// However, if supported, it would be better to make a remote call
+			// to look up the public keys.
+			return tmconsensus.HandleVoteProofsFutureUnverified
+		}
+
+		// If it was any other error, fail now.
+		m.log.Warn(
+			"Error while looking up future public keys",
+			"h", p.Height,
+			"r", p.Round,
+			"err", err,
+		)
+		return tmconsensus.HandleVoteProofsInternalError
+	}
+
+	// In the normal flow with non-future views,
+	// the kernel maintains the canonical set of votes in memory;
+	// but since this is a future view,
+	// we will load from the store directly.
+	// TODO: now that we have a case for loading only precommits,
+	// it may be better to add a more direct method on RoundStore,
+	// to save the effort of loading the other values.
+	_, _, curPrecommitsSparse, err := m.rs.LoadRoundState(ctx, vlReq.H, vlReq.R)
+	if err != nil {
+		// Like with loading the public keys, there is one acceptable error,
+		// and anything else is a failure.
+		var noRoundErr tmconsensus.RoundUnknownError
+		if !errors.As(err, &noRoundErr) {
+			m.log.Warn(
+				"Error while looking up future precommits",
+				"h", p.Height,
+				"r", p.Round,
+				"err", err,
+			)
+			return tmconsensus.HandleVoteProofsInternalError
+		}
+
+		// Then, it was a RoundUnknownError.
+		// We need to set base values in the sparse signature collection.
+		curPrecommitsSparse.PubKeyHash = []byte(p.PubKeyHash)
+		curPrecommitsSparse.BlockSignatures = make(
+			map[string][]gcrypto.SparseSignature, len(p.Proofs),
+		)
+	}
+
+	// Convert the precommits we just loaded from storage,
+	// into a set of full proofs, so that we can merge in the new sparse proofs.
+	fullMap, err := curPrecommitsSparse.ToFullPrecommitProofMap(
+		p.Height, p.Round,
+		pubKeys,
+		m.sigScheme, m.cmspScheme,
+	)
+	if err != nil {
+		m.log.Warn(
+			"Error building full precommit map for future precommits",
+			"h", p.Height,
+			"r", p.Round,
+			"err", err,
+		)
+		return tmconsensus.HandleVoteProofsInternalError
+	}
+
+	res := gcrypto.SignatureProofMergeResult{
+		AllValidSignatures: true,
+	}
+	for hash, sparseSigs := range p.Proofs {
+		sparseProof := gcrypto.SparseSignatureProof{
+			PubKeyHash: p.PubKeyHash,
+			Signatures: sparseSigs,
+		}
+
+		if fullMap[hash] == nil {
+			// Then the full map just owns incoming proof.
+			vt := tmconsensus.VoteTarget{
+				Height:    p.Height,
+				Round:     p.Round,
+				BlockHash: hash,
+			}
+			msg, err := tmconsensus.PrecommitSignBytes(vt, m.sigScheme)
+			if err != nil {
+				m.log.Warn(
+					"Failed to get precommit sign bytes",
+					"h", p.Height,
+					"r", p.Round,
+					"err", err,
+				)
+				return tmconsensus.HandleVoteProofsInternalError
+			}
+
+			fullMap[hash], err = m.cmspScheme.New(
+				msg, pubKeys, p.PubKeyHash,
+			)
+			if err != nil {
+				m.log.Warn(
+					"Failed to make empty signature proof for precommits",
+					"h", p.Height,
+					"r", p.Round,
+					"err", err,
+				)
+				return tmconsensus.HandleVoteProofsInternalError
+			}
+		}
+
+		res = res.Combine(fullMap[hash].MergeSparse(sparseProof))
+		if !res.AllValidSignatures {
+			// If we see any bad signatures,
+			// don't bother processing any of the good signatures.
+			return tmconsensus.HandleVoteProofsBadSignature
+		}
+	}
+
+	if !res.IncreasedSignatures {
+		return tmconsensus.HandleVoteProofsNoNewSignatures
+	}
+
+	// At this point, we have an updated set of full proofs,
+	// and we know we've added at least one new signature.
+	// So we can forward this to the kernel.
+	ch := make(chan tmi.AddVoteResult, 1)
+	fReq := tmi.AddFuturePrecommitRequest{
+		H: vlReq.H,
+		R: vlReq.R,
+
+		PubKeyHash: []byte(p.PubKeyHash),
+		PubKeys:    pubKeys,
+
+		Precommits: fullMap,
+
+		Resp: ch,
+	}
+
+	result, ok := gchan.ReqResp(
+		ctx, m.log,
+		m.addFuturePrecommitRequests, fReq,
+		ch,
+		"handleFuturePrecommitProofs",
+	)
+	if !ok {
+		return tmconsensus.HandleVoteProofsInternalError
+	}
+
+	switch result {
+	case tmi.AddVoteAccepted:
+		// We are done.
+		return tmconsensus.HandleVoteProofsFutureVerified
+	case tmi.AddVoteRedundant:
+		return tmconsensus.HandleVoteProofsNoNewSignatures
+	case tmi.AddVoteInternalError:
+		return tmconsensus.HandleVoteProofsInternalError
+	default:
+		panic(fmt.Errorf(
+			"BUG: received unexpected AddVoteResult %d", result,
 		))
 	}
 }

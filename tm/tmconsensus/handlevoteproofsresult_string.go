@@ -13,13 +13,15 @@ func _() {
 	_ = x[HandleVoteProofsEmpty-3]
 	_ = x[HandleVoteProofsBadPubKeyHash-4]
 	_ = x[HandleVoteProofsRoundTooOld-5]
-	_ = x[HandleVoteProofsTooFarInFuture-6]
-	_ = x[HandleVoteProofsInternalError-7]
+	_ = x[HandleVoteProofsBadSignature-6]
+	_ = x[HandleVoteProofsFutureVerified-7]
+	_ = x[HandleVoteProofsFutureUnverified-8]
+	_ = x[HandleVoteProofsInternalError-9]
 }
 
-const _HandleVoteProofsResult_name = "AcceptedNoNewSignaturesEmptyBadPubKeyHashRoundTooOldTooFarInFutureInternalError"
+const _HandleVoteProofsResult_name = "AcceptedNoNewSignaturesEmptyBadPubKeyHashRoundTooOldBadSignatureFutureVerifiedFutureUnverifiedInternalError"
 
-var _HandleVoteProofsResult_index = [...]uint8{0, 8, 23, 28, 41, 52, 66, 79}
+var _HandleVoteProofsResult_index = [...]uint8{0, 8, 23, 28, 41, 52, 64, 78, 94, 107}
 
 func (i HandleVoteProofsResult) String() string {
 	i -= 1

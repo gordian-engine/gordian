@@ -21,7 +21,7 @@ import (
 // due to its larger awareness of block hashes,
 // which are outside the scope of the gcrypto package.
 type SparseSignatureCollection struct {
-	// There is exactly one public key hash
+	// There is exactly one public key hash for
 	// the keys and signatures in the entire collection.
 	// Consumers must assume this slice is shared across many goroutines,
 	// and therefore must never modify the slice.
@@ -37,13 +37,13 @@ type SparseSignatureCollection struct {
 func (c SparseSignatureCollection) ToFullPrevoteProofMap(
 	height uint64,
 	round uint32,
-	valSet ValidatorSet,
+	pubKeys []gcrypto.PubKey,
 	sigScheme SignatureScheme,
 	cmspScheme gcrypto.CommonMessageSignatureProofScheme,
 ) (map[string]gcrypto.CommonMessageSignatureProof, error) {
 	out, err := c.toFullProofMap(
 		height, round,
-		valSet,
+		pubKeys,
 		cmspScheme,
 		func(vt VoteTarget) ([]byte, error) {
 			return PrevoteSignBytes(vt, sigScheme)
@@ -60,13 +60,13 @@ func (c SparseSignatureCollection) ToFullPrevoteProofMap(
 func (c SparseSignatureCollection) ToFullPrecommitProofMap(
 	height uint64,
 	round uint32,
-	valSet ValidatorSet,
+	pubKeys []gcrypto.PubKey,
 	sigScheme SignatureScheme,
 	cmspScheme gcrypto.CommonMessageSignatureProofScheme,
 ) (map[string]gcrypto.CommonMessageSignatureProof, error) {
 	out, err := c.toFullProofMap(
 		height, round,
-		valSet,
+		pubKeys,
 		cmspScheme,
 		func(vt VoteTarget) ([]byte, error) {
 			return PrecommitSignBytes(vt, sigScheme)
@@ -81,14 +81,12 @@ func (c SparseSignatureCollection) ToFullPrecommitProofMap(
 func (c SparseSignatureCollection) toFullProofMap(
 	height uint64,
 	round uint32,
-	valSet ValidatorSet,
+	pubKeys []gcrypto.PubKey,
 	cmspScheme gcrypto.CommonMessageSignatureProofScheme,
 	signBytesFunc func(VoteTarget) ([]byte, error),
 ) (map[string]gcrypto.CommonMessageSignatureProof, error) {
-	valPubKeys := ValidatorsToPubKeys(valSet.Validators)
-	pubKeyHash := string(valSet.PubKeyHash)
-
 	out := make(map[string]gcrypto.CommonMessageSignatureProof, len(c.BlockSignatures))
+	sHash := string(c.PubKeyHash)
 
 	vt := VoteTarget{Height: height, Round: round}
 	for hash, sparseSigs := range c.BlockSignatures {
@@ -99,7 +97,7 @@ func (c SparseSignatureCollection) toFullProofMap(
 				"failed to build sign bytes for block hash %x: %w", hash, err,
 			)
 		}
-		out[hash], err = cmspScheme.New(content, valPubKeys, pubKeyHash)
+		out[hash], err = cmspScheme.New(content, pubKeys, sHash)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get initial proof for %x: %w", hash, err)
 		}
@@ -109,7 +107,7 @@ func (c SparseSignatureCollection) toFullProofMap(
 		}
 
 		sparseProof := gcrypto.SparseSignatureProof{
-			PubKeyHash: pubKeyHash,
+			PubKeyHash: sHash,
 			Signatures: sparseSigs,
 		}
 		mergeRes := out[hash].MergeSparse(sparseProof)

@@ -131,8 +131,8 @@ type CommonMessageSignatureProofScheme interface {
 	// New creates a new, empty proof.
 	New(msg []byte, candidateKeys []PubKey, pubKeyHash string) (CommonMessageSignatureProof, error)
 
-	// KeyIDChecker returns a KeyIDChecker that validates sparse signatures
-	// within the given set of public keys.
+	// KeyIDChecker returns a KeyIDChecker associated with the scheme instance.
+	// The checker validates key IDs within the instance's set of public keys.
 	KeyIDChecker(keys []PubKey) KeyIDChecker
 
 	// Whether the proofs from a finalized previous commit proof

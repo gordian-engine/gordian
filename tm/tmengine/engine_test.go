@@ -764,7 +764,7 @@ func TestEngine_plumbing_ReplayedHeaders(t *testing.T) {
 
 		fullPrecommits, err := precommits.ToFullPrecommitProofMap(
 			1, 0,
-			efx.Fx.ValSet(),
+			efx.Fx.ValSet().PubKeys,
 			efx.Fx.SignatureScheme, efx.Fx.CommonMessageSignatureProofScheme,
 		)
 		require.NoError(t, err)
@@ -861,7 +861,7 @@ func TestEngine_plumbing_ReplayedHeaders(t *testing.T) {
 
 		fullPrecommits, err := precommits.ToFullPrecommitProofMap(
 			1, 1,
-			efx.Fx.ValSet(),
+			efx.Fx.ValSet().PubKeys,
 			efx.Fx.SignatureScheme, efx.Fx.CommonMessageSignatureProofScheme,
 		)
 		require.NoError(t, err)

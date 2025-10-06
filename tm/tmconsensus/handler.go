@@ -96,8 +96,14 @@ const (
 	// Votes had older height or round than our current view of the world.
 	HandleVoteProofsRoundTooOld
 
+	// The vote proofs contained an invalid signature.
+	// This value should not have been sent.
+	HandleVoteProofsBadSignature
+
 	// Vote is beyond our NextHeight and/or NextRound handlers.
-	HandleVoteProofsTooFarInFuture
+	// Name indicates whether we were able to verify the vote.
+	HandleVoteProofsFutureVerified
+	HandleVoteProofsFutureUnverified
 
 	// Internal error not necessarily correlated with the actual prevote proof.
 	HandleVoteProofsInternalError

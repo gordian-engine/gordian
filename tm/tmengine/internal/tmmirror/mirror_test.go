@@ -843,7 +843,7 @@ func TestMirror_HandlePrevoteProofs(t *testing.T) {
 
 		newFullPrevotes, err := prevotes.ToFullPrevoteProofMap(
 			1, 0,
-			mfx.Fx.ValSet(),
+			mfx.Fx.PrivVals.PubKeys(),
 			mfx.Fx.SignatureScheme, mfx.Fx.CommonMessageSignatureProofScheme,
 		)
 		require.NoError(t, err)
@@ -935,7 +935,7 @@ func TestMirror_HandlePrevoteProofs(t *testing.T) {
 
 		newFullPrevotes, err := prevotes.ToFullPrevoteProofMap(
 			1, 0,
-			mfx.Fx.ValSet(),
+			mfx.Fx.PrivVals.PubKeys(),
 			mfx.Fx.SignatureScheme, mfx.Fx.CommonMessageSignatureProofScheme,
 		)
 		require.NoError(t, err)
@@ -1024,7 +1024,7 @@ func TestMirror_HandlePrecommitProofs(t *testing.T) {
 
 		newFullPrecommits, err := precommits.ToFullPrecommitProofMap(
 			1, 0,
-			mfx.Fx.ValSet(),
+			mfx.Fx.PrivVals.PubKeys(),
 			mfx.Fx.SignatureScheme, mfx.Fx.CommonMessageSignatureProofScheme,
 		)
 		require.NoError(t, err)
@@ -3078,7 +3078,7 @@ func TestMirror_replayedHeaders(t *testing.T) {
 		require.Empty(t, prevotes.BlockSignatures)
 		fullPrecommits, err := precommits.ToFullPrecommitProofMap(
 			1, 0,
-			mfx.Fx.ValSet(),
+			mfx.Fx.PrivVals.PubKeys(),
 			mfx.Fx.SignatureScheme, mfx.Fx.CommonMessageSignatureProofScheme,
 		)
 		require.NoError(t, err)
@@ -3176,7 +3176,7 @@ func TestMirror_replayedHeaders(t *testing.T) {
 		require.Empty(t, prevotes.BlockSignatures)
 		fullPrecommits, err := precommits.ToFullPrecommitProofMap(
 			1, 0,
-			mfx.Fx.ValSet(),
+			mfx.Fx.PrivVals.PubKeys(),
 			mfx.Fx.SignatureScheme, mfx.Fx.CommonMessageSignatureProofScheme,
 		)
 		require.NoError(t, err)
@@ -3566,4 +3566,78 @@ func TestMirror_stateMachineCatchup_lateInitialization(t *testing.T) {
 	rer = gtest.ReceiveSoon(t, re.Response)
 	require.False(t, rer.IsCH())
 	require.True(t, rer.IsVRV())
+}
+
+func TestMirror_futureRoundVotes(t *testing.T) {
+	t.Run("verified prevotes", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		mfx := tmmirrortest.NewFixture(ctx, t, 4)
+
+		m := mfx.NewMirror()
+		defer m.Wait()
+		defer cancel()
+
+		_ = gtest.ReceiveSoon(t, mfx.GossipStrategyOut)
+
+		keyHash, _ := mfx.Fx.ValidatorHashes()
+
+		voteMap := map[string][]int{
+			"": {0, 1},
+		}
+
+		prevoteProof := tmconsensus.PrevoteSparseProof{
+			Height:     1,
+			Round:      6,
+			PubKeyHash: keyHash,
+			Proofs:     mfx.Fx.SparsePrevoteProofMap(ctx, 1, 6, voteMap),
+		}
+
+		res := m.HandlePrevoteProofs(ctx, prevoteProof)
+		require.Equal(t, tmconsensus.HandleVoteProofsFutureVerified, res)
+
+		_, gotPrevotes, _, err := mfx.Cfg.RoundStore.LoadRoundState(ctx, 1, 6)
+		require.NoError(t, err)
+		require.Equal(t, prevoteProof.Proofs, gotPrevotes.BlockSignatures)
+		require.Equal(t, keyHash, string(gotPrevotes.PubKeyHash))
+	})
+
+	t.Run("verified precommits", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		mfx := tmmirrortest.NewFixture(ctx, t, 4)
+
+		m := mfx.NewMirror()
+		defer m.Wait()
+		defer cancel()
+
+		_ = gtest.ReceiveSoon(t, mfx.GossipStrategyOut)
+
+		keyHash, _ := mfx.Fx.ValidatorHashes()
+
+		voteMap := map[string][]int{
+			"": {0, 1},
+		}
+
+		precommitProof := tmconsensus.PrecommitSparseProof{
+			Height:     1,
+			Round:      7,
+			PubKeyHash: keyHash,
+			Proofs:     mfx.Fx.SparsePrecommitProofMap(ctx, 1, 7, voteMap),
+		}
+
+		res := m.HandlePrecommitProofs(ctx, precommitProof)
+		require.Equal(t, tmconsensus.HandleVoteProofsFutureVerified.String(), res.String())
+
+		_, _, gotPrecommits, err := mfx.Cfg.RoundStore.LoadRoundState(ctx, 1, 7)
+		require.NoError(t, err)
+		require.Equal(t, precommitProof.Proofs, gotPrecommits.BlockSignatures)
+		require.Equal(t, keyHash, string(gotPrecommits.PubKeyHash))
+	})
 }

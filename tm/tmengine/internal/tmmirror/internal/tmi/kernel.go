@@ -61,9 +61,11 @@ type Kernel struct {
 	viewLookupRequests <-chan ViewLookupRequest
 	phCheckRequests    <-chan PHCheckRequest
 
-	addPHRequests        <-chan tmconsensus.ProposedHeader
-	addPrevoteRequests   <-chan AddPrevoteRequest
-	addPrecommitRequests <-chan AddPrecommitRequest
+	addPHRequests              <-chan tmconsensus.ProposedHeader
+	addPrevoteRequests         <-chan AddPrevoteRequest
+	addPrecommitRequests       <-chan AddPrecommitRequest
+	addFuturePrevoteRequests   <-chan AddFuturePrevoteRequest
+	addFuturePrecommitRequests <-chan AddFuturePrecommitRequest
 
 	assertEnv gassert.Env
 
@@ -104,9 +106,11 @@ type KernelConfig struct {
 	ViewLookupRequests <-chan ViewLookupRequest
 	PHCheckRequests    <-chan PHCheckRequest
 
-	AddPHRequests        <-chan tmconsensus.ProposedHeader
-	AddPrevoteRequests   <-chan AddPrevoteRequest
-	AddPrecommitRequests <-chan AddPrecommitRequest
+	AddPHRequests              <-chan tmconsensus.ProposedHeader
+	AddPrevoteRequests         <-chan AddPrevoteRequest
+	AddPrecommitRequests       <-chan AddPrecommitRequest
+	AddFuturePrevoteRequests   <-chan AddFuturePrevoteRequest
+	AddFuturePrecommitRequests <-chan AddFuturePrecommitRequest
 
 	MetricsCollector *tmemetrics.Collector
 
@@ -197,9 +201,11 @@ func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel
 		viewLookupRequests: cfg.ViewLookupRequests,
 		phCheckRequests:    cfg.PHCheckRequests,
 
-		addPHRequests:        cfg.AddPHRequests,
-		addPrevoteRequests:   cfg.AddPrevoteRequests,
-		addPrecommitRequests: cfg.AddPrecommitRequests,
+		addPHRequests:              cfg.AddPHRequests,
+		addPrevoteRequests:         cfg.AddPrevoteRequests,
+		addPrecommitRequests:       cfg.AddPrecommitRequests,
+		addFuturePrevoteRequests:   cfg.AddFuturePrevoteRequests,
+		addFuturePrecommitRequests: cfg.AddFuturePrecommitRequests,
 
 		assertEnv: cfg.AssertEnv,
 
@@ -350,10 +356,22 @@ func (k *Kernel) mainLoop(ctx context.Context, s *kState, wd *gwatchdog.Watchdog
 			// when handling prevote proofs.
 			k.addPrevote(ctx, s, req)
 
+		case req := <-k.addFuturePrevoteRequests:
+			// The mirror has a special case for future prevotes,
+			// because the mirror had to look up public keys
+			// that may not be in the actively managed views.
+			req.Resp <- k.addFuturePrevote(ctx, s, req)
+
 		case req := <-k.addPrecommitRequests:
 			// The mirror makes an add precommit request
 			// when handling precommit proofs.
 			k.addPrecommit(ctx, s, req)
+
+		case req := <-k.addFuturePrecommitRequests:
+			// The mirror has a special case for future precommits,
+			// because the mirror had to look up public keys
+			// that may not be in the actively managed views.
+			req.Resp <- k.addFuturePrecommit(ctx, s, req)
 
 		case gsOut.Ch <- gsOut.Val:
 			// If the gossip strategy output channel is not nil,
@@ -602,25 +620,25 @@ func (k *Kernel) addPrevote(ctx context.Context, s *kState, req AddPrevoteReques
 	// NOTE: keep changes to this method synchronized with addPrecommit.
 
 	vrv, vID, vStatus := s.FindView(req.H, req.R, "(*Kernel).addPrevote")
-	if vStatus != ViewFound {
-		switch vStatus {
-		case ViewBeforeCommitting, ViewOrphaned:
-			if req.Response != nil {
-				req.Response <- AddVoteOutOfDate
-			}
-			return
-		case ViewWrongCommit:
-			k.log.Warn("TODO: add new addVoteResult for viewWrongCommit")
-			if req.Response != nil {
-				req.Response <- AddVoteOutOfDate
-			}
-			return
-		default:
-			panic(fmt.Errorf(
-				"TODO: handle unexpected view status (%s) when looking up view to add prevote",
-				vStatus,
-			))
+	switch vStatus {
+	case ViewFound:
+		// Okay.
+	case ViewBeforeCommitting, ViewOrphaned:
+		if req.Response != nil {
+			req.Response <- AddVoteOutOfDate
 		}
+		return
+	case ViewWrongCommit:
+		k.log.Warn("TODO: add new addVoteResult for viewWrongCommit")
+		if req.Response != nil {
+			req.Response <- AddVoteOutOfDate
+		}
+		return
+	default:
+		panic(fmt.Errorf(
+			"TODO: handle unexpected view status (%s) when looking up view to add prevote",
+			vStatus,
+		))
 	}
 	if vID != ViewIDCommitting && vID != ViewIDVoting && vID != ViewIDNextRound {
 		panic(fmt.Errorf(
@@ -703,25 +721,25 @@ func (k *Kernel) addPrecommit(ctx context.Context, s *kState, req AddPrecommitRe
 	// NOTE: keep changes to this method synchronized with addPrevote.
 
 	vrv, vID, vStatus := s.FindView(req.H, req.R, "(*Kernel).addPrecommit")
-	if vStatus != ViewFound {
-		switch vStatus {
-		case ViewBeforeCommitting, ViewOrphaned:
-			if req.Response != nil {
-				req.Response <- AddVoteOutOfDate
-			}
-			return
-		case ViewWrongCommit:
-			k.log.Warn("TODO: add new addVoteResult for viewWrongCommit")
-			if req.Response != nil {
-				req.Response <- AddVoteOutOfDate
-			}
-			return
-		default:
-			panic(fmt.Errorf(
-				"TODO: handle unexpected view status (%s) when looking up view to add precommit",
-				vStatus,
-			))
+	switch vStatus {
+	case ViewFound:
+	// Okay.
+	case ViewBeforeCommitting, ViewOrphaned:
+		if req.Response != nil {
+			req.Response <- AddVoteOutOfDate
 		}
+		return
+	case ViewWrongCommit:
+		k.log.Warn("TODO: add new addVoteResult for viewWrongCommit")
+		if req.Response != nil {
+			req.Response <- AddVoteOutOfDate
+		}
+		return
+	default:
+		panic(fmt.Errorf(
+			"TODO: handle unexpected view status (%s) when looking up view to add precommit",
+			vStatus,
+		))
 	}
 	if vID != ViewIDCommitting && vID != ViewIDVoting && vID != ViewIDNextRound {
 		panic(fmt.Errorf(
@@ -798,6 +816,222 @@ func (k *Kernel) addPrecommit(ctx context.Context, s *kState, req AddPrecommitRe
 	default:
 		panic(fmt.Errorf("BUG: unhandled view ID %s in addPrecommit", vID))
 	}
+}
+
+func (k *Kernel) addFuturePrevote(
+	ctx context.Context, s *kState, req AddFuturePrevoteRequest,
+) AddVoteResult {
+	// NOTE: keep changes to this method synchronized with addFuturePrecommit.
+
+	// TODO: the mirror thought this was a future view,
+	// but it is possible that it changed from future to current
+	// before the kernel processed the request.
+	if _, _, vStatus := s.FindView(req.H, req.R, "(*Kernel).addFuturePrevote"); vStatus != ViewFuture {
+		panic(fmt.Errorf(
+			"TODO: handle addFuturePrevote when the view has changed from future to %s",
+			vStatus,
+		))
+	}
+
+	// It's still a future view.
+	// Now that we are in the kernel's main loop,
+	// we are sure that reading the prevotes for the given round
+	// will not occur concurrently with any writes.
+	_, curPrevotesSparse, _, err := k.rStore.LoadRoundState(ctx, req.H, req.R)
+	if err != nil {
+		// It is still acceptable for the round to be unknown.
+		var noRoundErr tmconsensus.RoundUnknownError
+		if !errors.As(err, &noRoundErr) {
+			k.log.Warn(
+				"Error while looking up future prevotes",
+				"h", req.H,
+				"r", req.R,
+				"err", err,
+			)
+			return AddVoteInternalError
+		}
+
+		// Then, it was a RoundUnknownError.
+		// We need to set base values in the sparse signature collection.
+		curPrevotesSparse.PubKeyHash = req.PubKeyHash
+		curPrevotesSparse.BlockSignatures = make(
+			map[string][]gcrypto.SparseSignature, len(req.Prevotes),
+		)
+	}
+
+	// TODO: there is probably some optimized path using [gcrypto.CommonMessageSignatureProof.Derive].
+	existingFullProofs, err := curPrevotesSparse.ToFullPrevoteProofMap(
+		req.H, req.R,
+		req.PubKeys,
+		k.sigScheme, k.cmspScheme,
+	)
+	if err != nil {
+		k.log.Warn(
+			"Failed to build full prevote proof map",
+			"h", req.H,
+			"r", req.R,
+			"err", err,
+		)
+		return AddVoteInternalError
+	}
+
+	// Now we have the votes that were on disk,
+	// so first we have to merge and write back.
+	res := gcrypto.SignatureProofMergeResult{
+		AllValidSignatures: true,
+	}
+	for blockHash, fullProof := range req.Prevotes {
+		if existingFullProofs[blockHash] == nil {
+			existingFullProofs[blockHash] = fullProof
+			res.IncreasedSignatures = true
+			continue
+		}
+
+		res = res.Combine(
+			existingFullProofs[blockHash].Merge(fullProof),
+		)
+		// The mirror confirmed the signatures are all valid,
+		// so we don't need to check for invalid signatures.
+	}
+
+	if !res.IncreasedSignatures {
+		return AddVoteRedundant
+	}
+
+	// It increased signatures, so save the result.
+	// We have to convert the full proofs that we just used,
+	// back into a SparseSignatureCollection.
+	toStore := tmconsensus.SparseSignatureCollection{
+		PubKeyHash:      req.PubKeyHash,
+		BlockSignatures: make(map[string][]gcrypto.SparseSignature),
+	}
+	for blockHash, fullProof := range existingFullProofs {
+		toStore.BlockSignatures[blockHash] = fullProof.AsSparse().Signatures
+	}
+
+	if err := k.rStore.OverwriteRoundPrevoteProofs(
+		ctx,
+		req.H, req.R,
+		toStore,
+	); err != nil {
+		k.log.Warn(
+			"Failed to build full prevote proof map",
+			"h", req.H,
+			"r", req.R,
+			"err", err,
+		)
+		return AddVoteInternalError
+	}
+
+	return AddVoteAccepted
+}
+
+func (k *Kernel) addFuturePrecommit(
+	ctx context.Context, s *kState, req AddFuturePrecommitRequest,
+) AddVoteResult {
+	// NOTE: keep changes to this method synchronized with addFuturePrevote.
+
+	// TODO: the mirror thought this was a future view,
+	// but it is possible that it changed from future to current
+	// before the kernel processed the request.
+	if _, _, vStatus := s.FindView(req.H, req.R, "(*Kernel).addFuturePrecommit"); vStatus != ViewFuture {
+		panic(fmt.Errorf(
+			"TODO: handle addFuturePrecommit when the view has changed from future to %s",
+			vStatus,
+		))
+	}
+
+	// It's still a future view.
+	// Now that we are in the kernel's main loop,
+	// we are sure that reading the precommits for the given round
+	// will not occur concurrently with any writes.
+	_, _, curPrecommitsSparse, err := k.rStore.LoadRoundState(ctx, req.H, req.R)
+	if err != nil {
+		// It is still acceptable for the round to be unknown.
+		var noRoundErr tmconsensus.RoundUnknownError
+		if !errors.As(err, &noRoundErr) {
+			k.log.Warn(
+				"Error while looking up future precommits",
+				"h", req.H,
+				"r", req.R,
+				"err", err,
+			)
+			return AddVoteInternalError
+		}
+
+		// Then, it was a RoundUnknownError.
+		// We need to set base values in the sparse signature collection.
+		curPrecommitsSparse.PubKeyHash = req.PubKeyHash
+		curPrecommitsSparse.BlockSignatures = make(
+			map[string][]gcrypto.SparseSignature, len(req.Precommits),
+		)
+	}
+
+	// TODO: there is probably some optimized path using [gcrypto.CommonMessageSignatureProof.Derive].
+	existingFullProofs, err := curPrecommitsSparse.ToFullPrecommitProofMap(
+		req.H, req.R,
+		req.PubKeys,
+		k.sigScheme, k.cmspScheme,
+	)
+	if err != nil {
+		k.log.Warn(
+			"Failed to build full precommit proof map",
+			"h", req.H,
+			"r", req.R,
+			"err", err,
+		)
+		return AddVoteInternalError
+	}
+
+	// Now we have the votes that were on disk,
+	// so first we have to merge and write back.
+	res := gcrypto.SignatureProofMergeResult{
+		AllValidSignatures: true,
+	}
+	for blockHash, fullProof := range req.Precommits {
+		if existingFullProofs[blockHash] == nil {
+			existingFullProofs[blockHash] = fullProof
+			res.IncreasedSignatures = true
+			continue
+		}
+
+		res = res.Combine(
+			existingFullProofs[blockHash].Merge(fullProof),
+		)
+		// The mirror confirmed the signatures are all valid,
+		// so we don't need to check for invalid signatures.
+	}
+
+	if !res.IncreasedSignatures {
+		return AddVoteRedundant
+	}
+
+	// It increased signatures, so save the result.
+	// We have to convert the full proofs that we just used,
+	// back into a SparseSignatureCollection.
+	toStore := tmconsensus.SparseSignatureCollection{
+		PubKeyHash:      req.PubKeyHash,
+		BlockSignatures: make(map[string][]gcrypto.SparseSignature),
+	}
+	for blockHash, fullProof := range existingFullProofs {
+		toStore.BlockSignatures[blockHash] = fullProof.AsSparse().Signatures
+	}
+
+	if err := k.rStore.OverwriteRoundPrecommitProofs(
+		ctx,
+		req.H, req.R,
+		toStore,
+	); err != nil {
+		k.log.Warn(
+			"Failed to build full precommit proof map",
+			"h", req.H,
+			"r", req.R,
+			"err", err,
+		)
+		return AddVoteInternalError
+	}
+
+	return AddVoteAccepted
 }
 
 // checkVotingPrecommitViewShift checks if precommit consensus
@@ -1909,7 +2143,7 @@ func (k *Kernel) loadInitialView(
 
 	rv.PrevoteProofs, err = sparsePrevotes.ToFullPrevoteProofMap(
 		h, r,
-		vs,
+		vs.PubKeys,
 		k.sigScheme, k.cmspScheme,
 	)
 	if err != nil {
@@ -1920,7 +2154,7 @@ func (k *Kernel) loadInitialView(
 
 	rv.PrecommitProofs, err = sparsePrecommits.ToFullPrecommitProofMap(
 		h, r,
-		vs,
+		vs.PubKeys,
 		k.sigScheme, k.cmspScheme,
 	)
 	if err != nil {
