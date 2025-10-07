@@ -23,10 +23,25 @@ type gossipViewManager struct {
 	NilVotedRound *tmconsensus.VersionedRoundView
 
 	Committing, Voting, NextRound OutgoingView
+
+	pendingRoundSessionChanges []tmelink.RoundSessionChange
+
+	// Track what height-rounds we've reported to be in the grace period.
+	// These are eventually marked as expired late in [*gossipStrategyOutput.MarkSent].
+	inGrace map[hr]struct{}
+}
+
+type hr struct {
+	H uint64
+	R uint32
 }
 
 func newGossipViewManager(out chan<- tmelink.NetworkViewUpdate) gossipViewManager {
-	return gossipViewManager{out: out}
+	return gossipViewManager{
+		out: out,
+
+		inGrace: make(map[hr]struct{}),
+	}
 }
 
 func (m *gossipViewManager) Output() gossipStrategyOutput {
@@ -71,7 +86,55 @@ func (m *gossipViewManager) Output() gossipStrategyOutput {
 		o.Val.NilVotedRound = m.NilVotedRound
 	}
 
+	if len(m.pendingRoundSessionChanges) > 0 {
+		o.Ch = m.out
+
+		o.Val.RoundSessionChanges = m.pendingRoundSessionChanges
+	}
+
 	return o
+}
+
+// Grace adds a grace-period round session change
+// for the given height and round.
+func (m *gossipViewManager) Grace(height uint64, round uint32) {
+	m.pendingRoundSessionChanges = append(
+		m.pendingRoundSessionChanges,
+		tmelink.RoundSessionChange{
+			Height: height,
+			Round:  round,
+			State:  tmelink.RoundSessionStateGrace,
+		},
+	)
+
+	m.inGrace[hr{H: height, R: round}] = struct{}{}
+}
+
+// Activate adds an activated round session change
+// for the given height and round.
+func (m *gossipViewManager) Activate(height uint64, round uint32) {
+	m.pendingRoundSessionChanges = append(
+		m.pendingRoundSessionChanges,
+		tmelink.RoundSessionChange{
+			Height: height,
+			Round:  round,
+			State:  tmelink.RoundSessionStateActive,
+		},
+	)
+
+	// No map necessary to track active rounds.
+}
+
+// Expire notes the given height and round's session is expired.
+func (m *gossipViewManager) Expire(height uint64, round uint32) {
+	m.pendingRoundSessionChanges = append(
+		m.pendingRoundSessionChanges,
+		tmelink.RoundSessionChange{
+			Height: height,
+			Round:  round,
+			State:  tmelink.RoundSessionStateExpired,
+		},
+	)
 }
 
 type gossipStrategyOutput struct {
@@ -84,7 +147,10 @@ type gossipStrategyOutput struct {
 // MarkSent updates o's GossipViewManager to indicate the values in o
 // have successfully been sent.
 func (o gossipStrategyOutput) MarkSent() {
+	var committingHeight uint64
+
 	if o.Val.Committing != nil {
+		committingHeight = o.m.Committing.VRV.Height
 		o.m.Committing.MarkSent()
 	}
 
@@ -94,6 +160,30 @@ func (o gossipStrategyOutput) MarkSent() {
 
 	if o.Val.NextRound != nil {
 		o.m.NextRound.MarkSent()
+	}
+
+	o.m.pendingRoundSessionChanges = nil
+
+	// Now that the gossip strategy is aware we have a particular committing round,
+	// check if any grace period sessions are old,
+	// and mark them expired.
+	//
+	// We could possibly choose to do more than two grace heights at some point.
+	const graceHeightCount = 2
+	if committingHeight > graceHeightCount {
+		for hr := range o.m.inGrace {
+			if hr.H < committingHeight-graceHeightCount {
+				delete(o.m.inGrace, hr)
+				o.m.pendingRoundSessionChanges = append(
+					o.m.pendingRoundSessionChanges,
+					tmelink.RoundSessionChange{
+						Height: hr.H,
+						Round:  hr.R,
+						State:  tmelink.RoundSessionStateExpired,
+					},
+				)
+			}
+		}
 	}
 
 	// Always clear the NilVotedRound; no version tracking involved there.

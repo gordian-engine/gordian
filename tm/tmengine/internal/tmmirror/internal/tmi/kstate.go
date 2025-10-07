@@ -154,6 +154,7 @@ func (s *kState) MarkViewUpdated(id ViewID) {
 	}
 }
 
+// nextHeightDetails is the parameter type for [*kState.ShiftVotingToCommitting].
 type nextHeightDetails struct {
 	ValidatorSet tmconsensus.ValidatorSet
 
@@ -163,6 +164,8 @@ type nextHeightDetails struct {
 	Round1NilPrevote, Round1NilPrecommit gcrypto.CommonMessageSignatureProof
 }
 
+// ShiftVotingToCommitting shifts the voting view to committing.
+// The existing committing view is marked to be in the grace period.
 func (s *kState) ShiftVotingToCommitting(nhd nextHeightDetails) {
 	// If the state machine was pointing at the committing height,
 	// we want to close the HeightCommitted channel
@@ -174,8 +177,14 @@ func (s *kState) ShiftVotingToCommitting(nhd nextHeightDetails) {
 	}
 
 	// Easy part: move the voting view over the committing view.
+	if s.Committing.Height != 0 {
+		// It could be zero if we haven't committed yet.
+		s.GossipViewManager.Grace(s.Committing.Height, s.Committing.Round)
+	}
 	s.Committing = s.Voting
 	s.MarkCommittingViewUpdated()
+
+	s.GossipViewManager.Expire(s.NextRound.Height, s.NextRound.Round)
 
 	newHeight := s.Voting.Height + 1
 
@@ -200,6 +209,8 @@ func (s *kState) ShiftVotingToCommitting(nhd nextHeightDetails) {
 			},
 
 			// Empty but not nil maps.
+			// TODO: this needs to load from the store,
+			// as we may have received future votes earlier.
 			PrevoteProofs:   map[string]gcrypto.CommonMessageSignatureProof{},
 			PrecommitProofs: map[string]gcrypto.CommonMessageSignatureProof{},
 
@@ -212,6 +223,7 @@ func (s *kState) ShiftVotingToCommitting(nhd nextHeightDetails) {
 
 	s.Voting.VoteSummary.SetAvailablePower(nhd.ValidatorSet.Validators)
 	s.MarkVotingViewUpdated()
+	s.GossipViewManager.Activate(newHeight, 0)
 
 	// Now for the next round.
 	s.NextRound.Reset()
@@ -224,6 +236,7 @@ func (s *kState) ShiftVotingToCommitting(nhd nextHeightDetails) {
 	s.NextRound.VoteSummary.AvailablePower = s.Voting.VoteSummary.AvailablePower
 
 	s.MarkNextRoundViewUpdated()
+	s.GossipViewManager.Activate(newHeight, 1)
 
 	s.CommittingHeader = nhd.VotedHeader
 
@@ -234,6 +247,7 @@ func (s *kState) ShiftVotingToCommitting(nhd nextHeightDetails) {
 	}
 }
 
+// AdvanceVotingRound increments the voting round by one.
 func (s *kState) AdvanceVotingRound() {
 	// Always set the NilVotedRound here,
 	// because we have to assume nobody else has sufficient information to advance.
@@ -244,6 +258,12 @@ func (s *kState) AdvanceVotingRound() {
 	s.GossipViewManager.NilVotedRound = &vClone
 
 	s.incrementVotingRound()
+
+	// Grace the previous round,
+	// and the next round was previously active,
+	// so we also need to active the new next round.
+	s.GossipViewManager.Grace(s.Voting.Height, s.Voting.Round-1)
+	s.GossipViewManager.Activate(s.Voting.Height, s.Voting.Round+1)
 }
 
 func (s *kState) JumpVotingRound() {

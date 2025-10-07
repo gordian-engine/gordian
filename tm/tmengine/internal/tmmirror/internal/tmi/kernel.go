@@ -257,6 +257,20 @@ func NewKernel(ctx context.Context, log *slog.Logger, cfg KernelConfig) (*Kernel
 	initState.Voting.RoundView.PrevCommitProof = committingProof
 	initState.NextRound.RoundView.PrevCommitProof = committingProof
 
+	// Note the initial active sessions.
+	if initState.Committing.Height > 0 {
+		// Don't indicate an active session before we have a committing round.
+		initState.GossipViewManager.Activate(
+			initState.Committing.Height, initState.Committing.Round,
+		)
+	}
+	initState.GossipViewManager.Activate(
+		initState.Voting.Height, initState.Voting.Round,
+	)
+	initState.GossipViewManager.Activate(
+		initState.NextRound.Height, initState.NextRound.Round,
+	)
+
 	if err := k.updateObservers(ctx, &initState); err != nil {
 		return nil, err
 	}

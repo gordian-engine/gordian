@@ -22,4 +22,13 @@ type NetworkViewUpdate struct {
 	// which would eventually bring validators to the same round;
 	// but we can instead eagerly distribute the details that caused a round to vote nil.
 	NilVotedRound *tmconsensus.VersionedRoundView
+
+	// If the gossip strategy has to maintain state around connections,
+	// these updates indicate the engine's view of which heights and rounds
+	// should be activated, in grace period, or expired.
+	//
+	// This is not a totally exclusive list;
+	// if the p2p layer receives a valid future vote,
+	// it is free to maintain that session as necessary.
+	RoundSessionChanges []RoundSessionChange
 }

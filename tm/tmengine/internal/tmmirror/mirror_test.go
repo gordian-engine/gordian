@@ -3641,3 +3641,96 @@ func TestMirror_futureRoundVotes(t *testing.T) {
 		require.Equal(t, keyHash, string(gotPrecommits.PubKeyHash))
 	})
 }
+
+func TestMirror_GossipStrategyOut_RoundSessionChanges(t *testing.T) {
+	t.Run("at genesis", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		mfx := tmmirrortest.NewFixture(ctx, t, 4)
+
+		m := mfx.NewMirror()
+		defer m.Wait()
+		defer cancel()
+
+		// At genesis, no committing view; just voting and next round.
+		gs0 := gtest.ReceiveSoon(t, mfx.GossipStrategyOut)
+		require.ElementsMatch(
+			t,
+			[]tmelink.RoundSessionChange{
+				{
+					Height: 1,
+					Round:  0,
+					State:  tmelink.RoundSessionStateActive,
+				},
+				{
+					Height: 1,
+					Round:  1,
+					State:  tmelink.RoundSessionStateActive,
+				},
+			},
+			gs0.RoundSessionChanges,
+		)
+	})
+
+	t.Run("on first commit", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		mfx := tmmirrortest.NewFixture(ctx, t, 4)
+
+		m := mfx.NewMirror()
+		defer m.Wait()
+		defer cancel()
+
+		// At genesis, no committing view; just voting and next round.
+		_ = gtest.ReceiveSoon(t, mfx.GossipStrategyOut)
+
+		ph1 := mfx.Fx.NextProposedHeader([]byte("app_data_1"), 0)
+		mfx.Fx.SignProposal(ctx, &ph1, 0)
+		require.Equal(t, tmconsensus.HandleProposedHeaderAccepted, m.HandleProposedHeader(ctx, ph1))
+
+		voteMap := map[string][]int{
+			string(ph1.Header.Hash): {0, 1, 2, 3},
+		}
+
+		keyHash, _ := mfx.Fx.ValidatorHashes()
+		precommitProof := tmconsensus.PrecommitSparseProof{
+			Height:     1,
+			Round:      0,
+			PubKeyHash: keyHash,
+			Proofs:     mfx.Fx.SparsePrecommitProofMap(ctx, 1, 0, voteMap),
+		}
+		res := m.HandlePrecommitProofs(ctx, precommitProof)
+		require.Equal(t, tmconsensus.HandleVoteProofsAccepted, res)
+
+		// The next height and its next round are active.
+		gs := gtest.ReceiveSoon(t, mfx.GossipStrategyOut)
+		require.ElementsMatch(
+			t,
+			[]tmelink.RoundSessionChange{
+				{
+					Height: 2,
+					Round:  0,
+					State:  tmelink.RoundSessionStateActive,
+				},
+				{
+					Height: 2,
+					Round:  1,
+					State:  tmelink.RoundSessionStateActive,
+				},
+				// Our next round was beyond the committing round.
+				{
+					Height: 1,
+					Round:  1,
+					State:  tmelink.RoundSessionStateExpired,
+				},
+			},
+			gs.RoundSessionChanges,
+		)
+	})
+}
