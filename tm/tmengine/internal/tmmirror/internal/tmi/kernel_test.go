@@ -583,3 +583,82 @@ func TestKernel_initialViewLoadsPrevCommitProof(t *testing.T) {
 		require.Equal(t, rer.VRV.VoteSummary.AvailablePower, rer.VRV.VoteSummary.PrecommitBlockPower[string(ph2.Header.Hash)])
 	})
 }
+
+func TestKernel_viewLookupResponse_futureViewValidators(t *testing.T) {
+	t.Run("later round in voting height", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		kfx := NewKernelFixture(ctx, t, 2)
+
+		k := kfx.NewKernel()
+		defer k.Wait()
+		defer cancel()
+
+		respCh := make(chan tmi.ViewLookupResponse, 1)
+		vrv := new(tmconsensus.VersionedRoundView)
+		req := tmi.ViewLookupRequest{
+			H: 1,
+			R: 9,
+
+			// Only need the validators for this.
+			Fields: tmi.RVValidators,
+
+			VRV: vrv,
+
+			Reason: "test",
+
+			Resp: respCh,
+		}
+
+		// It's reported as future status.
+		gtest.SendSoon(t, kfx.ViewLookupRequests, req)
+		resp := gtest.ReceiveSoon(t, respCh)
+		require.Equal(t, tmi.ViewFuture, resp.Status)
+
+		// And the validators are populated correctly.
+		require.True(t, kfx.Fx.ValSet().Equal(vrv.ValidatorSet))
+	})
+
+	t.Run("later height", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		kfx := NewKernelFixture(ctx, t, 2)
+
+		k := kfx.NewKernel()
+		defer k.Wait()
+		defer cancel()
+
+		respCh := make(chan tmi.ViewLookupResponse, 1)
+		vrv := new(tmconsensus.VersionedRoundView)
+		req := tmi.ViewLookupRequest{
+			H: 8,
+			R: 0,
+
+			// Only need the validators for this.
+			Fields: tmi.RVValidators,
+
+			VRV: vrv,
+
+			Reason: "test",
+
+			Resp: respCh,
+		}
+
+		// It's reported as future status.
+		gtest.SendSoon(t, kfx.ViewLookupRequests, req)
+		resp := gtest.ReceiveSoon(t, respCh)
+		require.Equal(t, tmi.ViewFuture, resp.Status)
+
+		// The validators are cleared --
+		// the kernel does not attempt any lookup,
+		// and the request does not currently contain the public key hash
+		// for the kernel to compare it against the maintained views.
+		require.Zero(t, vrv.ValidatorSet)
+	})
+}

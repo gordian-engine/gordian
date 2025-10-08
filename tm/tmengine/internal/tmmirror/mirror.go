@@ -613,29 +613,34 @@ func (m *Mirror) handleFuturePrevoteProofs(
 	defer trace.StartRegion(ctx, "handleFuturePrevoteProofs").End()
 	// NOTE: keep changes to this method synchronized with handleFuturePrecommitProofs.
 
-	// First, gather the public keys for the hash.
-	// TODO: there is an optimistic case where the future votes
-	// match the same current validator set,
-	// so we should check that before querying the store.
-	pubKeys, err := m.vs.LoadPubKeys(ctx, p.PubKeyHash)
-	if err != nil {
-		// The only "acceptable" error for loading public keys is not finding them.
-		var noHashErr tmstore.NoPubKeyHashError
-		if errors.As(err, &noHashErr) {
-			// Call it too far in the future if we can't identify the public keys.
-			// However, if supported, it would be better to make a remote call
-			// to look up the public keys.
-			return tmconsensus.HandleVoteProofsFutureUnverified
-		}
+	// Sometimes the kernel is able to assign the validator set,
+	// including public keys.
+	pubKeys := vlReq.VRV.ValidatorSet.PubKeys
 
-		// If it was any other error, fail now.
-		m.log.Warn(
-			"Error while looking up future public keys",
-			"h", p.Height,
-			"r", p.Round,
-			"err", err,
-		)
-		return tmconsensus.HandleVoteProofsInternalError
+	if len(pubKeys) == 0 {
+		// The mirror didn't have the public keys loaded in memory,
+		// so read them from storage.
+		var err error
+		pubKeys, err = m.vs.LoadPubKeys(ctx, p.PubKeyHash)
+		if err != nil {
+			// The only "acceptable" error for loading public keys is not finding them.
+			var noHashErr tmstore.NoPubKeyHashError
+			if errors.As(err, &noHashErr) {
+				// Call it too far in the future if we can't identify the public keys.
+				// However, if supported, it would be better to make a remote call
+				// to look up the public keys.
+				return tmconsensus.HandleVoteProofsFutureUnverified
+			}
+
+			// If it was any other error, fail now.
+			m.log.Warn(
+				"Error while looking up future public keys",
+				"h", p.Height,
+				"r", p.Round,
+				"err", err,
+			)
+			return tmconsensus.HandleVoteProofsInternalError
+		}
 	}
 
 	// In the normal flow with non-future views,
@@ -959,29 +964,34 @@ func (m *Mirror) handleFuturePrecommitProofs(
 	defer trace.StartRegion(ctx, "handleFuturePrecommitProofs").End()
 	// NOTE: keep changes to this method synchronized with handleFuturePrecommitProofs.
 
-	// First, gather the public keys for the hash.
-	// TODO: there is an optimistic case where the future votes
-	// match the same current validator set,
-	// so we should check that before querying the store.
-	pubKeys, err := m.vs.LoadPubKeys(ctx, p.PubKeyHash)
-	if err != nil {
-		// The only "acceptable" error for loading public keys is not finding them.
-		var noHashErr tmstore.NoPubKeyHashError
-		if errors.As(err, &noHashErr) {
-			// Call it too far in the future if we can't identify the public keys.
-			// However, if supported, it would be better to make a remote call
-			// to look up the public keys.
-			return tmconsensus.HandleVoteProofsFutureUnverified
-		}
+	// Sometimes the kernel is able to assign the validator set,
+	// including public keys.
+	pubKeys := vlReq.VRV.ValidatorSet.PubKeys
 
-		// If it was any other error, fail now.
-		m.log.Warn(
-			"Error while looking up future public keys",
-			"h", p.Height,
-			"r", p.Round,
-			"err", err,
-		)
-		return tmconsensus.HandleVoteProofsInternalError
+	if len(pubKeys) == 0 {
+		// The mirror didn't have the public keys loaded in memory,
+		// so read them from storage.
+		var err error
+		pubKeys, err = m.vs.LoadPubKeys(ctx, p.PubKeyHash)
+		if err != nil {
+			// The only "acceptable" error for loading public keys is not finding them.
+			var noHashErr tmstore.NoPubKeyHashError
+			if errors.As(err, &noHashErr) {
+				// Call it too far in the future if we can't identify the public keys.
+				// However, if supported, it would be better to make a remote call
+				// to look up the public keys.
+				return tmconsensus.HandleVoteProofsFutureUnverified
+			}
+
+			// If it was any other error, fail now.
+			m.log.Warn(
+				"Error while looking up future public keys",
+				"h", p.Height,
+				"r", p.Round,
+				"err", err,
+			)
+			return tmconsensus.HandleVoteProofsInternalError
+		}
 	}
 
 	// In the normal flow with non-future views,

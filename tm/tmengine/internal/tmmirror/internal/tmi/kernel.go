@@ -1531,6 +1531,14 @@ func (k *Kernel) sendViewLookupResponse(ctx context.Context, s *kState, req View
 	resp.ID = vID
 	resp.Status = vStatus
 
+	if vStatus == ViewFuture && req.H == s.Voting.Height && ((req.Fields & RVValidators) > 0) {
+		// Even though we don't copy in a full VRV in the future case,
+		// we can assign the ValidatorSet if it matches the voting height.
+		//
+		// Safe to reuse the reference since ValidatorSet is considered immutable.
+		req.VRV.ValidatorSet = s.Voting.ValidatorSet
+	}
+
 	// The response channel is guaranteed to be buffered,
 	// so this send does not need to be wrapped in a select.
 	req.Resp <- resp
