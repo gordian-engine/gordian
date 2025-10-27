@@ -10,17 +10,22 @@ import (
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmintegration"
+	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p/tmlibp2pintegration"
 )
 
 type blsFactory struct {
-	tmintegration.Libp2pFactory
+	// TODO: this should probably not rely on the libp2p implementation for tests.
+	// I think the intent was to exercise serialization of the signatures,
+	// but that ought to be covered elsewhere.
+	tmlibp2pintegration.Libp2pFactory
+
 	tmintegration.InmemStoreFactory
 	tmintegration.InmemSchemeFactory
 }
 
 func newBLSFactory(e *tmintegration.Env) blsFactory {
 	return blsFactory{
-		Libp2pFactory: tmintegration.NewLibp2pFactory(e),
+		Libp2pFactory: tmlibp2pintegration.NewLibp2pFactory(e),
 
 		// Zero-value structs are fine for the two in-mem factories.
 	}

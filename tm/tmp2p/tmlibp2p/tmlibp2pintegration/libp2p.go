@@ -1,4 +1,4 @@
-package tmintegration
+package tmlibp2pintegration
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/gordian-engine/gordian/internal/gtest"
 	"github.com/gordian-engine/gordian/tm/tmcodec/tmjson"
 	"github.com/gordian-engine/gordian/tm/tmgossip"
+	"github.com/gordian-engine/gordian/tm/tmintegration"
 	"github.com/gordian-engine/gordian/tm/tmp2p"
 	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p"
 	"github.com/gordian-engine/gordian/tm/tmp2p/tmlibp2p/tmlibp2ptest"
@@ -18,10 +19,10 @@ import (
 // Libp2pFactory provides a Network and GossipStrategy for integration tests.
 // This makes it straightforward to compose separate stores and schemes for integration tests.
 type Libp2pFactory struct {
-	e *Env
+	e *tmintegration.Env
 }
 
-func NewLibp2pFactory(e *Env) Libp2pFactory {
+func NewLibp2pFactory(e *tmintegration.Env) Libp2pFactory {
 	return Libp2pFactory{e: e}
 }
 
