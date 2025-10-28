@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/gordian-engine/gordian/gcrypto"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmgossip"
@@ -53,15 +52,15 @@ type NewFactoryFunc func(e *Env) Factory
 //     and all of the other factory methods (the store creators and NewGossipStrategy)
 //     are called once with the corresponding index of the validator.
 type Factory interface {
-	// NewConsensusFixture is the first method called in any test.
-	// The factory may perform any necessary allocations, generating keys, and so on,
-	// based on the nVals parameter.
-	NewConsensusFixture(nVals int) *tmconsensustest.Fixture
-
 	// NewNetwork will be called only once per test.
 	// The implementer may assume that the context will be canceled
 	// at or before the test's completion.
-	NewNetwork(*testing.T, context.Context, *gcrypto.Registry) (tmp2ptest.Network, error)
+	//
+	// The method returns a tmconsensustest.Fixture
+	// used internally by the integration tests.
+	NewNetwork(t *testing.T, ctx context.Context, nVals int) (
+		tmp2ptest.Network, *tmconsensustest.Fixture, error,
+	)
 
 	NewActionStore(context.Context, int) (tmstore.ActionStore, error)
 	NewCommittedHeaderStore(context.Context, int) (tmstore.CommittedHeaderStore, error)

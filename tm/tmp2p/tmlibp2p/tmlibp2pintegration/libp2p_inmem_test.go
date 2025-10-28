@@ -12,8 +12,6 @@ import (
 type Libp2pInmemFactory struct {
 	tmlibp2pintegration.Libp2pFactory
 
-	tmintegration.ConsensusFixtureFactory
-
 	tmintegration.InmemStoreFactory
 	tmintegration.InmemSchemeFactory
 }
@@ -23,8 +21,6 @@ func TestLibp2pInmem(t *testing.T) {
 		lf := tmlibp2pintegration.NewLibp2pFactory(e)
 		return Libp2pInmemFactory{
 			Libp2pFactory: lf,
-
-			ConsensusFixtureFactory: tmintegration.Ed25519ConsensusFixtureFactory{},
 		}
 	})
 }

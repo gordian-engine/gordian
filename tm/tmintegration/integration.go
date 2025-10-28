@@ -34,9 +34,8 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 		})
 
 		const netSize = 2
-		fx := f.NewConsensusFixture(netSize)
 
-		n, err := f.NewNetwork(t, ctx, &fx.Registry)
+		n, fx, err := f.NewNetwork(t, ctx, netSize)
 		require.NoError(t, err)
 		defer n.Wait()
 		defer cancel()
@@ -189,9 +188,8 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 		const netSize = 6 // Total number of validators in the network.
 		const pickN = 4   // How many validators participate in rounds beyond initial height.
-		fx := f.NewConsensusFixture(netSize)
 
-		n, err := f.NewNetwork(t, ctx, &fx.Registry)
+		n, fx, err := f.NewNetwork(t, ctx, netSize)
 		require.NoError(t, err)
 		defer n.Wait()
 		defer cancel()
