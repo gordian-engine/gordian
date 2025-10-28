@@ -93,24 +93,22 @@ func (p PrecommitSparseProof) Clone() PrecommitSparseProof {
 	}
 }
 
+// ToFull returns a newly allocated full PrecommitProof
+// based on the sparse proof and the provided arguments.
+//
+// This is mostly intended for tests that intercept a sparse proof,
+// but it may be useful in limited edge cases in production.
 func (p PrecommitSparseProof) ToFull(
 	cmsps gcrypto.CommonMessageSignatureProofScheme,
 	sigScheme SignatureScheme,
-	hashScheme HashScheme,
-	trustedVals []Validator,
+	pubKeys []gcrypto.PubKey,
+	pubKeyHash string,
 ) (PrecommitProof, error) {
 	out := PrecommitProof{
 		Height: p.Height,
 		Round:  p.Round,
 		Proofs: make(map[string]gcrypto.CommonMessageSignatureProof, len(p.Proofs)),
 	}
-
-	valPubKeys := ValidatorsToPubKeys(trustedVals)
-	bValPubKeyHash, err := hashScheme.PubKeys(valPubKeys)
-	if err != nil {
-		return out, fmt.Errorf("failed to build validator pub key hash: %w", err)
-	}
-	valPubKeyHash := string(bValPubKeyHash)
 
 	for h, sigs := range p.Proofs {
 		vt := VoteTarget{
@@ -123,9 +121,9 @@ func (p PrecommitSparseProof) ToFull(
 			return out, fmt.Errorf("failed to build precommit sign bytes: %w", err)
 		}
 
-		out.Proofs[h], err = cmsps.New(msg, valPubKeys, valPubKeyHash)
+		out.Proofs[h], err = cmsps.New(msg, pubKeys, pubKeyHash)
 		if err != nil {
-			return out, fmt.Errorf("failed to build signature proof: %w", err)
+			return out, fmt.Errorf("failed to build precommit signature proof: %w", err)
 		}
 
 		sparseProof := gcrypto.SparseSignatureProof{

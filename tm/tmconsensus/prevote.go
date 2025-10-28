@@ -92,24 +92,22 @@ func (p PrevoteSparseProof) Clone() PrevoteSparseProof {
 	}
 }
 
+// ToFull returns a newly allocated full PrevoteProof
+// based on the sparse proof and the provided arguments.
+//
+// This is mostly intended for tests that intercept a sparse proof,
+// but it may be useful in limited edge cases in production.
 func (p PrevoteSparseProof) ToFull(
 	cmsps gcrypto.CommonMessageSignatureProofScheme,
 	sigScheme SignatureScheme,
-	hashScheme HashScheme,
-	trustedVals []Validator,
+	pubKeys []gcrypto.PubKey,
+	pubKeyHash string,
 ) (PrevoteProof, error) {
 	out := PrevoteProof{
 		Height: p.Height,
 		Round:  p.Round,
 		Proofs: make(map[string]gcrypto.CommonMessageSignatureProof, len(p.Proofs)),
 	}
-
-	valPubKeys := ValidatorsToPubKeys(trustedVals)
-	bValPubKeyHash, err := hashScheme.PubKeys(valPubKeys)
-	if err != nil {
-		return out, fmt.Errorf("failed to build validator pub key hash: %w", err)
-	}
-	valPubKeyHash := string(bValPubKeyHash)
 
 	for h, sigs := range p.Proofs {
 		vt := VoteTarget{
@@ -122,9 +120,9 @@ func (p PrevoteSparseProof) ToFull(
 			return out, fmt.Errorf("failed to build prevote sign bytes: %w", err)
 		}
 
-		out.Proofs[h], err = cmsps.New(msg, valPubKeys, valPubKeyHash)
+		out.Proofs[h], err = cmsps.New(msg, pubKeys, pubKeyHash)
 		if err != nil {
-			return out, fmt.Errorf("failed to build signature proof: %w", err)
+			return out, fmt.Errorf("failed to build prevote signature proof: %w", err)
 		}
 
 		sparseProof := gcrypto.SparseSignatureProof{

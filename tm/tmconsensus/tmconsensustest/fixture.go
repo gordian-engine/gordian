@@ -318,7 +318,8 @@ func (f *Fixture) PrecommitSignatureProof(
 }
 
 // PrevoteProofMap creates a map of prevote signatures that can be passed
-// directly to [tmstore.ConsensusStore.OverwritePrevoteProof].
+// directly to methods like [tmstore.ConsensusStore.OverwritePrevoteProof]
+// that accept a map of block hashes to votes.
 func (f *Fixture) PrevoteProofMap(
 	ctx context.Context,
 	height uint64,
