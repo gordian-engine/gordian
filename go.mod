@@ -1,12 +1,11 @@
 module github.com/gordian-engine/gordian
 
-go 1.23.2
+go 1.25
 
 require (
 	github.com/bits-and-blooms/bitset v1.20.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20240428194347-eebcea082ee0
 	github.com/gorilla/mux v1.8.1
-	github.com/klauspost/reedsolomon v1.12.4
 	github.com/libp2p/go-libp2p v0.39.0
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/libp2p/go-libp2p-pubsub v0.11.0
