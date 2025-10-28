@@ -57,15 +57,6 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 		apps := make([]*identityApp, len(fx.PrivVals))
 
 		for i, v := range fx.PrivVals {
-			hashScheme, err := f.HashScheme(ctx, i)
-			require.NoError(t, err)
-
-			sigScheme, err := f.SignatureScheme(ctx, i)
-			require.NoError(t, err)
-
-			cmspScheme, err := f.CommonMessageSignatureProofScheme(ctx, i)
-			require.NoError(t, err)
-
 			as, err := f.NewActionStore(ctx, i)
 			require.NoError(t, err)
 
@@ -84,7 +75,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 			sms, err := f.NewStateMachineStore(ctx, i)
 			require.NoError(t, err)
 
-			vs, err := f.NewValidatorStore(ctx, i, hashScheme)
+			vs, err := f.NewValidatorStore(ctx, i, fx.HashScheme)
 			require.NoError(t, err)
 
 			gStrat, err := f.NewGossipStrategy(ctx, i, conns[i])
@@ -122,9 +113,9 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 				tmengine.WithStateMachineStore(sms),
 				tmengine.WithValidatorStore(vs),
 
-				tmengine.WithHashScheme(hashScheme),
-				tmengine.WithSignatureScheme(sigScheme),
-				tmengine.WithCommonMessageSignatureProofScheme(cmspScheme),
+				tmengine.WithHashScheme(fx.HashScheme),
+				tmengine.WithSignatureScheme(fx.SignatureScheme),
+				tmengine.WithCommonMessageSignatureProofScheme(fx.CommonMessageSignatureProofScheme),
 
 				tmengine.WithGossipStrategy(gStrat),
 				tmengine.WithConsensusStrategy(cStrat),
@@ -152,7 +143,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 				tmengine.WithSigner(tmconsensus.PassthroughSigner{
 					Signer:          v.Signer,
-					SignatureScheme: sigScheme,
+					SignatureScheme: fx.SignatureScheme,
 				}),
 
 				tmengine.WithWatchdog(wd),
@@ -170,7 +161,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 		for i := uint64(1); i < 6; i++ {
 			t.Logf("Beginning finalization sync for height %d", i)
-			for appIdx := 0; appIdx < len(apps); appIdx++ {
+			for appIdx := range apps {
 				finResp := gtest.ReceiveOrTimeout(t, apps[appIdx].FinalizeResponses, gtest.ScaleMs(1200))
 				require.Equal(t, i, finResp.Height)
 
@@ -221,15 +212,6 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 		apps := make([]*valShuffleApp, len(fx.PrivVals))
 
 		for i, v := range fx.PrivVals {
-			hashScheme, err := f.HashScheme(ctx, i)
-			require.NoError(t, err)
-
-			sigScheme, err := f.SignatureScheme(ctx, i)
-			require.NoError(t, err)
-
-			cmspScheme, err := f.CommonMessageSignatureProofScheme(ctx, i)
-			require.NoError(t, err)
-
 			as, err := f.NewActionStore(ctx, i)
 			require.NoError(t, err)
 
@@ -248,7 +230,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 			sms, err := f.NewStateMachineStore(ctx, i)
 			require.NoError(t, err)
 
-			vs, err := f.NewValidatorStore(ctx, i, hashScheme)
+			vs, err := f.NewValidatorStore(ctx, i, fx.HashScheme)
 			require.NoError(t, err)
 
 			gStrat, err := f.NewGossipStrategy(ctx, i, conns[i])
@@ -257,7 +239,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 			cStrat := &valShuffleConsensusStrategy{
 				Log:        log.With("sys", "consensusstrategy", "idx", i),
 				PubKey:     v.Val.PubKey,
-				HashScheme: hashScheme,
+				HashScheme: fx.HashScheme,
 			}
 
 			blockFinCh := make(chan tmdriver.FinalizeBlockRequest)
@@ -265,7 +247,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 			app := newValShuffleApp(
 				ctx, log.With("sys", "app", "idx", i), i,
-				hashScheme, pickN, initChainCh, blockFinCh,
+				fx.HashScheme, pickN, initChainCh, blockFinCh,
 			)
 			t.Cleanup(app.Wait)
 			t.Cleanup(cancel)
@@ -287,9 +269,9 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 				tmengine.WithStateMachineStore(sms),
 				tmengine.WithValidatorStore(vs),
 
-				tmengine.WithHashScheme(hashScheme),
-				tmengine.WithSignatureScheme(sigScheme),
-				tmengine.WithCommonMessageSignatureProofScheme(cmspScheme),
+				tmengine.WithHashScheme(fx.HashScheme),
+				tmengine.WithSignatureScheme(fx.SignatureScheme),
+				tmengine.WithCommonMessageSignatureProofScheme(fx.CommonMessageSignatureProofScheme),
 
 				tmengine.WithGossipStrategy(gStrat),
 				tmengine.WithConsensusStrategy(cStrat),
@@ -317,7 +299,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 				tmengine.WithSigner(tmconsensus.PassthroughSigner{
 					Signer:          v.Signer,
-					SignatureScheme: sigScheme,
+					SignatureScheme: fx.SignatureScheme,
 				}),
 
 				tmengine.WithWatchdog(wd),
@@ -343,7 +325,7 @@ func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
 
 		for height := uint64(1); height < 6; height++ {
 			t.Logf("Beginning finalization sync for height %d", height)
-			for appIdx := 0; appIdx < len(apps); appIdx++ {
+			for appIdx := range apps {
 				finResp := gtest.ReceiveOrTimeout(t, apps[appIdx].FinalizeResponses, gtest.ScaleMs(500))
 				require.Equal(t, height, finResp.Height)
 

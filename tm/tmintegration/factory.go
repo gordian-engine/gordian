@@ -43,7 +43,21 @@ func (e *Env) Cleanup(fn func()) {
 
 type NewFactoryFunc func(e *Env) Factory
 
+// Factory is the interface provided when running integration tests
+// (via [RunIntegrationTest]).
+//
+// Within each integration sub-test:
+//   - The factory func is called once, creating a new Factory instance
+//   - On that factory instance, NewNetwork is called once
+//   - For each validator that the test creates, [tmp2ptest.Network.Connect] is called once,
+//     and all of the other factory methods (the store creators and NewGossipStrategy)
+//     are called once with the corresponding index of the validator.
 type Factory interface {
+	// NewConsensusFixture is the first method called in any test.
+	// The factory may perform any necessary allocations, generating keys, and so on,
+	// based on the nVals parameter.
+	NewConsensusFixture(nVals int) *tmconsensustest.Fixture
+
 	// NewNetwork will be called only once per test.
 	// The implementer may assume that the context will be canceled
 	// at or before the test's completion.
@@ -57,12 +71,5 @@ type Factory interface {
 	NewStateMachineStore(context.Context, int) (tmstore.StateMachineStore, error)
 	NewValidatorStore(context.Context, int, tmconsensus.HashScheme) (tmstore.ValidatorStore, error)
 
-	// TODO: fixture probably takes precedence over this?
-	HashScheme(context.Context, int) (tmconsensus.HashScheme, error)
-	SignatureScheme(context.Context, int) (tmconsensus.SignatureScheme, error)
-	CommonMessageSignatureProofScheme(context.Context, int) (gcrypto.CommonMessageSignatureProofScheme, error)
-
 	NewGossipStrategy(context.Context, int, tmp2p.Connection) (tmgossip.Strategy, error)
-
-	NewConsensusFixture(nVals int) *tmconsensustest.Fixture
 }
