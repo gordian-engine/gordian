@@ -16,6 +16,9 @@ type ActionStore interface {
 	SavePrecommitAction(ctx context.Context, pubKey gcrypto.PubKey, vt tmconsensus.VoteTarget, sig []byte) error
 
 	// LoadActions returns all actions recorded for this round.
+	//
+	// If there are no actions stored for the given round,
+	// the store must return [tmconsensus.RoundUnknownError].
 	LoadActions(ctx context.Context, height uint64, round uint32) (RoundActions, error)
 }
 

@@ -32,6 +32,8 @@ type StateMachine struct {
 
 	finalizer tsi.CommitProofFinalizer
 
+	phi tmelink.ProposedHeaderInterceptor
+
 	genesis tmconsensus.Genesis
 
 	aStore  tmstore.ActionStore
@@ -73,6 +75,8 @@ type StateMachineConfig struct {
 
 	ConsensusStrategy tmconsensus.ConsensusStrategy
 
+	ProposedHeaderInterceptor tmelink.ProposedHeaderInterceptor
+
 	RoundViewInCh      <-chan tmeil.StateMachineRoundView
 	RoundEntranceOutCh chan<- tmeil.StateMachineRoundEntrance
 
@@ -99,6 +103,8 @@ func NewStateMachine(ctx context.Context, log *slog.Logger, cfg StateMachineConf
 			SigScheme:  cfg.SignatureScheme,
 			CMSPScheme: cfg.CommonMessageSignatureProofScheme,
 		},
+
+		phi: cfg.ProposedHeaderInterceptor,
 
 		genesis: cfg.Genesis,
 
@@ -1382,6 +1388,13 @@ func (m *StateMachine) recordProposedHeader(
 		ProposerPubKey: m.signer.PubKey(),
 
 		Annotations: p.ProposalAnnotations,
+	}
+
+	if m.phi != nil {
+		if err := m.phi.InterceptProposedHeader(ctx, &ph); err != nil {
+			glog.HRE(m.log, h, r, err).Error("Failure when intercepting proposed header")
+			return false
+		}
 	}
 
 	hash, err := m.hashScheme.Block(ph.Header)

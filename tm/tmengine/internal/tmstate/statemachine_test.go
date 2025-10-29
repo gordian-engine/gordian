@@ -2,6 +2,7 @@ package tmstate_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -1231,6 +1232,110 @@ func TestStateMachine_enterRoundProposal(t *testing.T) {
 		threeValSet, err := tmconsensus.NewValidatorSet(threeVals, sfx.Fx.HashScheme)
 		require.NoError(t, err)
 		require.True(t, sentPH2.Header.NextValidatorSet.Equal(threeValSet))
+	})
+}
+
+func TestStateMachine_proposedHeaderInterceptor(t *testing.T) {
+	t.Run("interceptor receives proposal reference", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		sfx := tmstatetest.NewFixture(ctx, t, 4)
+
+		var intercepted *tmconsensus.ProposedHeader
+
+		sfx.Cfg.ProposedHeaderInterceptor = tmelink.ProposedHeaderInterceptorFunc(
+			func(_ context.Context, ph *tmconsensus.ProposedHeader) error {
+				intercepted = ph
+
+				ph.Annotations.User = []byte("user")
+
+				return nil
+			},
+		)
+
+		sm := sfx.NewStateMachine()
+		defer sm.Wait()
+		defer cancel()
+
+		re := gtest.ReceiveSoon(t, sfx.RoundEntranceOutCh)
+
+		vrv := sfx.EmptyVRV(1, 0)
+
+		cStrat := sfx.CStrat
+		ercCh := cStrat.ExpectEnterRound(1, 0, nil)
+
+		re.Response <- tmeil.RoundEntranceResponse{VRV: vrv}
+
+		erc := gtest.ReceiveSoon(t, ercCh)
+
+		// Consensus strategy proposes a block.
+		erc.ProposalOut <- tmconsensus.Proposal{
+			DataID: "app_data",
+		}
+
+		sentPH := gtest.ReceiveSoon(t, re.Actions).PH
+
+		// Interceptor was called.
+		require.NotNil(t, intercepted)
+		require.Equal(t, []byte("app_data"), intercepted.Header.DataID)
+		require.Equal(t, []byte("user"), intercepted.Annotations.User)
+
+		// The sent proposed header actually was modified.
+		require.Equal(t, []byte("user"), sentPH.Annotations.User)
+
+		// The signature is valid.
+		signContent, err := tmconsensus.ProposalSignBytes(
+			sentPH.Header, sentPH.Round, sentPH.Annotations, sfx.Fx.SignatureScheme,
+		)
+		require.NoError(t, err)
+		require.True(t, sfx.Fx.Vals()[0].PubKey.Verify(signContent, sentPH.Signature))
+	})
+
+	t.Run("interceptor error prevents proposed header from being recorded", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		sfx := tmstatetest.NewFixture(ctx, t, 4)
+
+		sfx.Cfg.ProposedHeaderInterceptor = tmelink.ProposedHeaderInterceptorFunc(
+			func(_ context.Context, ph *tmconsensus.ProposedHeader) error {
+				return errors.New("bad intercept")
+			},
+		)
+
+		sm := sfx.NewStateMachine()
+		defer sm.Wait()
+		defer cancel()
+
+		re := gtest.ReceiveSoon(t, sfx.RoundEntranceOutCh)
+
+		vrv := sfx.EmptyVRV(1, 0)
+
+		cStrat := sfx.CStrat
+		ercCh := cStrat.ExpectEnterRound(1, 0, nil)
+
+		re.Response <- tmeil.RoundEntranceResponse{VRV: vrv}
+
+		erc := gtest.ReceiveSoon(t, ercCh)
+
+		// Consensus strategy proposes a block.
+		erc.ProposalOut <- tmconsensus.Proposal{
+			DataID: "app_data",
+		}
+
+		// There is no send of the proposed header.
+		gtest.NotSendingSoon(t, re.Actions)
+
+		// And the action store does not contain an entry.
+		_, err := sfx.Cfg.ActionStore.LoadActions(ctx, 1, 0)
+		require.ErrorIs(t, err, tmconsensus.RoundUnknownError{
+			WantHeight: 1, WantRound: 0,
+		})
 	})
 }
 

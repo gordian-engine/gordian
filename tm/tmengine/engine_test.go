@@ -877,6 +877,71 @@ func TestEngine_plumbing_ReplayedHeaders(t *testing.T) {
 	})
 }
 
+func TestEngine_plumbing_proposedHeaderInterceptor(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	efx := tmenginetest.NewFixture(ctx, t, 3)
+
+	var intercepted *tmconsensus.ProposedHeader
+
+	interceptor := tmelink.ProposedHeaderInterceptorFunc(
+		func(_ context.Context, ph *tmconsensus.ProposedHeader) error {
+			intercepted = ph
+			return nil
+		},
+	)
+
+	var engine *tmengine.Engine
+	eReady := make(chan struct{})
+	go func() {
+		defer close(eReady)
+		opts := efx.SigningOptionMap().ToSlice()
+		opts = append(opts, tmengine.WithProposedHeaderInterceptor(interceptor))
+		engine = efx.MustNewEngine(opts...)
+	}()
+
+	defer func() {
+		cancel()
+		<-eReady
+		engine.Wait()
+	}()
+
+	// We may or may not reach EnterRound as this test finishes,
+	// so we need to set an expectation on the mock consensus strategy.
+	ercCh := efx.ConsensusStrategy.ExpectEnterRound(1, 0, nil)
+
+	icReq := gtest.ReceiveSoon(t, efx.InitChainCh)
+
+	const initAppStateHash = "app_state_0"
+
+	gtest.SendSoon(t, icReq.Resp, tmdriver.InitChainResponse{
+		AppStateHash: []byte(initAppStateHash),
+	})
+
+	// After we send the response, the engine is ready.
+	_ = gtest.ReceiveSoon(t, eReady)
+
+	// Drain the voting view before proposing a block.
+	_ = gtest.ReceiveSoon(t, efx.GossipStrategy.Updates)
+
+	erc := gtest.ReceiveSoon(t, ercCh)
+	erc.ProposalOut <- tmconsensus.Proposal{
+		DataID: "app_data_1",
+	}
+
+	// Get a gossip strategy update.
+	_ = gtest.ReceiveSoon(t, efx.GossipStrategy.Updates)
+
+	// Drain the consider to avoid an error on the request being blocked.
+	_ = gtest.ReceiveSoon(t, efx.ConsensusStrategy.ConsiderProposedBlocksRequests)
+
+	require.NotNil(t, intercepted)
+	require.Equal(t, []byte("app_data_1"), intercepted.Header.DataID)
+}
+
 func TestEngine_wiring_validatorChanges(t *testing.T) {
 	t.Parallel()
 
