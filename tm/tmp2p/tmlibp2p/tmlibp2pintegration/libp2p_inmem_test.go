@@ -17,7 +17,7 @@ type Libp2pInmemFactory struct {
 }
 
 func TestLibp2pInmem(t *testing.T) {
-	tmintegration.RunIntegrationTest(t, func(e *tmintegration.Env) tmintegration.Factory {
+	tmintegration.RunIntegrationTest_p2p(t, func(e *tmintegration.Env) tmintegration.Factory {
 		lf := tmlibp2pintegration.NewLibp2pFactory(e)
 		return Libp2pInmemFactory{
 			Libp2pFactory: lf,

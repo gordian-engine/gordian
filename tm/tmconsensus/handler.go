@@ -9,7 +9,8 @@ import (
 // ConsensusHandler is the interface to handle the set of consensus messages.
 //
 // In production this will be a
-// [*github.com/gordian-engine/gordian/tm/tmengine/tmengine.Engine] value.
+// [*github.com/gordian-engine/gordian/tm/tmengine/tmengine.Engine] value
+// wrapped in a [AcceptAllValidFeedbackMapper] or a [DropDuplicateFeedbackMapper].
 type ConsensusHandler interface {
 	HandleProposedHeader(context.Context, ProposedHeader) gexchange.Feedback
 	HandlePrevoteProofs(context.Context, PrevoteSparseProof) gexchange.Feedback

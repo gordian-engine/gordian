@@ -78,7 +78,7 @@ func (f blsFactory) NewConsensusFixture(nVals int) *tmconsensustest.Fixture {
 }
 
 func TestGblsminsig(t *testing.T) {
-	tmintegration.RunIntegrationTest(t, func(e *tmintegration.Env) tmintegration.Factory {
+	tmintegration.RunIntegrationTest_p2p(t, func(e *tmintegration.Env) tmintegration.Factory {
 		return newBLSFactory(e)
 	})
 }

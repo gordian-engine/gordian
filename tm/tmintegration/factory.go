@@ -13,6 +13,36 @@ import (
 	"github.com/gordian-engine/gordian/tm/tmstore"
 )
 
+// NetworkFactory is the function type to create a Network.
+type FactoryFunc func(t *testing.T, ctx context.Context, nVals int) (Network, StoreFactory)
+
+// Network represents a collection of connected gossip strategies.
+type Network interface {
+	Fixture() *tmconsensustest.Fixture
+
+	GetGossipStrategy(ctx context.Context, idx int) tmgossip.Strategy
+
+	SetConsensusHandler(ctx context.Context, idx int, h tmconsensus.ConsensusHandler)
+
+	// Block while the network stabilizes.
+	// This will be a no-op for some networks.
+	Stabilize(context.Context)
+
+	// Block until all background work is finished.
+	Wait()
+}
+
+// StoreFactory defines how to get stores for an integration test.
+type StoreFactory interface {
+	NewActionStore(context.Context, int) tmstore.ActionStore
+	NewCommittedHeaderStore(context.Context, int) tmstore.CommittedHeaderStore
+	NewFinalizationStore(context.Context, int) tmstore.FinalizationStore
+	NewMirrorStore(context.Context, int) tmstore.MirrorStore
+	NewRoundStore(context.Context, int) tmstore.RoundStore
+	NewStateMachineStore(context.Context, int) tmstore.StateMachineStore
+	NewValidatorStore(context.Context, int, tmconsensus.HashScheme) tmstore.ValidatorStore
+}
+
 // Env contains some of the primitives of the current test environment,
 // to inform the creation of a [Factory].
 type Env struct {

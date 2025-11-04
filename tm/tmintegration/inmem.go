@@ -55,3 +55,35 @@ func (f InmemSchemeFactory) SignatureScheme(ctx context.Context, idx int) (tmcon
 func (f InmemSchemeFactory) CommonMessageSignatureProofScheme(ctx context.Context, idx int) (gcrypto.CommonMessageSignatureProofScheme, error) {
 	return gcrypto.SimpleCommonMessageSignatureProofScheme{}, nil
 }
+
+// InmemStoreNetwork implements a subset of the [Network] interface,
+// for tests that do not need to explicitly exercise stores.
+type InmemStoreNetwork struct{}
+
+func (f InmemStoreNetwork) NewActionStore(ctx context.Context, idx int) tmstore.ActionStore {
+	return tmmemstore.NewActionStore()
+}
+
+func (f InmemStoreNetwork) NewFinalizationStore(ctx context.Context, idx int) tmstore.FinalizationStore {
+	return tmmemstore.NewFinalizationStore()
+}
+
+func (f InmemStoreNetwork) NewCommittedHeaderStore(ctx context.Context, idx int) tmstore.CommittedHeaderStore {
+	return tmmemstore.NewCommittedHeaderStore()
+}
+
+func (f InmemStoreNetwork) NewMirrorStore(ctx context.Context, idx int) tmstore.MirrorStore {
+	return tmmemstore.NewMirrorStore()
+}
+
+func (f InmemStoreNetwork) NewRoundStore(ctx context.Context, idx int) tmstore.RoundStore {
+	return tmmemstore.NewRoundStore()
+}
+
+func (f InmemStoreNetwork) NewStateMachineStore(ctx context.Context, idx int) tmstore.StateMachineStore {
+	return tmmemstore.NewStateMachineStore()
+}
+
+func (f InmemStoreNetwork) NewValidatorStore(ctx context.Context, idx int, hs tmconsensus.HashScheme) tmstore.ValidatorStore {
+	return tmmemstore.NewValidatorStore(hs)
+}

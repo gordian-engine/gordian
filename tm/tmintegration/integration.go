@@ -15,11 +15,269 @@ import (
 	"github.com/gordian-engine/gordian/tm/tmdebug"
 	"github.com/gordian-engine/gordian/tm/tmdriver"
 	"github.com/gordian-engine/gordian/tm/tmengine"
+	"github.com/gordian-engine/gordian/tm/tmgossip"
 	"github.com/gordian-engine/gordian/tm/tmp2p"
 	"github.com/stretchr/testify/require"
 )
 
-func RunIntegrationTest(t *testing.T, nf NewFactoryFunc) {
+func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
+	t.Run("basic flow with identity app", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		const netSize = 2
+
+		n, sf := ff(t, ctx, netSize)
+		defer n.Wait()
+		defer cancel()
+
+		fx := n.Fixture()
+
+		genesis := fx.DefaultGenesis()
+
+		n.Stabilize(ctx)
+
+		apps := make([]*identityApp, netSize)
+		gStrats := make([]tmgossip.Strategy, netSize)
+
+		log := gtest.NewLogger(t)
+
+		for i := range netSize {
+			wd, wCtx := gwatchdog.NewWatchdog(ctx, log.With("sys", "watchdog", "idx", i))
+			t.Cleanup(wd.Wait)
+			t.Cleanup(cancel)
+
+			gs := n.GetGossipStrategy(wCtx, i)
+			gStrats[i] = gs
+			t.Cleanup(gs.Wait)
+			t.Cleanup(cancel)
+
+			cStrat := &identityConsensusStrategy{
+				Log:    log.With("sys", "consensusstrategy", "idx", i),
+				PubKey: fx.PrivVals[i].Val.PubKey,
+			}
+
+			blockFinCh := make(chan tmdriver.FinalizeBlockRequest)
+			initChainCh := make(chan tmdriver.InitChainRequest)
+
+			app := newIdentityApp(
+				ctx, log.With("sys", "app", "idx", i), i,
+				initChainCh, blockFinCh,
+			)
+			t.Cleanup(app.Wait)
+			t.Cleanup(cancel)
+
+			apps[i] = app
+
+			e, err := tmengine.New(
+				wCtx,
+				log.With("sys", "engine", "idx", i),
+
+				tmengine.WithActionStore(sf.NewActionStore(wCtx, i)),
+				tmengine.WithCommittedHeaderStore(sf.NewCommittedHeaderStore(wCtx, i)),
+				tmengine.WithFinalizationStore(sf.NewFinalizationStore(wCtx, i)),
+				tmengine.WithMirrorStore(sf.NewMirrorStore(wCtx, i)),
+				tmengine.WithRoundStore(sf.NewRoundStore(wCtx, i)),
+				tmengine.WithStateMachineStore(sf.NewStateMachineStore(wCtx, i)),
+				tmengine.WithValidatorStore(sf.NewValidatorStore(wCtx, i, fx.HashScheme)),
+
+				tmengine.WithHashScheme(fx.HashScheme),
+				tmengine.WithSignatureScheme(fx.SignatureScheme),
+				tmengine.WithCommonMessageSignatureProofScheme(fx.CommonMessageSignatureProofScheme),
+
+				tmengine.WithGossipStrategy(gs),
+				tmengine.WithConsensusStrategy(cStrat),
+
+				tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
+					ChainID:             genesis.ChainID,
+					InitialHeight:       genesis.InitialHeight,
+					InitialAppState:     strings.NewReader(""), // No initial app state for identity app.
+					GenesisValidatorSet: fx.ValSet(),
+				}),
+
+				// TODO: this might need scaled up to run on a slower machine.
+				// Plus we really don't want to trigger any timeouts during these tests anyway.
+				tmengine.WithTimeoutStrategy(ctx, tmengine.LinearTimeoutStrategy{
+					ProposalBase: 250 * time.Millisecond,
+
+					PrevoteDelayBase:   100 * time.Millisecond,
+					PrecommitDelayBase: 100 * time.Millisecond,
+
+					CommitWaitBase: 15 * time.Millisecond,
+				}),
+
+				tmengine.WithBlockFinalizationChannel(blockFinCh),
+				tmengine.WithInitChainChannel(initChainCh),
+
+				tmengine.WithSigner(tmconsensus.PassthroughSigner{
+					Signer:          fx.PrivVals[i].Signer,
+					SignatureScheme: fx.SignatureScheme,
+				}),
+
+				tmengine.WithWatchdog(wd),
+
+				tmengine.WithAssertEnv(gasserttest.DefaultEnv()),
+			)
+			require.NoError(t, err)
+			t.Cleanup(e.Wait)
+			t.Cleanup(cancel)
+
+			n.SetConsensusHandler(wCtx, i, tmconsensus.AcceptAllValidFeedbackMapper{
+				Handler: e,
+			})
+		}
+
+		for i := uint64(1); i < 6; i++ {
+			t.Logf("Beginning finalization sync for height %d", i)
+			for appIdx := range apps {
+				finResp := gtest.ReceiveOrTimeout(t, apps[appIdx].FinalizeResponses, gtest.ScaleMs(1200))
+				require.Equal(t, i, finResp.Height)
+
+				round := finResp.Round
+
+				expData := fmt.Sprintf("Height: %d; Round: %d", finResp.Height, round)
+				expDataHash := sha256.Sum256([]byte(expData))
+				require.Equal(t, expDataHash[:], finResp.AppStateHash)
+			}
+		}
+	})
+
+	t.Run("basic flow with validator shuffle app", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		const netSize = 6
+		const pickN = 4
+
+		n, sf := ff(t, ctx, netSize)
+		defer n.Wait()
+		defer cancel()
+
+		fx := n.Fixture()
+
+		genesis := fx.DefaultGenesis()
+
+		n.Stabilize(ctx)
+
+		apps := make([]*valShuffleApp, netSize)
+		gStrats := make([]tmgossip.Strategy, netSize)
+
+		log := gtest.NewLogger(t)
+
+		for i := range netSize {
+			wd, wCtx := gwatchdog.NewWatchdog(ctx, log.With("sys", "watchdog", "idx", i))
+			t.Cleanup(wd.Wait)
+			t.Cleanup(cancel)
+
+			gs := n.GetGossipStrategy(wCtx, i)
+			gStrats[i] = gs
+			t.Cleanup(gs.Wait)
+			t.Cleanup(cancel)
+
+			cStrat := &valShuffleConsensusStrategy{
+				Log:        log.With("sys", "consensusstrategy", "idx", i),
+				PubKey:     fx.PrivVals[i].Val.PubKey,
+				HashScheme: fx.HashScheme,
+			}
+
+			blockFinCh := make(chan tmdriver.FinalizeBlockRequest)
+			initChainCh := make(chan tmdriver.InitChainRequest)
+
+			app := newValShuffleApp(
+				ctx, log.With("sys", "app", "idx", i), i,
+				fx.HashScheme, pickN, initChainCh, blockFinCh,
+			)
+			t.Cleanup(app.Wait)
+			t.Cleanup(cancel)
+
+			apps[i] = app
+
+			e, err := tmengine.New(
+				wCtx,
+				log.With("sys", "engine", "idx", i),
+
+				tmengine.WithActionStore(sf.NewActionStore(wCtx, i)),
+				tmengine.WithCommittedHeaderStore(sf.NewCommittedHeaderStore(wCtx, i)),
+				tmengine.WithFinalizationStore(sf.NewFinalizationStore(wCtx, i)),
+				tmengine.WithMirrorStore(sf.NewMirrorStore(wCtx, i)),
+				tmengine.WithRoundStore(sf.NewRoundStore(wCtx, i)),
+				tmengine.WithStateMachineStore(sf.NewStateMachineStore(wCtx, i)),
+				tmengine.WithValidatorStore(sf.NewValidatorStore(wCtx, i, fx.HashScheme)),
+
+				tmengine.WithHashScheme(fx.HashScheme),
+				tmengine.WithSignatureScheme(fx.SignatureScheme),
+				tmengine.WithCommonMessageSignatureProofScheme(fx.CommonMessageSignatureProofScheme),
+
+				tmengine.WithGossipStrategy(gs),
+				tmengine.WithConsensusStrategy(cStrat),
+
+				tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
+					ChainID:             genesis.ChainID,
+					InitialHeight:       genesis.InitialHeight,
+					InitialAppState:     strings.NewReader(""), // No initial app state for identity app.
+					GenesisValidatorSet: fx.ValSet(),
+				}),
+
+				// TODO: this might need scaled up to run on a slower machine.
+				// Plus we really don't want to trigger any timeouts during these tests anyway.
+				tmengine.WithTimeoutStrategy(ctx, tmengine.LinearTimeoutStrategy{
+					ProposalBase: 250 * time.Millisecond,
+
+					PrevoteDelayBase:   100 * time.Millisecond,
+					PrecommitDelayBase: 100 * time.Millisecond,
+
+					CommitWaitBase: 15 * time.Millisecond,
+				}),
+
+				tmengine.WithBlockFinalizationChannel(blockFinCh),
+				tmengine.WithInitChainChannel(initChainCh),
+
+				tmengine.WithSigner(tmconsensus.PassthroughSigner{
+					Signer:          fx.PrivVals[i].Signer,
+					SignatureScheme: fx.SignatureScheme,
+				}),
+
+				tmengine.WithWatchdog(wd),
+
+				tmengine.WithAssertEnv(gasserttest.DefaultEnv()),
+			)
+			require.NoError(t, err)
+			t.Cleanup(e.Wait)
+			t.Cleanup(cancel)
+
+			const debugging = false
+			var handler tmconsensus.FineGrainedConsensusHandler = e
+			if debugging {
+				handler = tmdebug.LoggingFineGrainedConsensusHandler{
+					Log:     log.With("debug", "consensus", "idx", i),
+					Handler: e,
+				}
+			}
+
+			n.SetConsensusHandler(wCtx, i, tmconsensus.DropDuplicateFeedbackMapper{
+				Handler: handler,
+			})
+		}
+
+		for height := uint64(1); height < 6; height++ {
+			t.Logf("Beginning finalization sync for height %d", height)
+			for appIdx := range apps {
+				finResp := gtest.ReceiveOrTimeout(t, apps[appIdx].FinalizeResponses, gtest.ScaleMs(500))
+				require.Equal(t, height, finResp.Height)
+
+				require.Len(t, finResp.Validators, pickN)
+
+				// TODO: There should be more assertions around the specific validators here.
+			}
+		}
+	})
+}
+
+func RunIntegrationTest_p2p(t *testing.T, nf NewFactoryFunc) {
 	t.Run("basic flow with identity app", func(t *testing.T) {
 		t.Parallel()
 
