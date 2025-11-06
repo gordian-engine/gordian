@@ -5,6 +5,7 @@ import (
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmintegration"
 )
 
 // DaisyChainFixture contains a DaisyChainNetwork,
@@ -12,6 +13,8 @@ import (
 // and mock consensus handlers to confirm outputs.
 type DaisyChainFixture struct {
 	Network *DaisyChainNetwork
+
+	Stores []tmintegration.BlockDataStore
 
 	Handlers []*tmconsensustest.ChannelConsensusHandler
 
@@ -21,7 +24,12 @@ type DaisyChainFixture struct {
 // NewDaisyChainFixture returns a fixture with a network,
 // mock consensus handlers, and input update channels.
 func NewDaisyChainFixture(ctx context.Context, nStrats int) *DaisyChainFixture {
-	n := NewDaisyChainNetwork(ctx, nStrats)
+	stores := make([]tmintegration.BlockDataStore, nStrats)
+	for i := range nStrats {
+		stores[i] = tmintegration.NewBlockDataMap()
+	}
+
+	n := NewDaisyChainNetwork(ctx, stores)
 
 	handlers := make([]*tmconsensustest.ChannelConsensusHandler, nStrats)
 	for i := range nStrats {
@@ -39,6 +47,8 @@ func NewDaisyChainFixture(ctx context.Context, nStrats int) *DaisyChainFixture {
 
 	return &DaisyChainFixture{
 		Network: n,
+
+		Stores: stores,
 
 		Handlers: handlers,
 

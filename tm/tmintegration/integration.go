@@ -31,7 +31,12 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 
 		const netSize = 2
 
-		n, sf := ff(t, ctx, netSize)
+		stores := make([]BlockDataStore, netSize)
+		for i := range stores {
+			stores[i] = IdentityBlockDataStore{}
+		}
+
+		n, sf := ff(t, ctx, stores)
 		defer n.Wait()
 		defer cancel()
 
@@ -155,7 +160,12 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 		const netSize = 6
 		const pickN = 4
 
-		n, sf := ff(t, ctx, netSize)
+		stores := make([]BlockDataStore, netSize)
+		for i := range stores {
+			stores[i] = IdentityBlockDataStore{}
+		}
+
+		n, sf := ff(t, ctx, stores)
 		defer n.Wait()
 		defer cancel()
 
@@ -286,7 +296,12 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 
 		const netSize = 4
 
-		n, sf := ff(t, ctx, netSize)
+		stores := make([]BlockDataStore, netSize)
+		for i := range stores {
+			stores[i] = NewBlockDataMap()
+		}
+
+		n, sf := ff(t, ctx, stores)
 		defer n.Wait()
 		defer cancel()
 
@@ -318,6 +333,7 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 			cStrat := &randomDataConsensusStrategy{
 				Log:    log.With("sys", "consensusstrategy", "idx", i),
 				PubKey: fx.PrivVals[i].Val.PubKey,
+				Store:  stores[i],
 
 				RNG: rng,
 			}

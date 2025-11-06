@@ -28,6 +28,8 @@ func TestDaisyChainNetwork_messagePropagation(t *testing.T) {
 
 		// Update from left side.
 		ph0 := fx.NextProposedHeader([]byte("data0"), 0)
+		nfx.Stores[0].PutData(ph0.Header.DataID, []byte("some data"))
+
 		gtest.SendSoon(t, nfx.UpdateChs[0], tmelink.NetworkViewUpdate{
 			Voting: &tmconsensus.VersionedRoundView{
 				RoundView: tmconsensus.RoundView{
@@ -50,6 +52,8 @@ func TestDaisyChainNetwork_messagePropagation(t *testing.T) {
 
 		// Update from right side.
 		ph2 := fx.NextProposedHeader([]byte("data2"), 2)
+		nfx.Stores[2].PutData(ph2.Header.DataID, []byte("some more data"))
+
 		gtest.SendSoon(t, nfx.UpdateChs[2], tmelink.NetworkViewUpdate{
 			Voting: &tmconsensus.VersionedRoundView{
 				RoundView: tmconsensus.RoundView{

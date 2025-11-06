@@ -122,6 +122,8 @@ type randomDataConsensusStrategy struct {
 	Log    *slog.Logger
 	PubKey gcrypto.PubKey
 
+	Store BlockDataStore
+
 	RNG *rand.ChaCha8
 
 	mu                sync.Mutex
@@ -156,7 +158,9 @@ func (s *randomDataConsensusStrategy) EnterRound(
 	}
 
 	dataID := sha256.Sum256(blockData)
-	// TODO: need to store the block data for the proposer.
+
+	// Make data available to gossip strategy.
+	s.Store.PutData(dataID[:], blockData)
 
 	proposalOut <- tmconsensus.Proposal{
 		DataID: string(dataID[:]),
@@ -178,7 +182,21 @@ func (s *randomDataConsensusStrategy) ConsiderProposedBlocks(
 			continue
 		}
 
-		// TODO: look up block data and confirm it matches the data ID.
+		blockData, ok := s.Store.GetData(ph.Header.DataID)
+		if !ok {
+			return "", tmconsensus.ErrProposedBlockChoiceNotReady
+		}
+
+		// We do have the block data.
+		// Just need to confirm that the data ID matches.
+		expID := sha256.Sum256(blockData)
+		if !bytes.Equal(expID[:], ph.Header.DataID) {
+			// We could either vote nil here,
+			// or continue looking for a valid block.
+			// We'll do the latter, arbitrarily.
+			continue
+		}
+
 		s.Log.Info("Prevote in favor of block", "hash", glog.Hex(ph.Header.Hash), "height", s.curH)
 		return string(ph.Header.Hash), nil
 	}

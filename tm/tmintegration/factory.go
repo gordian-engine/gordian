@@ -13,8 +13,12 @@ import (
 	"github.com/gordian-engine/gordian/tm/tmstore"
 )
 
-// NetworkFactory is the function type to create a Network.
-type FactoryFunc func(t *testing.T, ctx context.Context, nVals int) (Network, StoreFactory)
+// FactoryFunc is the function type to create a Network and a StoreFactory.
+type FactoryFunc func(
+	t *testing.T,
+	ctx context.Context,
+	stores []BlockDataStore,
+) (Network, StoreFactory)
 
 // Network represents a collection of connected gossip strategies.
 type Network interface {

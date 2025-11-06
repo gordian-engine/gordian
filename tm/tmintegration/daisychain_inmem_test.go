@@ -30,10 +30,12 @@ func TestDaisyChainInmem_p2p(t *testing.T) {
 
 func TestDaisyChainInmem(t *testing.T) {
 	t.Parallel()
-	tmintegration.RunIntegrationTest(t, func(t *testing.T, ctx context.Context, nVals int) (tmintegration.Network, tmintegration.StoreFactory) {
+	tmintegration.RunIntegrationTest(t, func(
+		t *testing.T, ctx context.Context, stores []tmintegration.BlockDataStore,
+	) (tmintegration.Network, tmintegration.StoreFactory) {
 		return dcNet{
-			net: tmgossiptest.NewDaisyChainNetwork(ctx, nVals),
-			fx:  tmconsensustest.NewEd25519Fixture(nVals),
+			net: tmgossiptest.NewDaisyChainNetwork(ctx, stores),
+			fx:  tmconsensustest.NewEd25519Fixture(len(stores)),
 		}, tmintegration.InmemStoreNetwork{}
 	})
 }

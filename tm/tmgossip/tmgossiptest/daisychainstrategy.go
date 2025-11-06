@@ -7,6 +7,7 @@ import (
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
+	"github.com/gordian-engine/gordian/tm/tmintegration"
 )
 
 // DaisyChainStrategy is an implementation of an in-process
@@ -15,6 +16,8 @@ import (
 // and messages are transmitted left and right concurrently from its originator.
 type DaisyChainStrategy struct {
 	h tmconsensus.ConsensusHandler
+
+	store tmintegration.BlockDataStore
 
 	toLeft, toRight     chan<- daisyChainMessage
 	fromLeft, fromRight <-chan daisyChainMessage
@@ -25,15 +28,22 @@ type DaisyChainStrategy struct {
 }
 
 // NewDaisyChainStrategy returns a new strategy instance.
+// The store argument must not be nil.
 // If left is not nil, updates are broadcast to the left.
 //
 // All related instances must be created together before
 // [*DaisyChainStrategy.Start] is called on any instance.
 // [NewDaisyChainFixture] is one function that creates the strategy instances,
 // sets all the consensus handlers, and then calls Start on every instance.
-func NewDaisyChainStrategy(ctx context.Context, left *DaisyChainStrategy) *DaisyChainStrategy {
+func NewDaisyChainStrategy(
+	ctx context.Context,
+	store tmintegration.BlockDataStore,
+	left *DaisyChainStrategy,
+) *DaisyChainStrategy {
 	s := &DaisyChainStrategy{
 		startCh: make(chan (<-chan tmelink.NetworkViewUpdate), 1),
+
+		store: store,
 
 		done: make(chan struct{}),
 	}
@@ -60,7 +70,7 @@ type daisyChainMessage struct {
 	Prevote        *tmconsensus.PrevoteSparseProof
 	Precommit      *tmconsensus.PrecommitSparseProof
 
-	// BlockData will not be nil if ph is set.
+	// BlockData is nil when ProposedHeader is also nil.
 	BlockData []byte
 }
 
@@ -127,12 +137,19 @@ func (s *DaisyChainStrategy) broadcastView(
 	// and using those to determine which subsets of messages to send.
 
 	for _, ph := range vrv.ProposedHeaders {
+		blockData, ok := s.store.GetData(ph.Header.DataID)
+		if !ok {
+			panic(errors.New(
+				"BUG: attempting to propagate proposed header when data is unavailable",
+			))
+		}
 		if s.toLeft != nil {
 			select {
 			case <-ctx.Done():
 				return
 			case s.toLeft <- daisyChainMessage{
 				ProposedHeader: &ph,
+				BlockData:      blockData,
 			}:
 				// Okay.
 			}
@@ -143,6 +160,7 @@ func (s *DaisyChainStrategy) broadcastView(
 				return
 			case s.toRight <- daisyChainMessage{
 				ProposedHeader: &ph,
+				BlockData:      blockData,
 			}:
 				// Okay.
 			}
@@ -222,6 +240,15 @@ func (s *DaisyChainStrategy) acceptMessage(
 	ctx context.Context, msg daisyChainMessage,
 ) {
 	if msg.ProposedHeader != nil {
+		if msg.BlockData == nil {
+			panic(errors.New(
+				"DaisyChainStrategy requires proposed headers to have BlockData set",
+			))
+		}
+
+		// This is re-storing the block data every time, but that's fine for now.
+		s.store.PutData(msg.ProposedHeader.Header.DataID, msg.BlockData)
+
 		_ = s.h.HandleProposedHeader(ctx, *msg.ProposedHeader)
 		return
 	}

@@ -1,6 +1,10 @@
 package tmgossiptest
 
-import "context"
+import (
+	"context"
+
+	"github.com/gordian-engine/gordian/tm/tmintegration"
+)
 
 // DaisyChainNetwork is a collection of [DaisyChainStrategy] instances.
 //
@@ -14,15 +18,15 @@ type DaisyChainNetwork struct {
 
 // NewDaisyChainNetwork returns a network that contains a sequence of
 // [DaisyChainStrategy] instances.
-func NewDaisyChainNetwork(ctx context.Context, nStrats int) *DaisyChainNetwork {
-	strats := make([]*DaisyChainStrategy, nStrats)
+func NewDaisyChainNetwork(ctx context.Context, stores []tmintegration.BlockDataStore) *DaisyChainNetwork {
+	strats := make([]*DaisyChainStrategy, len(stores))
 
 	for i := range strats {
 		var left *DaisyChainStrategy
 		if i > 0 {
 			left = strats[i-1]
 		}
-		strats[i] = NewDaisyChainStrategy(ctx, left)
+		strats[i] = NewDaisyChainStrategy(ctx, stores[i], left)
 	}
 
 	return &DaisyChainNetwork{
