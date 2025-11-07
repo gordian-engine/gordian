@@ -96,6 +96,7 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 
 				tmengine.WithGossipStrategy(gs),
 				tmengine.WithConsensusStrategy(cStrat),
+				tmengine.WithProposedHeaderInterceptor(n.GetProposedHeaderInterceptor(ctx, i)),
 
 				tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
 					ChainID:             genesis.ChainID,
@@ -226,6 +227,7 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 
 				tmengine.WithGossipStrategy(gs),
 				tmengine.WithConsensusStrategy(cStrat),
+				tmengine.WithProposedHeaderInterceptor(n.GetProposedHeaderInterceptor(ctx, i)),
 
 				tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
 					ChainID:             genesis.ChainID,
@@ -368,6 +370,7 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 
 				tmengine.WithGossipStrategy(gs),
 				tmengine.WithConsensusStrategy(cStrat),
+				tmengine.WithProposedHeaderInterceptor(n.GetProposedHeaderInterceptor(ctx, i)),
 
 				tmengine.WithGenesis(&tmconsensus.ExternalGenesis{
 					ChainID:             genesis.ChainID,

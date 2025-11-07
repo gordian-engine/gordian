@@ -7,6 +7,7 @@ import (
 
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
+	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 	"github.com/gordian-engine/gordian/tm/tmgossip"
 	"github.com/gordian-engine/gordian/tm/tmp2p"
 	"github.com/gordian-engine/gordian/tm/tmp2p/tmp2ptest"
@@ -27,6 +28,8 @@ type Network interface {
 	GetGossipStrategy(ctx context.Context, idx int) tmgossip.Strategy
 
 	SetConsensusHandler(ctx context.Context, idx int, h tmconsensus.ConsensusHandler)
+
+	GetProposedHeaderInterceptor(ctx context.Context, idx int) tmelink.ProposedHeaderInterceptor
 
 	// Block while the network stabilizes.
 	// This will be a no-op for some networks.
