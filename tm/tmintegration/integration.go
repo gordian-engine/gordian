@@ -116,6 +116,7 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 					CommitWaitBase: 15 * time.Millisecond,
 				}),
 
+				tmengine.WithBlockDataArrivalChannel(n.GetBlockDataArrivalChannel(wCtx, i)),
 				tmengine.WithBlockFinalizationChannel(blockFinCh),
 				tmengine.WithInitChainChannel(initChainCh),
 
@@ -247,6 +248,7 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 					CommitWaitBase: 15 * time.Millisecond,
 				}),
 
+				tmengine.WithBlockDataArrivalChannel(n.GetBlockDataArrivalChannel(wCtx, i)),
 				tmengine.WithBlockFinalizationChannel(blockFinCh),
 				tmengine.WithInitChainChannel(initChainCh),
 
@@ -390,6 +392,7 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 					CommitWaitBase: 15 * time.Millisecond,
 				}),
 
+				tmengine.WithBlockDataArrivalChannel(n.GetBlockDataArrivalChannel(wCtx, i)),
 				tmengine.WithBlockFinalizationChannel(blockFinCh),
 				tmengine.WithInitChainChannel(initChainCh),
 

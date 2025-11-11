@@ -59,6 +59,12 @@ func (n dcNet) SetConsensusHandler(_ context.Context, idx int, h tmconsensus.Con
 	n.net.Strategies[idx].SetConsensusHandler(h)
 }
 
+func (n dcNet) GetBlockDataArrivalChannel(_ context.Context, idx int) <-chan tmelink.BlockDataArrival {
+	// The block data is shipped with the proposed headers,
+	// in the daisy chain strategy implementation.
+	return nil
+}
+
 func (n dcNet) GetProposedHeaderInterceptor(context.Context, int) tmelink.ProposedHeaderInterceptor {
 	return nil
 }

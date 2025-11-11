@@ -29,6 +29,8 @@ type Network interface {
 
 	SetConsensusHandler(ctx context.Context, idx int, h tmconsensus.ConsensusHandler)
 
+	GetBlockDataArrivalChannel(ctx context.Context, idx int) <-chan tmelink.BlockDataArrival
+
 	GetProposedHeaderInterceptor(ctx context.Context, idx int) tmelink.ProposedHeaderInterceptor
 
 	// Block while the network stabilizes.
