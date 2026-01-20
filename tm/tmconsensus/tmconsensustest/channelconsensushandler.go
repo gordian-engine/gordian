@@ -4,11 +4,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/gordian-engine/gordian/gexchange"
 	"github.com/gordian-engine/gordian/tm/tmconsensus"
 )
 
-// ChannelConsensusHandler is a [tmconsensus.ConsensusHandler]
+// ChannelConsensusHandler is a [tmconsensus.FineGrainedConsensusHandler]
 // that emits messages to a set of channels.
 //
 // This is useful in tests where you have a "client-only" connection
@@ -35,30 +34,30 @@ func NewChannelConsensusHandler(bufSize int) *ChannelConsensusHandler {
 }
 
 // HandleProposedProposedHeader implements [tmconsensus.ConsensusHandler].
-func (h *ChannelConsensusHandler) HandleProposedHeader(ctx context.Context, ph tmconsensus.ProposedHeader) gexchange.Feedback {
+func (h *ChannelConsensusHandler) HandleProposedHeader(ctx context.Context, ph tmconsensus.ProposedHeader) tmconsensus.HandleProposedHeaderResult {
 	select {
 	case h.incomingProposals <- ph:
-		return gexchange.FeedbackAccepted
+		return tmconsensus.HandleProposedHeaderAccepted
 	case <-ctx.Done():
-		return gexchange.FeedbackIgnored
+		return tmconsensus.HandleProposedHeaderInternalError
 	}
 }
 
-func (h *ChannelConsensusHandler) HandlePrevoteProofs(ctx context.Context, p tmconsensus.PrevoteSparseProof) gexchange.Feedback {
+func (h *ChannelConsensusHandler) HandlePrevoteProofs(ctx context.Context, p tmconsensus.PrevoteSparseProof) tmconsensus.HandleVoteProofsResult {
 	select {
 	case h.incomingPrevoteProofs <- p:
-		return gexchange.FeedbackAccepted
+		return tmconsensus.HandleVoteProofsAccepted
 	case <-ctx.Done():
-		return gexchange.FeedbackIgnored
+		return tmconsensus.HandleVoteProofsInternalError
 	}
 }
 
-func (h *ChannelConsensusHandler) HandlePrecommitProofs(ctx context.Context, p tmconsensus.PrecommitSparseProof) gexchange.Feedback {
+func (h *ChannelConsensusHandler) HandlePrecommitProofs(ctx context.Context, p tmconsensus.PrecommitSparseProof) tmconsensus.HandleVoteProofsResult {
 	select {
 	case h.incomingPrecommitProofs <- p:
-		return gexchange.FeedbackAccepted
+		return tmconsensus.HandleVoteProofsAccepted
 	case <-ctx.Done():
-		return gexchange.FeedbackIgnored
+		return tmconsensus.HandleVoteProofsInternalError
 	}
 }
 

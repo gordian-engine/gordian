@@ -132,10 +132,6 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 			require.NoError(t, err)
 			t.Cleanup(e.Wait)
 			t.Cleanup(cancel)
-
-			n.SetConsensusHandler(wCtx, i, tmconsensus.AcceptAllValidFeedbackMapper{
-				Handler: e,
-			})
 		}
 
 		for i := uint64(1); i < 6; i++ {
@@ -264,19 +260,6 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 			require.NoError(t, err)
 			t.Cleanup(e.Wait)
 			t.Cleanup(cancel)
-
-			const debugging = false
-			var handler tmconsensus.FineGrainedConsensusHandler = e
-			if debugging {
-				handler = tmdebug.LoggingFineGrainedConsensusHandler{
-					Log:     log.With("debug", "consensus", "idx", i),
-					Handler: e,
-				}
-			}
-
-			n.SetConsensusHandler(wCtx, i, tmconsensus.DropDuplicateFeedbackMapper{
-				Handler: handler,
-			})
 		}
 
 		for height := uint64(1); height < 6; height++ {
@@ -408,19 +391,6 @@ func RunIntegrationTest(t *testing.T, ff FactoryFunc) {
 			require.NoError(t, err)
 			t.Cleanup(e.Wait)
 			t.Cleanup(cancel)
-
-			const debugging = false
-			var handler tmconsensus.FineGrainedConsensusHandler = e
-			if debugging {
-				handler = tmdebug.LoggingFineGrainedConsensusHandler{
-					Log:     log.With("debug", "consensus", "idx", i),
-					Handler: e,
-				}
-			}
-
-			n.SetConsensusHandler(wCtx, i, tmconsensus.DropDuplicateFeedbackMapper{
-				Handler: handler,
-			})
 		}
 
 		for height := uint64(1); height < 6; height++ {

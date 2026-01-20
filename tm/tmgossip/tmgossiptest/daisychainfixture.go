@@ -32,17 +32,15 @@ func NewDaisyChainFixture(ctx context.Context, nStrats int) *DaisyChainFixture {
 	n := NewDaisyChainNetwork(ctx, stores)
 
 	handlers := make([]*tmconsensustest.ChannelConsensusHandler, nStrats)
-	for i := range nStrats {
-		h := tmconsensustest.NewChannelConsensusHandler(4)
-		handlers[i] = h
-		n.Strategies[i].SetConsensusHandler(h)
-	}
-
 	updateChs := make([]chan<- tmelink.NetworkViewUpdate, nStrats)
 	for i := range updateChs {
 		ch := make(chan tmelink.NetworkViewUpdate)
 		updateChs[i] = ch
-		n.Strategies[i].Start(ch)
+
+		h := tmconsensustest.NewChannelConsensusHandler(4)
+		handlers[i] = h
+
+		n.Strategies[i].Start(h, ch)
 	}
 
 	return &DaisyChainFixture{

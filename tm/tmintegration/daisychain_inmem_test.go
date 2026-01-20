@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gordian-engine/gordian/tm/tmconsensus"
 	"github.com/gordian-engine/gordian/tm/tmconsensus/tmconsensustest"
 	"github.com/gordian-engine/gordian/tm/tmengine/tmelink"
 	"github.com/gordian-engine/gordian/tm/tmgossip"
@@ -53,10 +52,6 @@ func (n dcNet) Fixture() *tmconsensustest.Fixture {
 
 func (n dcNet) GetGossipStrategy(_ context.Context, idx int) tmgossip.Strategy {
 	return n.net.Strategies[idx]
-}
-
-func (n dcNet) SetConsensusHandler(_ context.Context, idx int, h tmconsensus.ConsensusHandler) {
-	n.net.Strategies[idx].SetConsensusHandler(h)
 }
 
 func (n dcNet) GetBlockDataArrivalChannel(_ context.Context, idx int) <-chan tmelink.BlockDataArrival {

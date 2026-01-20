@@ -139,7 +139,7 @@ func New(ctx context.Context, log *slog.Logger, opts ...Opt) (*Engine, error) {
 		return e, fmt.Errorf("failed to instantiate state machine: %w", err)
 	}
 
-	e.gs.Start(gsCh)
+	e.gs.Start(e, gsCh)
 
 	return e, nil
 }

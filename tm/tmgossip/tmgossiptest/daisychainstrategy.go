@@ -15,7 +15,7 @@ import (
 // where each "node" is connect left-to-right
 // and messages are transmitted left and right concurrently from its originator.
 type DaisyChainStrategy struct {
-	h tmconsensus.ConsensusHandler
+	h tmconsensus.FineGrainedConsensusHandler
 
 	store tmintegration.BlockDataStore
 
@@ -74,12 +74,6 @@ type daisyChainMessage struct {
 	BlockData []byte
 }
 
-// SetConsensusHandler sets the consensus handler for the strategy.
-// This method must be called before [*DaisyChainStrategy.Start].
-func (s *DaisyChainStrategy) SetConsensusHandler(h tmconsensus.ConsensusHandler) {
-	s.h = h
-}
-
 func (s *DaisyChainStrategy) mainLoop(ctx context.Context) {
 	defer close(s.done)
 
@@ -113,7 +107,11 @@ func (s *DaisyChainStrategy) mainLoop(ctx context.Context) {
 }
 
 // Start implements [github.com/gordian-engine/gordian/tm/tmgossip.Strategy].
-func (s *DaisyChainStrategy) Start(updates <-chan tmelink.NetworkViewUpdate) {
+func (s *DaisyChainStrategy) Start(
+	h tmconsensus.FineGrainedConsensusHandler,
+	updates <-chan tmelink.NetworkViewUpdate,
+) {
+	s.h = h
 	s.startCh <- updates
 }
 

@@ -27,8 +27,6 @@ type Network interface {
 
 	GetGossipStrategy(ctx context.Context, idx int) tmgossip.Strategy
 
-	SetConsensusHandler(ctx context.Context, idx int, h tmconsensus.ConsensusHandler)
-
 	GetBlockDataArrivalChannel(ctx context.Context, idx int) <-chan tmelink.BlockDataArrival
 
 	GetProposedHeaderInterceptor(ctx context.Context, idx int) tmelink.ProposedHeaderInterceptor

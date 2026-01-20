@@ -18,6 +18,11 @@ import (
 //
 // This should not be used in production,
 // as it is totally inefficient in terms of bandwidth.
+//
+// Deprecated: this is part of the now-defunct tmp2p API.
+// New implementations should only provide a Strategy that abstracts network details.
+// See [github.com/gordian-engine/gordian/tm/tmintegration.Factory]
+// and [github.com/gordian-engine/gordian/tm/tmintegration.RunIntegrationTest].
 type ChattyStrategy struct {
 	log *slog.Logger
 
@@ -49,7 +54,8 @@ func (s *ChattyStrategy) Wait() {
 	<-s.kernelDone
 }
 
-func (s *ChattyStrategy) Start(link <-chan tmelink.NetworkViewUpdate) {
+func (s *ChattyStrategy) Start(_ tmconsensus.FineGrainedConsensusHandler, link <-chan tmelink.NetworkViewUpdate) {
+	// Ignored handler to fit newer gossip strategy interface.
 	s.startCh <- link
 	close(s.startCh)
 }
