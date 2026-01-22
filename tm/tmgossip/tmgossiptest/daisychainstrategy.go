@@ -96,12 +96,14 @@ func (s *DaisyChainStrategy) mainLoop(ctx context.Context) {
 			s.broadcastUpdate(ctx, u)
 
 		case msg := <-s.fromLeft:
-			s.acceptMessage(ctx, msg)
-			s.forwardMessage(ctx, msg, s.toRight)
+			if s.acceptMessage(ctx, msg) {
+				s.forwardMessage(ctx, msg, s.toRight)
+			}
 
 		case msg := <-s.fromRight:
-			s.acceptMessage(ctx, msg)
-			s.forwardMessage(ctx, msg, s.toLeft)
+			if s.acceptMessage(ctx, msg) {
+				s.forwardMessage(ctx, msg, s.toLeft)
+			}
 		}
 	}
 }
@@ -236,7 +238,7 @@ func (s *DaisyChainStrategy) broadcastView(
 
 func (s *DaisyChainStrategy) acceptMessage(
 	ctx context.Context, msg daisyChainMessage,
-) {
+) (shouldForward bool) {
 	if msg.ProposedHeader != nil {
 		if msg.BlockData == nil {
 			panic(errors.New(
@@ -247,18 +249,15 @@ func (s *DaisyChainStrategy) acceptMessage(
 		// This is re-storing the block data every time, but that's fine for now.
 		s.store.PutData(msg.ProposedHeader.Header.DataID, msg.BlockData)
 
-		_ = s.h.HandleProposedHeader(ctx, *msg.ProposedHeader)
-		return
+		return s.h.HandleProposedHeader(ctx, *msg.ProposedHeader) == tmconsensus.HandleProposedHeaderAccepted
 	}
 
 	if msg.Prevote != nil {
-		_ = s.h.HandlePrevoteProofs(ctx, *msg.Prevote)
-		return
+		return s.h.HandlePrevoteProofs(ctx, *msg.Prevote) == tmconsensus.HandleVoteProofsAccepted
 	}
 
 	if msg.Precommit != nil {
-		_ = s.h.HandlePrecommitProofs(ctx, *msg.Precommit)
-		return
+		return s.h.HandlePrecommitProofs(ctx, *msg.Precommit) == tmconsensus.HandleVoteProofsAccepted
 	}
 
 	panic(errors.New(
