@@ -143,26 +143,23 @@ func (s *DaisyChainStrategy) broadcastView(
 				"BUG: attempting to propagate proposed header when data is unavailable",
 			))
 		}
-		if s.toLeft != nil {
+
+		toLeft := s.toLeft
+		toRight := s.toRight
+		for toLeft != nil || toRight != nil {
 			select {
 			case <-ctx.Done():
 				return
-			case s.toLeft <- daisyChainMessage{
+			case toLeft <- daisyChainMessage{
 				ProposedHeader: &ph,
 				BlockData:      blockData,
 			}:
-				// Okay.
-			}
-		}
-		if s.toRight != nil {
-			select {
-			case <-ctx.Done():
-				return
-			case s.toRight <- daisyChainMessage{
+				toLeft = nil
+			case toRight <- daisyChainMessage{
 				ProposedHeader: &ph,
 				BlockData:      blockData,
 			}:
-				// Okay.
+				toRight = nil
 			}
 		}
 	}
@@ -179,24 +176,20 @@ func (s *DaisyChainStrategy) broadcastView(
 			))
 		}
 
-		if s.toLeft != nil {
+		toLeft := s.toLeft
+		toRight := s.toRight
+		for toLeft != nil || toRight != nil {
 			select {
 			case <-ctx.Done():
 				return
-			case s.toLeft <- daisyChainMessage{
+			case toLeft <- daisyChainMessage{
 				Prevote: &sparse,
 			}:
-				// Okay.
-			}
-		}
-		if s.toRight != nil {
-			select {
-			case <-ctx.Done():
-				return
-			case s.toRight <- daisyChainMessage{
+				toLeft = nil
+			case toRight <- daisyChainMessage{
 				Prevote: &sparse,
 			}:
-				// Okay.
+				toRight = nil
 			}
 		}
 	}
@@ -213,24 +206,20 @@ func (s *DaisyChainStrategy) broadcastView(
 			))
 		}
 
-		if s.toLeft != nil {
+		toLeft := s.toLeft
+		toRight := s.toRight
+		for toLeft != nil || toRight != nil {
 			select {
 			case <-ctx.Done():
 				return
-			case s.toLeft <- daisyChainMessage{
+			case toLeft <- daisyChainMessage{
 				Precommit: &sparse,
 			}:
-				// Okay.
-			}
-		}
-		if s.toRight != nil {
-			select {
-			case <-ctx.Done():
-				return
-			case s.toRight <- daisyChainMessage{
+				toLeft = nil
+			case toRight <- daisyChainMessage{
 				Precommit: &sparse,
 			}:
-				// Okay.
+				toRight = nil
 			}
 		}
 	}
