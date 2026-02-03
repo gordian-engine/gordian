@@ -149,11 +149,22 @@ func (s *identityConsensusStrategy) EnterRound(ctx context.Context, rv tmconsens
 
 			// Just to exercise the annotations, set them to the ascii value of the proposer index,
 			// prefixed with a "p" or "b" for proposal or block.
+			//
+			// Normally the consensus strategy would write to the driver annotations, not the user's,
+			// but any consumers of the integration test are much more likely to use driver annotations.
+			//
+			// Typically, a "driver" would encompass the full stack,
+			// including consensus strategies and network implementations,
+			// so that driver implementation would handle coordination of driver annotations.
+			// But, we do not want to require the drivers to be aware of any integration apps.
+			// In fact, the drivers should not be touching the user annotations at all.
+			// So for this slight misuse of the user annotations,
+			// we get considerably simplified integration tests.
 			ProposalAnnotations: tmconsensus.Annotations{
-				Driver: strconv.AppendInt([]byte("p"), int64(s.expProposerIndex), 10),
+				User: strconv.AppendInt([]byte("p"), int64(s.expProposerIndex), 10),
 			},
 			BlockAnnotations: tmconsensus.Annotations{
-				Driver: strconv.AppendInt([]byte("b"), int64(s.expProposerIndex), 10),
+				User: strconv.AppendInt([]byte("b"), int64(s.expProposerIndex), 10),
 			},
 		}
 	}
@@ -175,12 +186,12 @@ func (s *identityConsensusStrategy) ConsiderProposedBlocks(
 		}
 
 		expPA := strconv.AppendInt([]byte("p"), int64(s.expProposerIndex), 10)
-		if !bytes.Equal(ph.Annotations.Driver, expPA) {
+		if !bytes.Equal(ph.Annotations.User, expPA) {
 			return "", nil
 		}
 
 		expBA := strconv.AppendInt([]byte("b"), int64(s.expProposerIndex), 10)
-		if !bytes.Equal(ph.Header.Annotations.Driver, expBA) {
+		if !bytes.Equal(ph.Header.Annotations.User, expBA) {
 			return "", nil
 		}
 
